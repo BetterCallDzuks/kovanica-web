@@ -17,6 +17,7 @@ const DOWNLOADS: Record<string, string> = {
   "install.sh": `${RAW}/node/scripts/install.sh`,
   "kovanica-node-linux-x64": `${NODE_RELEASE}/kovanica-node-x86_64-linux.tar.gz`,
   "kovanica-node-linux-arm64": `${NODE_RELEASE}/kovanica-node-aarch64-linux.tar.gz`,
+  "kovanica-chain2-genesis.tar.gz": `${NODE_RELEASE}/kovanica-chain2-genesis.tar.gz`,
   "kovanica-chain4-genesis.tar.gz": `${NODE_RELEASE}/kovanica-chain4-genesis.tar.gz`,
 };
 

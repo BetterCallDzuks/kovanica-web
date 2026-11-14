@@ -15,7 +15,7 @@ import {
 
 export const SPEC_TEXT = `# ${NETWORK_ID}
 
-BlockDAG testnet. Native token **${TOKEN}** (9 decimals). Canonical chain IDs: mainnet=1, testnet=2, devnet=3, testnet_v2=4, hybrid_testnet=2, local=1337.
+BlockDAG testnet. Native token **${TOKEN}** (9 decimals). Canonical chain IDs: mainnet=1, testnet=2, devnet=3, hybrid_testnet=2, local=1337.
 Engine is the Rust node; this app speaks the same HTTP contract.
 
 || | |
@@ -25,7 +25,7 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 || Map | ${LIVE_MAP} |
 || Site | ${LIVE_SITE} |
 || Network | \`${NETWORK_ID}\` |
-|| Premine | ${FOUNDER_AMOUNT / ATOM} KVNC (founder / treasury) |
+|| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis validator allocation |
 || Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks |
 || Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) |
 || Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) |

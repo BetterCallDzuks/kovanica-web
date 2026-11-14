@@ -200,7 +200,7 @@ export function CoinJoinView() {
                 <input
                   value={p1Recipient}
                   onChange={(e) => setP1Recipient(e.target.value)}
-                  placeholder="kvnc…dag or 64-hex"
+                  placeholder="kvnc…dag (64 chars)"
                   className="h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
                 />
               </div>
@@ -215,7 +215,7 @@ export function CoinJoinView() {
                 <input
                   value={p2Address}
                   onChange={(e) => setP2Address(e.target.value)}
-                  placeholder="kvnc…dag or 64-hex"
+                  placeholder="kvnc…dag (64 chars)"
                   className="h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
                 />
               </div>
@@ -235,7 +235,7 @@ export function CoinJoinView() {
               <input
                 value={p2Recipient}
                 onChange={(e) => setP2Recipient(e.target.value)}
-                placeholder="kvnc…dag or 64-hex"
+                placeholder="kvnc…dag (64 chars)"
                 className="h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
               />
             </div>

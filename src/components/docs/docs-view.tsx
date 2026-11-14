@@ -71,7 +71,7 @@ export function DocsView() {
       ? ["Connecting to node telemetry…"]
       : boot
         ? [
-            `${typeof boot.blocks === "number" ? `${boot.blocks.toLocaleString()} blocks` : "Blocks —"} · ${boot.network ?? "Chain 5"}`,
+            `${typeof boot.blocks === "number" ? `${boot.blocks.toLocaleString()} blocks` : "Blocks —"} · ${boot.network ?? "Chain 2"}`,
             `genesis ${boot.genesis ? shortId(boot.genesis, 6) : "—"}`,
           ]
         : ["Telemetry unavailable · Node offline", err ? `offline (${err})` : "offline"];
@@ -289,16 +289,16 @@ export function DocsView() {
         <section id="tokenomics" className="mt-10 scroll-mt-20">
           <h2 className="font-display text-2xl tracking-tight text-fg">Tokenomics</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Kovanica has a locked total supply of 90,200,000 KVNC with geometric subsidy decay every 8,100,000 blocks. Block rewards (initially 2.5 KVNC) are minted to committed block authors.
+            Kovanica has a locked total supply of 90,200,000 KVNC with geometric subsidy decay every 8,200,000 blocks. Block rewards (initially 2.5 KVNC) are minted to committed block authors.
           </p>
           <dl className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
             <Fact k="Hard cap" v="90,200,000 KVNC" />
-            <Fact k="Subsidy budget" v="81,000,000 KVNC" />
+            <Fact k="Subsidy budget" v="82,000,000 KVNC" />
             <Fact k="Initial Reward s₀" v="2.5 KVNC / block" />
             <Fact k="Founder premine" v="200,000 KVNC" />
             <Fact k="Treasury" v="8,000,000 KVNC (1M/yr × 8 yrs linear)" />
-            <Fact k="Genesis Allocation" v="1,000,000 KVNC" />
-            <Fact k="Subsidy Era" v="8,100,000 blocks" />
+            <Fact k="Genesis Allocation" v="0 KVNC (no-stake PoW)" />
+            <Fact k="Subsidy Era" v="8,200,000 blocks" />
             <Fact k="Decay Factor" v="× 3/4 each era" />
             <Fact k="Target Block" v="4.0s (target interval)" />
           </dl>
@@ -386,7 +386,7 @@ export function DocsView() {
         <section id="roadmap" className="mt-10 scroll-mt-20">
           <h2 className="font-display text-2xl tracking-tight text-fg">Roadmap</h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Explore planned protocol milestones, Chain 5 hybrid testnet verification, and mainnet deployment readiness.
+            Explore planned protocol milestones, Chain 2 hybrid testnet verification, and mainnet deployment readiness.
           </p>
           <Button asChild variant="outline" size="sm" className="mt-4">
             <Link to="/roadmap">Open roadmap</Link>

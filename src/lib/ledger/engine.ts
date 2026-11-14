@@ -44,7 +44,7 @@ export function seedDag(): Block[] {
 
   for (let i = 1; i <= 8; i += 1) {
     const parents = i % 3 === 0 ? [tip, side] : [tip];
-    const next = mineBlock(blocks, parents, TREASURY, { nonce: i * 17, timestamp: i * 12_000 });
+    const next = mineBlock(blocks, parents, TREASURY, { nonce: i * 17, timestamp: i * 4_000 });
     blocks.push(next);
     if (i % 2 === 0) side = next.id;
     else tip = next.id;

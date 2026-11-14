@@ -168,7 +168,7 @@ export function NetworkView() {
               <Row label="Founder amount" value={fmtKvnc(b.founder_amount)} />
               <Row label="Founder seed" value={String(b.founder_seed)} />
               <Row label="Atom" value={`1 ${TOKEN} = ${h.atom.toLocaleString()} atoms`} />
-              <Row label="MysticGhost k" value={String(b.k)} />
+              <Row label="GHOSTDAG k" value={String(b.k)} />
               {"finality_depth" in b && (
                 <Row label="Finality depth" value={String((b as Record<string, unknown>).finality_depth)} />
               )}

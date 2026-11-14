@@ -163,7 +163,7 @@ const NEXT: Item[] = [
     title: "Mainnet Launch Readiness",
     status: "next",
     blurb:
-      "Public launch planned for 1.1.2027 following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 81M mining subsidy budget, 8.1M block halving eras with × 3/4 decay).",
+      "Public launch planned for 1.1.2027 following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8.2M block halving eras with × 3/4 decay).",
   },
 ];
 
@@ -266,7 +266,7 @@ export function RoadmapView() {
           <strong className="text-fg">Execution:</strong> Deterministic Wasmi WebAssembly runtime.
         </p>
         <p>
-          <strong className="text-fg">Tokenomics:</strong> Native token <strong className="text-fg">KVNC</strong> (9 decimals, 90,200,000 hard cap, 81M mining subsidy budget, 2.5 KVNC initial block reward).
+          <strong className="text-fg">Tokenomics:</strong> Native token <strong className="text-fg">KVNC</strong> (9 decimals, 90,200,000 hard cap, 82M mining subsidy budget, 2.5 KVNC initial block reward).
         </p>
         <p className="border-t border-border/60 pt-2 text-subtle">
           More details available in the{" "}
