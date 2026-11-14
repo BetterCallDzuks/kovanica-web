@@ -332,7 +332,7 @@ export function DexView() {
                 <input
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="kvnc…dag or 64-hex"
+                  placeholder="kvnc…dag (64 chars)"
                   className="h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
                 />
               </div>

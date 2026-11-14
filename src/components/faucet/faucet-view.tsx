@@ -26,7 +26,7 @@ type ErrorKind =
 
 const ERROR_COPY: Record<Exclude<ErrorKind, null>, string> = {
   "invalid-address":
-    "That doesn't look like a Kovanica address. Paste a 64-hex public key or a kvnc…dag address.",
+    "That doesn't look like a Kovanica address. Paste a canonical kvnc…dag address (PRO-21, 64 chars).",
   cap: "This address has already claimed its lifetime cap — 10 KVNC per address on testnet.",
   dry: "The faucet is dry right now — the node has no funds to give. Try again in a bit.",
   offline: "The testnet node is unreachable. Check back in a moment.",
@@ -223,7 +223,7 @@ export function FaucetView() {
                 setAddress(e.target.value);
                 if (errorKind === "invalid-address") setErrorKind(null);
               }}
-              placeholder="64-hex pubkey or kvnc…dag"
+              placeholder="kvnc…dag (canonical PRO-21)"
               spellCheck={false}
               autoComplete="off"
               className={cn(

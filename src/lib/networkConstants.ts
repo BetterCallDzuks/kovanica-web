@@ -19,11 +19,11 @@ export const DECIMALS = 9;
 export const SUBSIDY = Math.floor(2.5 * ATOM);
 export const FOUNDER_AMOUNT = 200_000 * ATOM;
 export const FOUNDER_SEED = 1;
-export const HALVING_ERA = 8_100_000;
+export const HALVING_ERA = 8_200_000;
 export const MAX_SUPPLY = 90_200_000 * ATOM;
 // Mirrors the node: min_fee = max(subsidy / 500_000, 1) atoms.
 // subsidy = 2.5 KVNC (s₀) → min_fee = max(2.5 * 10^9 / 500_000, 1) = 5,000 atoms.
-// Note: 500_000 here is the fee-floor divider, not HALVING_ERA (8_100_000).
+// Note: 500_000 here is the fee-floor divider, not HALVING_ERA (8_200_000).
 export const MIN_FEE = Math.max(Math.floor(SUBSIDY / 500_000), 1);
 export const K = 5;
 export const TREASURY = "cecc1507dc1ddd7295951c290888f095adb9044d1b73d696e6df065d683bd4fc";
@@ -248,7 +248,7 @@ export function getSpecText(network: PublicSource): string {
 
   return `# ${networkId}
 
-BlockDAG ${isMainnet ? "mainnet" : "testnet"}. Native token **${TOKEN}** (9 decimals). Canonical chain IDs: mainnet=1, testnet=2, devnet=3, testnet_v2=4, hybrid_testnet=2, local=1337.
+BlockDAG ${isMainnet ? "mainnet" : "testnet"}. Native token **${TOKEN}** (9 decimals). Canonical chain IDs: mainnet=1, testnet=2, devnet=3, hybrid_testnet=2, local=1337.
 Engine is the Rust node; this app speaks the same HTTP contract.
 
 ||| | |
@@ -258,7 +258,7 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 ||| Map | ${liveMap} ||
 ||| Site | ${liveSite} ||
 ||| Network | \`${networkId}\` ||
-||| Premine | ${FOUNDER_AMOUNT / ATOM} KVNC (founder / treasury) ||
+||| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis validator allocation ||
 ||| Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks ||
 ||| Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) ||
 ||| Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) ||

@@ -43,7 +43,6 @@ export function ExplorerView() {
   // Endpoint verification check for hybrid capability
   const isHybridVerified =
     state?.network?.includes("2") ||
-    state?.network?.includes("5") ||
     state?.network?.toLowerCase().includes("testnet") ||
     state?.network?.toLowerCase().includes("hybrid") ||
     source === "local";
@@ -395,9 +394,9 @@ function AnalyticsPanel({ node }: { node: ApiNode | undefined }) {
           <div className="flex justify-between"><dt className="text-subtle">GHOSTDAG Parameter K</dt><dd className="font-mono">5</dd></div>
           <div className="flex justify-between"><dt className="text-subtle">PoW Algorithm</dt><dd className="font-mono">KovanicaHash</dd></div>
           <div className="flex justify-between"><dt className="text-subtle">Total Coin Supply</dt><dd className="font-mono">90,200,000 KVNC</dd></div>
-          <div className="flex justify-between"><dt className="text-subtle">Mining Subsidy Budget</dt><dd className="font-mono">81,000,000 KVNC</dd></div>
+          <div className="flex justify-between"><dt className="text-subtle">Mining Subsidy Budget</dt><dd className="font-mono">82,000,000 KVNC</dd></div>
           <div className="flex justify-between"><dt className="text-subtle">Initial Block Reward</dt><dd className="font-mono">2.5 KVNC</dd></div>
-          <div className="flex justify-between"><dt className="text-subtle">Subsidy Era</dt><dd className="font-mono">8,100,000 blocks</dd></div>
+          <div className="flex justify-between"><dt className="text-subtle">Subsidy Era</dt><dd className="font-mono">8,200,000 blocks</dd></div>
         </dl>
       </div>
     </div>

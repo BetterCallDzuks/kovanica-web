@@ -345,7 +345,7 @@ export function WalletView() {
     }
     const dest = parseAddr(to);
     if (!dest) {
-      toast.error("Need a kvnc…dag or 64-hex address");
+      toast.error("Need a canonical kvnc…dag address");
       return;
     }
     const need = isNativeAsset(assetId) ? atoms + fee : atoms;
@@ -428,7 +428,7 @@ export function WalletView() {
     }
     const dest = parseAddr(to);
     if (!dest) {
-      toast.error("Need a kvnc…dag or 64-hex address");
+      toast.error("Need a canonical kvnc…dag address");
       return;
     }
     const held = BigInt(token.balance ?? "0");
@@ -938,7 +938,7 @@ export function WalletView() {
               <input
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                placeholder="kvnc…dag or 64-hex"
+                placeholder="kvnc…dag (64 chars)"
                 className="mt-1 h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
               />
             </label>

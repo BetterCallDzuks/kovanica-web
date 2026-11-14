@@ -187,7 +187,7 @@ export function ApiReferenceView() {
                 <input
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="address (64-hex or kvnc…dag)"
+                  placeholder="address (kvnc…dag)"
                   spellCheck={false}
                   className="h-9 flex-1 rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg outline-none transition-colors placeholder:text-subtle focus:border-blue"
                 />

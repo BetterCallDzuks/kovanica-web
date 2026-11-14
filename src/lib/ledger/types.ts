@@ -76,4 +76,4 @@ export const ATOM = 1_000_000_000;
 export const DECIMALS = 9;
 export const SUBSIDY = 2.5 * ATOM;
 export const NETWORK = "kovanica-testnet";
-export const K = 3;
+export const K = 5;

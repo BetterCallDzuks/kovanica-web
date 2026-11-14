@@ -325,9 +325,9 @@ async function fetchLiveState(): Promise<ApiState> {
       blue_score: currentHeight,
       blue_work: currentHeight * 100,
       k: tips?.ghostdag_k ?? 5,
-      subsidy: 81_000_000_000_000_000,
+      subsidy: 2_500_000_000,
       issuance: 2_500_000_000,
-      halving_era: 8_100_000,
+      halving_era: 8_200_000,
       min_fee: 10_000,
       genesis: "0x17e79432dfbee3adad15d7a851ff78ebafcefbc547073883489cd9cbdaae60fa",
       supply: 90_200_000_000_000_000,
@@ -366,15 +366,15 @@ async function fetchLiveBootstrap(): Promise<ApiBootstrap> {
     k: 5,
     subsidy: 2_500_000_000,
     min_fee: 10_000,
-    finality_depth: 3,
+    finality_depth: 100,
     block_pruning_depth: 18446744073709551615,
     payload_pruning_depth: 1000,
     founder_amount: 200_000 * 1_000_000_000,
     founder_seed: 0,
     max_supply: 90_200_000 * 1_000_000_000,
     burned: 0,
-    circulating: 1_000_000 * 1_000_000_000,
-    native_minted: 1_000_000 * 1_000_000_000,
+    circulating: 200_000 * 1_000_000_000 + head.blocks * 2_500_000_000,
+    native_minted: 200_000 * 1_000_000_000 + head.blocks * 2_500_000_000,
     total: 90_200_000 * 1_000_000_000,
     listen: "0.0.0.0:8000",
     peers: ["seed1.kovanica.online:8000", "seed2.kovanica.online:8000", "seed3.kovanica.online:8000"],
@@ -400,7 +400,7 @@ async function fetchLiveHead(): Promise<ApiHead> {
     blocks: currentHeight,
     min_fee: 10_000,
     atom: 1_000_000_000,
-    finality_depth: 180,
+    finality_depth: 100,
   };
 }
 
@@ -641,7 +641,7 @@ export async function dispatchApi(req: Request): Promise<Response> {
           args,
           u64le(TOKEN_GAS_LIMIT),
         ]);
-        const hash = signingHashForKind(fromBytes, nonce, sighashKind, TOKEN_FEE, 4);
+        const hash = signingHashForKind(fromBytes, nonce, sighashKind, TOKEN_FEE, 2);
         const sighashHex = bytesToHex(hash);
 
         if (name === "token_prepare") {
@@ -732,7 +732,7 @@ export async function dispatchApi(req: Request): Promise<Response> {
 
         const fromBytes = hexToBytes(fromHex);
         const toBytes = hexToBytes(toHex);
-        const hash = signingHash(fromBytes, nonce, toBytes, amount, fee, 4);
+        const hash = signingHash(fromBytes, nonce, toBytes, amount, fee, 2);
         const sighashHex = bytesToHex(hash);
 
         return json({
@@ -773,7 +773,7 @@ export async function dispatchApi(req: Request): Promise<Response> {
 
         const fromBytes = hexToBytes(fromHex);
         const toBytes = hexToBytes(toHex);
-        const hash = signingHash(fromBytes, nonce, toBytes, amount, fee, 4);
+        const hash = signingHash(fromBytes, nonce, toBytes, amount, fee, 2);
         const sigBytes = hexToBytes(sig);
 
         const rawHex = encodeRawTransaction(fromBytes, nonce, toBytes, amount, fee, sigBytes, hash);

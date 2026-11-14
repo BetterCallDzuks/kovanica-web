@@ -290,7 +290,7 @@ export function Dashboard() {
             <div>
               <dt className="text-[10px] tracking-wide text-subtle uppercase">Bootstrap seeds</dt>
               <dd className="mt-0.5 break-all font-mono text-xs text-fg">
-                {b.peers.length > 0 ? b.peers.join(" · ") : "seed.kovanica.online:9000"}
+                {b.peers.length > 0 ? b.peers.join(" · ") : "seed1.kovanica.online:8000"}
               </dd>
             </div>
           </dl>
