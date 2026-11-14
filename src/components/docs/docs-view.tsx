@@ -281,7 +281,7 @@ export function DocsView() {
             />
             <Fact k="Min fee" v="10,000 atoms (0.00001 KVNC)" />
             <Fact k="Consensus" v="Hybrid PoW + GHOSTDAG (k = 5)" />
-            <Fact k="P2P" v="TCP :8000 · seed1, seed2, seed3" />
+            <Fact k="P2P" v="TCP :8000 · seed1" />
           </dl>
         </section>
 
@@ -314,8 +314,6 @@ export function DocsView() {
               P2P nodes listen on TCP <code>0.0.0.0:8000</code>. Bootstrap seed peers:
               <ul className="mt-1 list-disc pl-5 font-mono text-xs">
                 <li>seed1.kovanica.online:8000</li>
-                <li>seed2.kovanica.online:8000</li>
-                <li>seed3.kovanica.online:8000</li>
               </ul>
             </li>
           </ol>

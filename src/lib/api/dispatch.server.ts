@@ -67,7 +67,7 @@ function action(pathname: string): string {
 }
 
 const LOCAL_RPC = "http://127.0.0.1:8545/rpc";
-const LIVE_FAUCET = "https://seed3.kovanica.online/faucet";
+const LIVE_FAUCET = process.env.KOVANICA_FAUCET_URL || "http://127.0.0.1:3000";
 
 /** Same flat fee the native prepare path uses; token calls are one storage write. */
 const TOKEN_FEE = 10_000;
@@ -310,10 +310,10 @@ async function fetchLiveState(): Promise<ApiState> {
       now: Date.now(),
       queued: 0,
       nodes: (sync.peers || []).map((p: any, i: number) => ({
-        name: `val${i + 1}`,
+        name: `node${i + 1}`,
         blocks: sync.committedHeight,
         tip: `0x${(p.reportedTipRound ?? 0).toString(16)}`,
-        peers: [`seed${(i % 3) + 1}.kovanica.online`],
+        peers: ["seed1.kovanica.online:8000"],
         mempool: 0,
       })),
       events: [],
@@ -377,7 +377,7 @@ async function fetchLiveBootstrap(): Promise<ApiBootstrap> {
     native_minted: 200_000 * 1_000_000_000 + head.blocks * 2_500_000_000,
     total: 90_200_000 * 1_000_000_000,
     listen: "0.0.0.0:8000",
-    peers: ["seed1.kovanica.online:8000", "seed2.kovanica.online:8000", "seed3.kovanica.online:8000"],
+    peers: ["seed1.kovanica.online:8000"],
     upstream: {
       ok: true,
       head,

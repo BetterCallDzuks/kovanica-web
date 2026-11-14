@@ -67,7 +67,7 @@ const FIXTURES = {
     native_minted: 231125000000000,
     total: 90200000000000000,
     listen: "0.0.0.0:8000",
-    peers: ["seed1.kovanica.online:8000", "seed2.kovanica.online:8000"],
+    peers: ["seed1.kovanica.online:8000"],
     upstream: {
       ok: true,
       head: {

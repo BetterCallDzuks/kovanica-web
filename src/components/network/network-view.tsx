@@ -188,18 +188,12 @@ export function NetworkView() {
             </div>
             <dl className="mt-3 grid gap-3 sm:grid-cols-2">
               <Row label="Listen" value={p2p?.listen ?? b.listen ?? "—"} mono />
-              <Row label="Bootstrap" value={p2p?.bootstrap ?? "seed1.kovanica.online:8000,seed2.kovanica.online:8000,seed3.kovanica.online:8000"} mono />
+              <Row label="Bootstrap" value={p2p?.bootstrap ?? "seed1.kovanica.online:8000"} mono />
             </dl>
             <p className="mt-4 text-[10px] tracking-wide text-subtle uppercase">Bootstrap seeds</p>
             <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
               <li className="break-all px-3 py-2 font-mono text-xs text-fg">
                 seed1.kovanica.online:8000 <span className="text-subtle">(grey-cloud DNS)</span>
-              </li>
-              <li className="break-all px-3 py-2 font-mono text-xs text-fg">
-                seed2.kovanica.online:8000 <span className="text-subtle">(grey-cloud DNS)</span>
-              </li>
-              <li className="break-all px-3 py-2 font-mono text-xs text-fg">
-                seed3.kovanica.online:8000 <span className="text-subtle">(grey-cloud DNS)</span>
               </li>
             </ul>
             <p className="mt-3 text-[11px] leading-relaxed text-subtle">
