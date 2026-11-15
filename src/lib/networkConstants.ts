@@ -1,5 +1,6 @@
 // Network-specific constants and spec text generation
 // This file is imported by both network.ts and contract.ts to avoid circular dependencies
+import type { HealthSummary } from "./api/health";
 
 export const LIVE_EXPLORER = "https://explorer.kovanica.online";
 export const LIVE_WALLET = "https://wallet.kovanica.online";
@@ -7,6 +8,11 @@ export const LIVE_MAP = "https://map.kovanica.online";
 export const LIVE_SITE = "https://kovanica.online";
 export const NETWORK_ID = "kovanica-testnet";
 export const MAINNET_ID = "kovanica-mainnet";
+export const DEVNET_ID = "kovanica-devnet";
+/** kovanica-testnet is chain ID 2 (reported by seed1 in `kovanica_getDagTips`). */
+export const CHAIN_ID = 2;
+/** Canonical label for the only live network. */
+export const NETWORK_LABEL = `${NETWORK_ID} (chain ID ${CHAIN_ID})`;
 // Public-node proxy targets. Mainnet has no live endpoint yet ("launching soon"):
 // the URL is left blank until we open it, and selecting it surfaces a clear message.
 export const NETWORK_PROXIES: Record<PublicSource, string> = {
@@ -101,42 +107,51 @@ export type ApiHistoryTx = {
 export type ApiNode = {
   blocks: number;
   tips: string[];
-  selected_tip: string;
-  blue_score: number;
-  blue_work: number;
+  selected_tip: string | null;
+  /** Not exposed by seed1's RPC: null renders as "n/a". */
+  blue_score: number | null;
+  blue_work: number | null;
   k: number;
   subsidy: number;
-  issuance: number;
+  issuance: number | null;
   halving_era: number;
   min_fee: number;
-  genesis: string;
-  supply: number;
+  genesis: string | null;
+  supply: number | null;
   token: string;
   decimals: number;
-  miner: string;
+  miner: string | null;
   atom: number;
   ui: string;
-  utxos: number;
-  chain_len: number;
-  mempool: number;
-  tx_count: number;
+  utxos: number | null;
+  chain_len: number | null;
+  mempool: number | null;
+  tx_count: number | null;
   dag: ApiDagBlock[];
   order: string[];
   pending: string[];
 };
 export type ApiState = {
-  selected: string;
-  mining: boolean;
+  selected: string | null;
+  mining: boolean | null;
   faucet: boolean;
   allow_reset: boolean;
   operator: boolean;
   network: string;
-  listen: string;
+  chain_id?: number | null;
+  health?: HealthSummary;
+  listen: string | null;
   peers: string[];
   mesh: {
     now: number;
-    queued: number;
-    nodes: { name: string; blocks: number; tip: string; peers: string[]; mempool: number }[];
+    queued: number | null;
+    nodes: {
+      name: string;
+      blocks: number | null;
+      tip: string | null;
+      peers: string[];
+      mempool: number | null;
+    }[];
     events: { at: number; from: string; to: string; kind: string }[];
   };
   node: ApiNode;
@@ -145,18 +160,22 @@ export type ApiState = {
 };
 export type ApiHead = {
   network: string;
-  genesis: string;
-  tip: string;
+  chain_id?: number | null;
+  genesis: string | null;
+  tip: string | null;
   blocks: number;
   min_fee: number;
   atom: number;
   finality_depth: number;
+  k?: number;
+  health?: HealthSummary;
 };
 export type ApiBootstrap = {
   blocks?: number;
   network: string;
-  genesis: string;
-  tip: string;
+  chain_id?: number | null;
+  genesis: string | null;
+  tip: string | null;
   admission: string;
   poa_enabled: boolean;
   atom: number;
@@ -165,20 +184,21 @@ export type ApiBootstrap = {
   subsidy: number;
   min_fee: number;
   finality_depth: number;
-  block_pruning_depth: number;
-  payload_pruning_depth: number;
+  block_pruning_depth: number | null;
+  payload_pruning_depth: number | null;
   founder_amount: number;
   founder_seed: number;
   max_supply: number;
-  burned: number;
-  circulating: number;
-  native_minted: number;
+  burned: number | null;
+  circulating: number | null;
+  native_minted: number | null;
   total: number;
-  listen: string;
+  listen: string | null;
   peers: string[];
   operator_wallet_address?: string;
   light_config?: unknown;
   source?: ApiSource;
+  health?: HealthSummary;
   upstream?: { ok: true; head: ApiHead } | { ok: false; error: string };
 };
 export type ApiUtxos = {
@@ -242,13 +262,10 @@ export function getSpecText(network: PublicSource): string {
   const liveMap = isMainnet ? "" : "https://map.kovanica.online";
   const liveSite = isMainnet ? "" : "https://kovanica.online";
   const networkId = isMainnet ? MAINNET_ID : NETWORK_ID;
-  const upstreamMessage = isMainnet
-    ? "mainnet launching soon"
-    : "https://explorer.kovanica.online";
 
   return `# ${networkId}
 
-BlockDAG ${isMainnet ? "mainnet" : "testnet"}. Native token **${TOKEN}** (9 decimals). Canonical chain IDs: mainnet=1, testnet=2, devnet=3, hybrid_testnet=2, local=1337.
+BlockDAG ${isMainnet ? "mainnet" : "testnet"}. Native token **${TOKEN}** (9 decimals). Canonical chains: kovanica-mainnet (chain ID 1), kovanica-testnet (chain ID 2), kovanica-devnet (chain ID 3), local (chain ID 1337).
 Engine is the Rust node; this app speaks the same HTTP contract.
 
 ||| | |
@@ -257,12 +274,13 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 ||| Wallet | ${liveWallet} ||
 ||| Map | ${liveMap} ||
 ||| Site | ${liveSite} ||
-||| Network | \`${networkId}\` ||
-||| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis validator allocation ||
+||| Network | \`${networkId}\` (chain ID ${isMainnet ? 1 : CHAIN_ID}) ||
+||| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis allocation ||
 ||| Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks ||
 ||| Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) ||
 ||| Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) ||
-||| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW; no stake) ||
+||| Fees | 3/4 burned, 1/4 to miner — pending (PR in progress, PRO-53) ||
+||| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW) ||
 ||| Atom | 1 KVNC = 10^9 atoms ||
 ||| Finality depth | 100 blue score ||
 ||| Payload pruning | 1000 blue score ||
@@ -339,7 +357,7 @@ POST /api/miner?addr=
   local playground: set block proposer address
 
 POST /api/faucet?to=&amount=
-  ${network === "testnet" ? "testnet open faucet. kind=faucet (default). Per-address lifetime cap: 10 KVNC." : "mainnet faucet (closed)"}
+  ${network === "testnet" ? "testnet faucet when configured (unset KOVANICA_FAUCET_URL = unavailable). Per-address lifetime cap: 10 KVNC." : "mainnet faucet (closed)"}
 
 POST /api/reset
   local only (chain wipe is locked on the public testnet)
@@ -349,7 +367,7 @@ POST /api/origin?iso3=HRV
 
 ## Wallet
 
-Address: PRO-21 canonical format = kvnc + 57 bech32-alphabet chars + dag (64 total), 29-bit BLAKE3 checksum. Legacy hex only where chain allows (devnet: chain 3, local: 1337).
+Address: PRO-21 canonical format = kvnc + 57 bech32-alphabet chars + dag (64 total), 29-bit BLAKE3 checksum. Legacy hex is accepted on kovanica-devnet (chain ID 3) and local (chain ID 1337) only.
 Derivation: ADR-0002 — 24-word BIP-39 entropy IS the 32-byte Ed25519 seed; no PBKDF2 passphrase, no HD derivation, one phrase = one wallet address.
 Browser signs prepare's sighash; submit never receives the mnemonic.
 Faucet stays off on the public explorer. Hardware: Ledger (WebHID) + Trezor (WebUSB).

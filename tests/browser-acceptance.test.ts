@@ -90,7 +90,7 @@ const FIXTURES = {
       queued: 0,
       nodes: [
         {
-          name: "val1",
+          name: "seed1",
           blocks: 12450,
           tip: "0x3b6a",
           peers: ["seed1.kovanica.online"],
@@ -525,15 +525,6 @@ async function waitForBodyText(page: Page, needle: string, timeout = HYDRATION_T
   );
 }
 
-/** Wait until the rendered body text contains any of `needles`. */
-async function waitForBodyTextAny(page: Page, needles: string[], timeout = HYDRATION_TIMEOUT) {
-  await page.waitForFunction(
-    (texts: string[]) => texts.some((text) => document.body.innerText.includes(text)),
-    needles,
-    { timeout, polling: 100 },
-  );
-}
-
 /** Wait until the wallet header balance equals `expected` (e.g. "5 KVNC"). */
 async function waitForHeaderBalance(page: Page, expected: string, timeout = HYDRATION_TIMEOUT) {
   await page.waitForFunction(
@@ -842,12 +833,12 @@ test("Section B: unreachable services, malformed responses, and unknown statisti
       "Docs must render explicit 'Telemetry unavailable · Node offline' when node is unreachable",
     );
 
-    // 3. Malformed /api/state on /explorer keeps unknown statistics explicit ('—') and shows error
+    // 3. Malformed /api/state on /explorer keeps unknown statistics explicit ("n/a") and shows error
     await gotoAndSettle(page, `${baseUrl}/explorer`, "BlockDAG Explorer");
     const expText = await page.locator("body").innerText();
     assert.ok(
-      expText.includes("—"),
-      "Explorer must keep unknown statistics explicit ('—') when node state is unavailable or malformed",
+      expText.includes("n/a"),
+      "Explorer must keep unknown statistics explicit ('n/a') when node state is unavailable or malformed",
     );
     assert.ok(
       !expText.includes("12,450"),
@@ -861,33 +852,38 @@ test("Section B: unreachable services, malformed responses, and unknown statisti
   }
 });
 
-test("Section B: NO-stake messaging is preserved across documentation, network, and explorer", async () => {
+test("Section B: NO-stake consensus statement is preserved and stake/validator wording stays out of the UI", async () => {
   const { context, page } = await setupIsolatedPage({ viewport: { width: 1280, height: 800 } });
 
   try {
-    // 1. Docs consensus section
+    // 1. Docs consensus section keeps the single allowed no-stake statement
     await gotoAndSettle(page, `${baseUrl}/docs#consensus`);
-    await waitForBodyTextAny(page, [
-      "There is no validator staking, bonding, committee rotation, or slashing in consensus",
-      "None (pure PoW + GHOSTDAG)",
-    ]);
+    await waitForBodyText(page, "There is no stake in consensus.");
     const docsText = await page.locator("body").innerText();
     assert.ok(
-      docsText.includes("There is no validator staking, bonding, committee rotation, or slashing in consensus") ||
-      docsText.includes("None (pure PoW + GHOSTDAG)"),
-      "Docs must preserve explicit NO-stake consensus statement",
+      docsText.includes("There is no stake in consensus."),
+      "Docs must preserve the explicit no-stake consensus statement",
+    );
+    assert.doesNotMatch(
+      docsText,
+      /validator staking|bonding|committee rotation|slashing|delegation/i,
+      "Docs must not reintroduce validator/staking/committee wording",
     );
 
-    // 2. Network view
+    // 2. Network view keeps the same truthful consensus label on mainnet
     await gotoAndSettle(page, `${baseUrl}/network`);
-    // Switch to mainnet network view
     const mainnetBtn = page.locator("button[title=\"Mainnet\"], button:text(\"Mainnet\")").first();
     await mainnetBtn.click();
-    await waitForBodyText(page, "None (Zero-stake PoW consensus)");
+    await waitForBodyText(page, "kovanica-mainnet");
     const networkText = await page.locator("body").innerText();
     assert.ok(
-      networkText.includes("None (Zero-stake PoW consensus)"),
-      "Network view must preserve 'None (Zero-stake PoW consensus)'",
+      networkText.includes("Hybrid PoW + GHOSTDAG (k=5)"),
+      "Network view must state hybrid PoW + GHOSTDAG consensus",
+    );
+    assert.doesNotMatch(
+      networkText,
+      /validator|staking|zero-stake|delegation/i,
+      "Network view must not show validator/staking/zero-stake wording",
     );
   } catch (err) {
     await saveFailureArtifact(page, "section-b-no-stake", err);

@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { MinimalHeader } from "@/components/layout/minimal-header";
 import { SURFACE } from "@/lib/surfaces";
 import { ENDPOINTS, PLAYGROUND_ENDPOINTS } from "@/lib/api/endpoints";
+import { healthFromPayload, healthLabel, healthTone, type HealthState } from "@/lib/api/health";
 import { cn } from "@/lib/utils";
 
 type UpstreamStatus =
   | { state: "loading" }
-  | { state: "ok"; blocks: number; network: string; ms: number }
-  | { state: "down"; error: string };
+  | { state: "ok"; health: HealthState; status: number | null; ms: number }
+  | { state: "error"; error: string };
 
 /** Terminal-adjacent API reference: status, endpoints, read-only playground. */
 export function ApiReferenceView() {
@@ -30,14 +31,22 @@ export function ApiReferenceView() {
     setTestnet({ state: "loading" });
     const started = performance.now();
     try {
-      const r = await fetch("/api/head?source=testnet");
+      const r = await fetch("/api/health?source=testnet");
       const ms = Math.round(performance.now() - started);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = (await r.json()) as { network?: string; blocks?: number };
-      setTestnet({ state: "ok", blocks: j.blocks ?? 0, network: j.network ?? "testnet", ms });
+      const payload = (await r.json()) as unknown;
+      setTestnet({
+        state: "ok",
+        health: healthFromPayload(payload),
+        status:
+          payload && typeof payload === "object" && "status" in payload
+            ? ((payload as { status?: number | null }).status ?? null)
+            : null,
+        ms,
+      });
     } catch (e) {
       setTestnet({
-        state: "down",
+        state: "error",
         error: e instanceof Error ? e.message : "unreachable",
       });
     }
@@ -260,6 +269,10 @@ export function ApiReferenceView() {
               </div>
             ))}
           </div>
+          <p className="mt-2 text-xs text-muted">
+            The public RPC serves reads anonymously. Write methods currently answer HTTP 401 — writes
+            are not available via the public RPC until PRO-53 ships.
+          </p>
         </section>
       </main>
     </div>
@@ -297,14 +310,23 @@ function StatusCard({
       ) : status.state === "ok" ? (
         <div className="mt-2">
           <p className="flex items-center gap-2 text-sm text-fg">
-            <Server className="size-3.5 text-ok" />
-            <span className="font-mono">{status.blocks.toLocaleString()} blocks</span>
+            <Server
+              className={cn(
+                "size-3.5",
+                healthTone(status.health) === "ok" && "text-ok",
+                healthTone(status.health) === "warn" && "text-amber-400",
+                healthTone(status.health) === "danger" && "text-danger",
+              )}
+            />
+            <span className="font-mono">{healthLabel(status.health)}</span>
             <span className="text-subtle">· {status.ms}ms</span>
           </p>
-          <p className="mt-1 font-mono text-xs text-muted">{status.network}</p>
+          <p className="mt-1 font-mono text-xs text-muted">
+            GET /health → HTTP {status.status ?? "n/a"}
+          </p>
         </div>
       ) : (
-        <p className="mt-2 text-sm text-danger">down — {status.error}</p>
+        <p className="mt-2 text-sm text-danger">Down — {status.error}</p>
       )}
     </div>
   );

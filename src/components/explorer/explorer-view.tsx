@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { DagMark } from "@/components/brand/dag-mark";
-import { MAINNET_ID } from "@/lib/networkConstants";
+import { ATOM, MIN_FEE, MAINNET_ID, NETWORK_LABEL } from "@/lib/networkConstants";
 import { SURFACE } from "@/lib/surfaces";
 import { Compass, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
 import { DagCanvas, DagLegend } from "@/components/explorer/dag-canvas";
@@ -9,7 +9,7 @@ import { createDagBlocksCache } from "@/lib/api/map-blocks";
 import { useNode } from "@/lib/api/use-node";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
-import { getNetworkId } from "@/lib/network";
+import { healthLabel } from "@/lib/api/health";
 import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
@@ -19,7 +19,7 @@ type Tab = (typeof TABS)[number];
 
 /** Explorer BlockDAG surface. Truthful hybrid consensus metrics and DAG inspection. */
 export function ExplorerView() {
-  const { state, error, refresh, source } = useNode(2000);
+  const { state, error, errorStatus, refresh, source } = useNode(2000);
   const [tab, setTab] = useState<Tab>("Graph");
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
 
@@ -40,16 +40,17 @@ export function ExplorerView() {
   const selectedApi = state?.node.dag.find((b) => b.id === selectedBlock) ?? null;
   const n = state?.node;
 
-  // Endpoint verification check for hybrid capability
+  // Endpoint verification check for the single live network
   const isHybridVerified =
-    state?.network?.includes("2") ||
-    state?.network?.toLowerCase().includes("testnet") ||
-    state?.network?.toLowerCase().includes("hybrid") ||
+    state?.chain_id === 2 ||
+    state?.network === "kovanica-testnet" ||
     source === "local";
 
   if (source === "mainnet") {
     return <MainnetExplorerPlaceholder />;
   }
+
+  const health = state?.health?.state ?? null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -64,9 +65,14 @@ export function ExplorerView() {
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted md:text-sm">
-            Native coin <strong className="text-fg">KVNC</strong> on {state?.network ?? getNetworkId()}.
-            Target block interval: 4 s (not a finality guarantee) · GHOSTDAG K=5.
-            {error ? <span className="text-danger"> · {error}</span> : null}
+            Native coin <strong className="text-fg">KVNC</strong> on {NETWORK_LABEL}.
+            Target block interval: 4 s (not a finality guarantee) · GHOSTDAG k=5.
+            {error ? (
+              <span className={errorStatus === 503 ? "text-amber-400" : "text-danger"}>
+                {" "}
+                · {errorStatus === 503 ? healthLabel("stalled") : error}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -86,13 +92,44 @@ export function ExplorerView() {
         </div>
       </div>
 
-      {/* Endpoint caveat notice when hybrid capabilities not established */}
+      {/* Liveness: a stalled chain is not a down endpoint */}
+      {health && health !== "live" && (
+        <div
+          className={cn(
+            "flex items-center justify-between gap-3 border-b px-4 py-2 text-xs md:px-6",
+            health === "stalled"
+              ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+              : "border-danger/30 bg-danger/10 text-danger",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>
+              {healthLabel(health)}
+              {health === "stalled"
+                ? " — reads still answer; writes are not available via the public RPC."
+                : " — the RPC endpoint is unreachable."}
+            </span>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void refresh()}
+            className="h-7 border-current/40 text-xs"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Endpoint caveat notice when the expected chain is not reported */}
       {state && !isHybridVerified && (
         <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-300 md:px-6">
           <div className="flex items-center gap-2">
             <AlertCircle className="size-4 shrink-0" />
             <span>
-              Connected endpoint reports &ldquo;{state.network}&rdquo;. Hybrid Chain 2 data unavailable / endpoint not yet verified.
+              Connected endpoint reports &ldquo;{state.network}&rdquo; (chain ID {state.chain_id ?? "n/a"}). Expected {NETWORK_LABEL}; data not verified.
             </span>
           </div>
           <Button
@@ -109,29 +146,26 @@ export function ExplorerView() {
 
       {/* Real-data grid: at most 6 compact measured telemetry cells */}
       <dl className="grid grid-cols-2 border-b border-border bg-border gap-px sm:grid-cols-3 lg:grid-cols-6">
-        <Stat
-          label="DAG Blocks"
-          value={blocks.length > 0 ? `${blocks.length} Blocks` : String(n?.blocks ?? "—")}
-        />
+        <Stat label="Committed Height" value={n?.blocks !== undefined ? String(n.blocks) : "n/a"} />
         <Stat
           label="Selected Head"
-          value={n?.selected_tip ? shortId(n.selected_tip, 6) : "—"}
+          value={n?.selected_tip ? shortId(n.selected_tip, 6) : "n/a"}
         />
         <Stat
           label="Connected Peers"
-          value={state?.peers !== undefined ? `${state.peers.length} Peers` : "—"}
+          value={state?.peers !== undefined ? `${state.peers.length} Peers` : "n/a"}
         />
         <Stat
           label="Mempool"
-          value={n?.mempool !== undefined ? `${n.mempool} Pending` : "—"}
+          value={n?.mempool != null ? `${n.mempool} Pending` : "n/a"}
         />
         <Stat
           label="Genesis Anchor"
-          value={n?.genesis ? shortId(n.genesis, 6) : "—"}
+          value={n?.genesis ? shortId(n.genesis, 6) : "n/a"}
         />
         <Stat
           label="Blue Score"
-          value={n?.blue_score !== undefined ? String(n.blue_score) : "—"}
+          value={n?.blue_score != null ? String(n.blue_score) : "n/a"}
         />
       </dl>
 
@@ -154,14 +188,28 @@ export function ExplorerView() {
         </div>
         <div className="h-[min(54vh,480px)]">
           {error && !state ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-6 text-center">
-              <ShieldAlert className="size-8 text-danger" />
-              <p className="text-sm font-medium text-danger">Unable to reach node endpoint</p>
-              <p className="max-w-md text-xs text-muted">{error}</p>
-              <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
-                <RefreshCw className="mr-1.5 size-3.5" /> Retry Connection
-              </Button>
-            </div>
+            errorStatus === 503 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-6 text-center">
+                <AlertCircle className="size-8 text-amber-400" />
+                <p className="text-sm font-medium text-amber-300">{healthLabel("stalled")}</p>
+                <p className="max-w-md text-xs text-muted">
+                  The node answered HTTP 503: reads are degraded but the endpoint is up. This is not
+                  a down endpoint.
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
+                  <RefreshCw className="mr-1.5 size-3.5" /> Retry
+                </Button>
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-6 text-center">
+                <ShieldAlert className="size-8 text-danger" />
+                <p className="text-sm font-medium text-danger">Unable to reach node endpoint</p>
+                <p className="max-w-md text-xs text-muted">{error}</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
+                  <RefreshCw className="mr-1.5 size-3.5" /> Retry Connection
+                </Button>
+              </div>
+            )
           ) : !state ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-border bg-bg/50 p-6 text-center">
               <div className="size-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
@@ -171,7 +219,10 @@ export function ExplorerView() {
             <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-border bg-bg/50 p-6 text-center">
               <Compass className="size-8 text-muted" />
               <p className="text-sm font-medium text-fg">No blocks returned in DAG</p>
-              <p className="text-xs text-muted">The node state currently reports 0 DAG blocks.</p>
+              <p className="text-xs text-muted">
+                The node reports committed height but exposes no per-height headers, so the graph is
+                empty. n/a is shown rather than a synthetic chain.
+              </p>
               <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
                 <RefreshCw className="mr-1.5 size-3.5" /> Refresh
               </Button>
@@ -188,7 +239,7 @@ export function ExplorerView() {
           {TABS.map((t) => {
             const count =
               t === "Blocks" ? blocks.length :
-              t === "Mempool" ? (n?.mempool ?? 0) :
+              t === "Mempool" ? (n?.mempool ?? undefined) :
               undefined;
             return (
               <button
@@ -353,12 +404,15 @@ function BlocksTable({ blocks, selectedId, onSelect }: { blocks: Block[]; select
 }
 
 function MempoolPanel({ node }: { node: ApiNode | undefined }) {
-  if (!node || node.pending.length === 0) {
+  if (!node || node.mempool === null) {
+    return <p className="text-sm text-muted">Mempool: n/a — the public RPC does not report a pool count.</p>;
+  }
+  if (node.pending.length === 0) {
     return <p className="text-sm text-muted">Mempool is clear. Transactions are mined in 4-second blocks.</p>;
   }
   return (
     <div>
-      <p className="mb-3 text-sm text-muted">Min fee 0.00001 KVNC. {node.pending.length} in pool.</p>
+      <p className="mb-3 text-sm text-muted">Min fee {MIN_FEE / ATOM} KVNC. {node.pending.length} in pool.</p>
       <ul className="font-mono text-xs text-muted space-y-1">
         {node.pending.map((id) => (
           <li key={id}>mempool · {shortId(id)}</li>
@@ -408,12 +462,12 @@ function ConsolePanel({ node }: { node: ApiNode | undefined }) {
     <div className="overflow-auto rounded-lg border border-border bg-surface/50 p-4 max-h-[400px]">
       <p className="text-[10px] tracking-wide text-subtle uppercase">Consensus Status</p>
       <div className="mt-2 font-mono text-xs text-muted space-y-1">
-        <p>• Consensus Model: Hybrid PoW + GHOSTDAG (NO stake in consensus)</p>
+        <p>• Consensus Model: Hybrid PoW + GHOSTDAG</p>
         <p>• GHOSTDAG Parameter: K=5</p>
         <p>• Target Block Time: 4,000 ms (4 s)</p>
         <p>• PoW Hash Algorithm: KovanicaHash (BLAKE3 + 2 MiB mix)</p>
         <p>• Security Audit: Required before mainnet launch</p>
-        <p>• Reported Head Height: #{node?.blocks ?? 0}</p>
+        <p>• Reported Head Height: {node?.blocks !== undefined ? `#${node.blocks}` : "n/a"}</p>
         <p>• Native Token: KVNC (9 decimals)</p>
       </div>
     </div>
@@ -479,7 +533,7 @@ function DocsPanel() {
       </p>
       <p>
         The target block interval is 4 seconds. A target interval is not a finality guarantee.
-        There is zero stake in consensus — no validator bonds, delegations, or slashing.
+        Block authorship is Proof-of-Work only.
       </p>
     </div>
   );

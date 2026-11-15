@@ -36,5 +36,5 @@ export const ABOUT = {
   xFounder: "https://x.com/BetterCallDzuks",
 
   transparency:
-    "Early control is intentional and documented. Tokenomics (90.2M KVNC total supply, 82M subsidy budget, 8M treasury, 0 genesis validator allocation, 0.2M founder premine, 2.5 KVNC initial block reward) are public and locked. The goal is progressive decentralisation under transparent rules.",
+    "Early control is intentional and documented. Tokenomics (90.2M KVNC total supply, 82M subsidy budget, 8M treasury, 0 genesis allocation, 0.2M founder premine, 2.5 KVNC initial block reward) are public and locked. The goal is progressive decentralisation under transparent rules.",
 } as const;

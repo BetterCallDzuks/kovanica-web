@@ -38,7 +38,7 @@ export function LiveStats() {
 
   const cells = [
     { label: "Blocks", value: head.blocks.toLocaleString() },
-    { label: "Tip", value: shortId(head.tip) },
+    { label: "Tip", value: head.tip ? shortId(head.tip) : "n/a" },
     { label: "Min fee", value: `${head.min_fee.toLocaleString()} atoms` },
     { label: "Target", value: "4 s" },
   ];

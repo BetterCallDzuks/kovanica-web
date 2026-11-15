@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { SourceSwitch } from "@/components/layout/source-switch";
 import { Button } from "@/components/ui/button";
 import { api, useApiSource } from "@/lib/api/client";
-import { type ApiBootstrap } from "@/lib/api/contract";
+import { ATOM, MIN_FEE, type ApiBootstrap, NETWORK_LABEL } from "@/lib/api/contract";
+import { healthLabel, errorStatusOf } from "@/lib/api/health";
 import { getCurrentSpecText, getNetworkId } from "@/lib/network";
 import { shortId } from "@/lib/ledger/hash";
 import { SURFACE } from "@/lib/surfaces";
@@ -25,11 +26,13 @@ export function DocsView() {
   const source = useApiSource();
   const [boot, setBoot] = useState<ApiBootstrap | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [errStatus, setErrStatus] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setBoot(null);
     setErr(null);
+    setErrStatus(null);
     if (source === "mainnet") {
       setLoading(false);
       return;
@@ -44,11 +47,13 @@ export function DocsView() {
         }
         setBoot(b);
         setErr(null);
+        setErrStatus(null);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         setBoot(null);
         setErr(e instanceof Error ? e.message : "offline");
+        setErrStatus(errorStatusOf(e));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -58,12 +63,15 @@ export function DocsView() {
     };
   }, [source]);
 
-  const up = boot?.upstream;
   const _runNode = getCurrentSpecText().split("## Run a public node")[1]?.trim() ?? "";
 
   const isMainnet = source === "mainnet";
   const title = isMainnet ? "Mainnet" : "Testnet";
-  const ok = isMainnet ? false : (up?.ok === true || boot !== null);
+  const ok = isMainnet
+    ? false
+    : boot?.health
+      ? boot.health.state === "live"
+      : boot !== null;
 
   const statusLines: string[] = isMainnet
     ? ["Mainnet launch: 1.1.2027", "Pre-launch audit in progress", "No public node endpoint yet"]
@@ -71,10 +79,13 @@ export function DocsView() {
       ? ["Connecting to node telemetry…"]
       : boot
         ? [
-            `${typeof boot.blocks === "number" ? `${boot.blocks.toLocaleString()} blocks` : "Blocks —"} · ${boot.network ?? "Chain 2"}`,
-            `genesis ${boot.genesis ? shortId(boot.genesis, 6) : "—"}`,
+            `${typeof boot.blocks === "number" ? `${boot.blocks.toLocaleString()} blocks` : "Blocks —"} · ${boot.network ?? NETWORK_LABEL}`,
+            `genesis ${boot.genesis ? shortId(boot.genesis, 6) : "n/a"}`,
+            boot.health ? `${healthLabel(boot.health.state)} · HTTP ${boot.health.status ?? "n/a"}` : "health n/a",
           ]
-        : ["Telemetry unavailable · Node offline", err ? `offline (${err})` : "offline"];
+        : errStatus === 503
+          ? [healthLabel("stalled"), "Telemetry degraded · endpoint answered HTTP 503"]
+          : ["Telemetry unavailable · Node offline", err ? `offline (${err})` : "offline"];
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 py-8 md:px-6">
@@ -248,7 +259,7 @@ export function DocsView() {
             />
             <Fact
               k="Fee Currency"
-              v="KVNC (min fee 10,000 atoms = 0.00001 KVNC)"
+              v={`KVNC (min fee ${MIN_FEE.toLocaleString()} atoms = ${MIN_FEE / ATOM} KVNC)`}
             />
           </dl>
         </section>
@@ -257,14 +268,14 @@ export function DocsView() {
         <section id="consensus" className="mt-10 scroll-mt-20">
           <h2 className="font-display text-2xl tracking-tight text-fg">Consensus</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Kovanica pairs Proof-of-Work (PoW) block admission with GHOSTDAG graph ordering. Blocks target a 4-second interval and are topologically ordered by GHOSTDAG with parameter k=5 (target block interval is a network pacing parameter, not a finality guarantee). Proof-of-Work uses the KovanicaHash algorithm (BLAKE3 + 2 MiB memory mix; a formal security audit is required prior to mainnet launch). There is no validator staking, bonding, committee rotation, or slashing in consensus.
+            Kovanica pairs Proof-of-Work (PoW) block admission with GHOSTDAG graph ordering. Blocks target a 4-second interval and are topologically ordered by GHOSTDAG with parameter k=5 (target block interval is a network pacing parameter, not a finality guarantee). Proof-of-Work uses the KovanicaHash algorithm (BLAKE3 + 2 MiB memory mix; a formal security audit is required prior to mainnet launch). There is no stake in consensus.
           </p>
           <dl className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
             <Fact k="Consensus" v="Hybrid PoW + GHOSTDAG (k = 5)" />
             <Fact k="Target Interval" v="4.0s target block time" />
             <Fact k="GHOSTDAG k" v="k = 5" />
             <Fact k="PoW Algorithm" v="KovanicaHash (BLAKE3 + 2 MiB mix, audit required)" />
-            <Fact k="Consensus Stake" v="None (pure PoW + GHOSTDAG)" />
+            <Fact k="Block Admission" v="PoW (KovanicaHash)" />
             <Fact k="Execution Engine" v="Wasmi (Deterministic WASM)" />
           </dl>
         </section>
@@ -279,7 +290,7 @@ export function DocsView() {
               k="Initial Reward"
               v="2.5 KVNC / committed block"
             />
-            <Fact k="Min fee" v="10,000 atoms (0.00001 KVNC)" />
+            <Fact k="Min fee" v={`${MIN_FEE.toLocaleString()} atoms (${MIN_FEE / ATOM} KVNC)`} />
             <Fact k="Consensus" v="Hybrid PoW + GHOSTDAG (k = 5)" />
             <Fact k="P2P" v="TCP :8000 · seed1" />
           </dl>
@@ -297,10 +308,11 @@ export function DocsView() {
             <Fact k="Initial Reward s₀" v="2.5 KVNC / block" />
             <Fact k="Founder premine" v="200,000 KVNC" />
             <Fact k="Treasury" v="8,000,000 KVNC (1M/yr × 8 yrs linear)" />
-            <Fact k="Genesis Allocation" v="0 KVNC (no-stake PoW)" />
+            <Fact k="Genesis Allocation" v="0 KVNC (mining emission only)" />
             <Fact k="Subsidy Era" v="8,200,000 blocks" />
             <Fact k="Decay Factor" v="× 3/4 each era" />
             <Fact k="Target Block" v="4.0s (target interval)" />
+            <Fact k="Fees" v="3/4 burned, 1/4 to miner — pending (PR in progress, PRO-53)" />
           </dl>
         </section>
 
@@ -384,7 +396,7 @@ export function DocsView() {
         <section id="roadmap" className="mt-10 scroll-mt-20">
           <h2 className="font-display text-2xl tracking-tight text-fg">Roadmap</h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Explore planned protocol milestones, Chain 2 hybrid testnet verification, and mainnet deployment readiness.
+            Explore planned protocol milestones, {NETWORK_LABEL} hybrid verification, and mainnet deployment readiness.
           </p>
           <Button asChild variant="outline" size="sm" className="mt-4">
             <Link to="/roadmap">Open roadmap</Link>

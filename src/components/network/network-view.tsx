@@ -1,29 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { SURFACE } from "@/lib/surfaces";
-import { Activity, Globe, Server, Radio, RefreshCw } from "lucide-react";
+import { Activity, Globe, Server, Radio, RefreshCw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, useApiSource, isPublic } from "@/lib/api/client";
 import type { ApiBootstrap, ApiHead } from "@/lib/api/contract";
-import { ATOM, TOKEN } from "@/lib/api/contract";
+import { ATOM, NETWORK_LABEL, TOKEN } from "@/lib/api/contract";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
-
-type P2pInfo = {
-  path: string;
-  listen: string;
-  peers: string[];
-  bootstrap: string;
-};
+import { healthLabel, healthTone, errorStatusOf } from "@/lib/api/health";
 
 type Snapshot = {
   head: ApiHead;
   bootstrap: ApiBootstrap;
-  p2p: P2pInfo | null;
   fetchedAt: number;
 };
 
 function fmtKvnc(atoms: number): string {
   return `${(atoms / ATOM).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${TOKEN}`;
+}
+
+/** Block/tip hashes are the only values the RPC can omit; render "n/a" for them. */
+function na(value: string | null | undefined): string {
+  return value ? value : "n/a";
 }
 
 export function NetworkView() {
@@ -32,6 +30,7 @@ export function NetworkView() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const genRef = useRef(0);
   const inFlightGenRef = useRef<number | null>(null);
   const currentSourceRef = useRef(source);
@@ -45,11 +44,11 @@ export function NetworkView() {
     inFlightGenRef.current = myGen;
     setBusy(true);
     setError(null);
+    setErrorStatus(null);
     try {
-      const [head, bootstrap, p2p] = await Promise.all([
+      const [head, bootstrap] = await Promise.all([
         api<ApiHead>("/api/head"),
         api<ApiBootstrap>("/api/bootstrap"),
-        api<P2pInfo>("/api/p2p").catch(() => null),
       ]);
       if (
         !head ||
@@ -61,12 +60,13 @@ export function NetworkView() {
         throw new Error("Malformed network status response");
       }
       if (myGen === genRef.current && reqSource === currentSourceRef.current) {
-        setSnap({ head, bootstrap, p2p, fetchedAt: Date.now() });
+        setSnap({ head, bootstrap, fetchedAt: Date.now() });
       }
     } catch (e) {
       if (myGen === genRef.current && reqSource === currentSourceRef.current) {
         const msg = e instanceof Error ? e.message : "Failed to load network status";
         setError(msg);
+        setErrorStatus(errorStatusOf(e));
       }
     } finally {
       if (inFlightGenRef.current === myGen) {
@@ -83,6 +83,7 @@ export function NetworkView() {
     inFlightGenRef.current = null;
     setSnap(null);
     setError(null);
+    setErrorStatus(null);
     setBusy(false);
     if (source === "mainnet") return;
     void load();
@@ -100,7 +101,6 @@ export function NetworkView() {
 
   const b = snap?.bootstrap;
   const h = snap?.head;
-  const p2p = snap?.p2p;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
@@ -109,8 +109,7 @@ export function NetworkView() {
           <p className="font-mono text-[10px] tracking-brand text-gold uppercase">Status</p>
           <h1 className="font-display text-3xl tracking-tight text-fg">Network</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Live view of the selected source ({live ? "public testnet" : source}). Auto-refreshes
-            every 15s.
+            Live view of {live ? NETWORK_LABEL : source} from the seed1 RPC. Auto-refreshes every 15s.
           </p>
         </div>
         <Button
@@ -126,8 +125,15 @@ export function NetworkView() {
       </header>
 
       {error && (
-        <div className="rounded-xl border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
-          {error}
+        <div
+          className={cn(
+            "rounded-xl border px-4 py-3 text-sm",
+            errorStatus === 503
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+              : "border-danger/40 bg-danger/5 text-danger",
+          )}
+        >
+          {errorStatus === 503 ? `${healthLabel("stalled")} — ${error}` : error}
         </div>
       )}
 
@@ -137,32 +143,46 @@ export function NetworkView() {
 
       {snap && h && b && (
         <>
+          {b.health && b.health.state !== "live" && (
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-xl border px-4 py-3 text-sm",
+                healthTone(b.health.state) === "warn"
+                  ? "border-amber-500/40 bg-amber-500/5 text-amber-300"
+                  : "border-danger/40 bg-danger/5 text-danger",
+              )}
+            >
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{healthLabel(b.health.state)}</span>
+            </div>
+          )}
+
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               icon={Activity}
-              label="Blocks"
+              label="Committed height"
               value={h.blocks.toLocaleString()}
-              sub={`tip ${shortId(h.tip)}`}
+              sub={`tip ${h.tip ? shortId(h.tip) : "n/a"}`}
             />
             <StatCard
               icon={Globe}
               label="Network"
-              value={h.network}
-              sub={`k = ${b.k} · min fee ${(h.min_fee / ATOM).toFixed(4)} ${TOKEN}`}
+              value={NETWORK_LABEL}
+              sub={`k = ${b.k} · min fee ${h.min_fee.toLocaleString()} atoms`}
             />
             <StatCard
               icon={Server}
               label="Peers"
-              value={String((p2p?.peers?.length ?? b.peers?.length ?? 0))}
-              sub={p2p?.path ?? "tcp"}
+              value={String(b.peers?.length ?? 0)}
+              sub="reported by seed1"
             />
           </section>
 
           <section className="rounded-xl border border-border bg-surface p-4">
             <p className="text-[10px] tracking-wide text-subtle uppercase">Chain parameters</p>
             <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Row label="Genesis" value={shortId(h.genesis)} mono full={h.genesis} />
-              <Row label="Tip" value={shortId(h.tip)} mono full={h.tip} />
+              <Row label="Genesis" value={h.genesis ? shortId(h.genesis) : "n/a"} mono full={h.genesis ?? undefined} />
+              <Row label="Tip" value={h.tip ? shortId(h.tip) : "n/a"} mono full={h.tip ?? undefined} />
               <Row label="Token" value={b.token ?? TOKEN} />
               <Row label="Subsidy" value={fmtKvnc(b.subsidy)} />
               <Row label="Founder amount" value={fmtKvnc(b.founder_amount)} />
@@ -171,12 +191,6 @@ export function NetworkView() {
               <Row label="GHOSTDAG k" value={String(b.k)} />
               {"finality_depth" in b && (
                 <Row label="Finality depth" value={String((b as Record<string, unknown>).finality_depth)} />
-              )}
-              {"payload_pruning_depth" in b && (
-                <Row
-                  label="Payload prune"
-                  value={String((b as Record<string, unknown>).payload_pruning_depth)}
-                />
               )}
             </dl>
           </section>
@@ -187,30 +201,24 @@ export function NetworkView() {
               <p className="text-[10px] tracking-wide text-subtle uppercase">P2P</p>
             </div>
             <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Row label="Listen" value={p2p?.listen ?? b.listen ?? "—"} mono />
-              <Row label="Bootstrap" value={p2p?.bootstrap ?? "seed1.kovanica.online:8000"} mono />
+              <Row label="Listen" value={na(b.listen)} mono />
+              <Row label="Bootstrap seeds" value="seed1.kovanica.online:8000" mono />
             </dl>
-            <p className="mt-4 text-[10px] tracking-wide text-subtle uppercase">Bootstrap seeds</p>
-            <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-              <li className="break-all px-3 py-2 font-mono text-xs text-fg">
-                seed1.kovanica.online:8000 <span className="text-subtle">(grey-cloud DNS)</span>
-              </li>
-            </ul>
-            <p className="mt-3 text-[11px] leading-relaxed text-subtle">
-              Dial the DNS names on TCP 8000 — never the Cloudflare-proxied explorer
-              hostnames.
-            </p>
             <p className="mt-4 text-[10px] tracking-wide text-subtle uppercase">Connected peers</p>
             <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-              {(p2p?.peers ?? b.peers ?? []).length === 0 && (
-                <li className="px-3 py-2 font-mono text-xs text-muted">No peers reported</li>
+              {(b.peers ?? []).length === 0 && (
+                <li className="px-3 py-2 font-mono text-xs text-muted">n/a — seed1 reports no peers</li>
               )}
-              {(p2p?.peers ?? b.peers ?? []).map((peer) => (
+              {(b.peers ?? []).map((peer) => (
                 <li key={peer} className="break-all px-3 py-2 font-mono text-xs text-fg">
                   {peer}
                 </li>
               ))}
             </ul>
+            <p className="mt-3 text-[11px] leading-relaxed text-subtle">
+              Only the peers seed1 reports are shown. seed1 does not report other seed nodes or an
+              observer, so none are rendered.
+            </p>
           </section>
 
           {b.upstream && (
@@ -218,10 +226,10 @@ export function NetworkView() {
               <p className="text-[10px] tracking-wide text-subtle uppercase">Upstream probe</p>
               {b.upstream.ok ? (
                 <p className="mt-2 font-mono text-sm text-ok">
-                  OK · tip {shortId(b.upstream.head.tip)} · {b.upstream.head.blocks} blocks
+                  OK · tip {b.upstream.head.tip ? shortId(b.upstream.head.tip) : "n/a"} · {b.upstream.head.blocks} blocks
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-danger">{b.upstream.error}</p>
+                <p className="mt-2 text-sm text-muted">{b.upstream.error}</p>
               )}
             </section>
           )}
@@ -316,8 +324,8 @@ function MainnetNetworkView() {
             <dd className="mt-1 font-mono text-sm text-muted">Not open yet (opens at genesis)</dd>
           </div>
           <div className="rounded-lg bg-bg/50 p-3">
-            <dt className="text-xs text-muted">Staking / Validators</dt>
-            <dd className="mt-1 font-mono text-sm text-fg">None (Zero-stake PoW consensus)</dd>
+            <dt className="text-xs text-muted">Ledger Ordering</dt>
+            <dd className="mt-1 font-mono text-sm text-fg">GHOSTDAG (k = 5)</dd>
           </div>
         </dl>
 

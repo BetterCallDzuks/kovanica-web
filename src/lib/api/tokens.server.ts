@@ -23,11 +23,10 @@ import {
 } from "../tokens/codec";
 import { decodePool, POOL_SLOT_HEX, spotPriceKuna, type ApiPool, type PoolState } from "../tokens/pool";
 import { parseAddr } from "../wallet/address";
+import { rpcCall } from "./rpc-url.server";
 
 export type { ApiToken };
 export type { ApiPool };
-
-const RPC_URL = "http://127.0.0.1:8545/rpc";
 
 /** Heights per `getLogs` query — below the node's 500 cap, leaving retry room. */
 const CHUNK_HEIGHTS = 400;
@@ -52,15 +51,7 @@ let cache: Cache | null = null;
 let inflight: Promise<{ entries: Entry[] }> | null = null;
 
 async function rpc<T>(method: string, params: unknown[] = []): Promise<T> {
-  const res = await fetch(RPC_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
-  });
-  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
-  const data = (await res.json()) as { result?: T; error?: { message?: string } };
-  if (data.error) throw new Error(data.error.message ?? "RPC error");
-  return data.result as T;
+  return rpcCall<T>(method, params);
 }
 
 function hexHeight(value: string | number | bigint): string {

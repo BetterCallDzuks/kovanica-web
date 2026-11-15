@@ -81,7 +81,7 @@ export function PlaygroundOnboarding() {
           Send your first transaction
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Three quick steps to get started with Kovanica testnet.
+          Three quick steps to get started with kovanica-testnet (chain ID 2).
         </p>
       </div>
 
@@ -160,7 +160,7 @@ export function PlaygroundOnboarding() {
         <div className="mt-8 rounded-xl border border-green-500/30 bg-green-500/10 p-6 text-center">
           <p className="text-lg font-medium text-green-400">All done!</p>
           <p className="mt-1 text-sm text-muted">
-            You've completed the Kovanica testnet onboarding. Head back to the
+            You've completed the kovanica-testnet onboarding. Head back to the
             explorer to keep building.
           </p>
           <button

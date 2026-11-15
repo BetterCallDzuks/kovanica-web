@@ -535,7 +535,7 @@ export function WalletView() {
           >
             <p className="font-semibold text-gold">Mainnet Prelaunch · Launch Scheduled 1.1.2027</p>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              The Kovanica mainnet has not launched yet. Public genesis is scheduled for 1.1.2027 following the hybrid testnet and KovanicaHash audit. Wallet transfers, faucet claims, and transaction signing are strictly disabled on mainnet until launch. Please switch to Testnet to test wallet functions and transactions.
+              The kovanica-mainnet network (chain ID 1) has not launched yet. Public genesis is scheduled for 1.1.2027 following the kovanica-testnet milestone and the KovanicaHash audit. Wallet transfers, faucet claims, and transaction signing are strictly disabled on kovanica-mainnet until launch. Please switch to kovanica-testnet (chain ID 2) to test wallet functions and transactions.
             </p>
           </div>
         )}
@@ -769,7 +769,7 @@ export function WalletView() {
           >
             <p className="font-semibold text-gold">Mainnet Prelaunch · Launch Scheduled 1.1.2027</p>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              The Kovanica mainnet has not launched yet. Public genesis is scheduled for 1.1.2027 following the hybrid testnet and KovanicaHash audit. Wallet transfers, faucet claims, and transaction signing are strictly disabled on mainnet until launch. Please switch to Testnet to test wallet functions and transactions.
+              The kovanica-mainnet network (chain ID 1) has not launched yet. Public genesis is scheduled for 1.1.2027 following the kovanica-testnet milestone and the KovanicaHash audit. Wallet transfers, faucet claims, and transaction signing are strictly disabled on kovanica-mainnet until launch. Please switch to kovanica-testnet (chain ID 2) to test wallet functions and transactions.
             </p>
           </div>
         )}
@@ -842,7 +842,7 @@ export function WalletView() {
         >
           <p className="font-semibold text-gold">Mainnet Prelaunch · Launch Scheduled 1.1.2027</p>
           <p className="mt-1 text-xs leading-relaxed text-muted">
-            The Kovanica mainnet has not launched yet. Public genesis is scheduled for 1.1.2027 following the hybrid testnet and KovanicaHash audit. Wallet transfers, faucet claims, and transaction signing are strictly disabled on mainnet until launch. Please switch to Testnet to test wallet functions and transactions.
+            The kovanica-mainnet network (chain ID 1) has not launched yet. Public genesis is scheduled for 1.1.2027 following the kovanica-testnet milestone and the KovanicaHash audit. Wallet transfers, faucet claims, and transaction signing are strictly disabled on kovanica-mainnet until launch. Please switch to kovanica-testnet (chain ID 2) to test wallet functions and transactions.
           </p>
         </div>
       )}

@@ -1,5 +1,15 @@
 import { SPEC_TEXT } from "./spec";
-import { getSpecText, NETWORK_ID } from "../networkConstants";
+import {
+  ATOM,
+  DECIMALS,
+  HALVING_ERA,
+  MAX_SUPPLY,
+  MIN_FEE,
+  NETWORK_ID,
+  SUBSIDY,
+  TOKEN,
+  getSpecText,
+} from "../networkConstants";
 import {
   localBlocksDump,
   localBootstrap,
@@ -20,11 +30,13 @@ import {
   localSubmit,
   localUtxos,
 } from "./node.server";
-import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap, type ApiDagBlock } from "./contract";
+import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap } from "./contract";
 import { parseAddr, toCanonicalAddress } from "../wallet/address";
 import { listPools, listTokens, getTokenState } from "./tokens.server";
 import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
+import { classifyHealth, type HealthSummary } from "./health";
+import { faucetEndpoint, probeHealth, rpcCall, RpcError, type HealthProbeResult } from "./rpc-url.server";
 
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -66,25 +78,34 @@ function action(pathname: string): string {
   return rest.split("/")[0] ?? "";
 }
 
-const LOCAL_RPC = "http://127.0.0.1:8545/rpc";
-const LIVE_FAUCET = process.env.KOVANICA_FAUCET_URL || "http://127.0.0.1:3000";
-
 /** Same flat fee the native prepare path uses; token calls are one storage write. */
 const TOKEN_FEE = 10_000;
 /** Fuel cap, not a charge. 5M is far above a transfer and below MAX_TX_GAS_LIMIT. */
 const TOKEN_GAS_LIMIT = 5_000_000;
 const MAX_U128 = (1n << 128n) - 1n;
 
-async function callRpc(method: string, params: unknown[] = []): Promise<any> {
-  const res = await fetch(LOCAL_RPC, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
-  });
-  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
-  return data.result;
+/** Classify a liveness probe into the shared health vocabulary. */
+function summarise(probe: HealthProbeResult): HealthSummary {
+  return {
+    state: classifyHealth({ healthStatus: probe.status, failed: probe.failed }),
+    status: probe.status,
+    checkedAt: probe.checkedAt,
+  };
+}
+
+/** Read + write calls go straight to seed1; no token, no Authorization header. */
+function callRpc<T = any>(method: string, params: unknown[] = []): Promise<T> {
+  return rpcCall<T>(method, params);
+}
+
+/** 503 is a stalled chain; everything else (transport, 5xx) is down. */
+function rpcFailureStatus(error: unknown): 503 | 502 {
+  return error instanceof RpcError && error.status === 503 ? 503 : 502;
+}
+
+function numberOrNull(value: unknown): number | null {
+  const n = typeof value === "string" ? Number(value) : value;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
 }
 
 function asciiPad(text: string, size: number): Uint8Array {
@@ -211,227 +232,177 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 async function fetchLiveState(): Promise<ApiState> {
-  const [sync, latest, tips, miningInfo] = await Promise.all([
-    callRpc("kovanica_syncStatus"),
-    callRpc("kovanica_getLeaderHeader").catch(() => null),
-    callRpc("kovanica_getDagTips").catch(() => null),
-    callRpc("kovanica_getMiningInfo").catch(() => null),
+  const [sync, tips, mining, pending, probe] = await Promise.all([
+    callRpc<any>("kovanica_syncStatus"),
+    callRpc<any>("kovanica_getDagTips").catch(() => null),
+    callRpc<any>("kovanica_getMiningInfo").catch(() => null),
+    callRpc<any>("kovanica_getPendingTransactions").catch(() => null),
+    probeHealth(),
   ]);
 
-  const currentHeight = latest ? parseInt(latest.committedHeight, 16) : (Number(sync.committedHeight) || 0);
-  const currentTip = latest?.hash || tips?.tips?.[0] || "0x17e79432dfbee3adad15d7a851ff78ebafcefbc547073883489cd9cbdaae60fa";
-  const currentRound = latest ? parseInt(latest.leaderRound, 16) : (tips?.max_round ?? sync.localTipRound ?? currentHeight);
+  const currentHeight = numberOrNull(sync?.committedHeight) ?? 0;
+  const tipList: string[] = Array.isArray(tips?.tips) ? tips.tips.filter((t: unknown) => typeof t === "string") : [];
+  const peers: any[] = Array.isArray(sync?.peers) ? sync.peers : [];
+  const peerIds: string[] = peers
+    .map((p) => (typeof p?.peerId === "string" ? p.peerId : null))
+    .filter((id: string | null): id is string => id !== null);
+  const pendingIds: string[] = Array.isArray(pending)
+    ? pending
+        .map((tx) => (typeof tx === "string" ? tx : tx?.hash ?? tx?.tx_hash ?? null))
+        .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+    : [];
+  const mempool = Array.isArray(pending) ? pendingIds.length : null;
 
-  const start = Math.max(1, currentHeight - 24);
-  const headerPromises: Promise<any>[] = [];
-
-  // Always fetch Genesis Block (#0)
-  headerPromises.push(callRpc("kovanica_getLeaderHeader", [0]).catch(() => null));
-
-  // Fetch recent committed leaders
-  for (let h = start; h <= currentHeight; h++) {
-    headerPromises.push(callRpc("kovanica_getLeaderHeader", [h]).catch(() => null));
-  }
-  const rawHeaders = (await Promise.all(headerPromises)).filter(Boolean);
-
-  let dag: ApiDagBlock[] = [];
-  if (rawHeaders.length > 0) {
-    dag = rawHeaders.map((h): ApiDagBlock => {
-      const height = parseInt(h.committedHeight, 16);
-      const round = parseInt(h.leaderRound, 16);
-      let colour: "genesis" | "chain" | "blue" | "red" = "blue";
-      if (height === 0) {
-        colour = "genesis";
-      } else if (height === currentHeight) {
-        colour = "chain";
-      }
-
-      const parents = (h.parentLeaderDigest && h.parentLeaderDigest !== "0x0000000000000000000000000000000000000000000000000000000000000000")
-        ? [h.parentLeaderDigest]
-        : [];
-
-      return {
-        id: h.hash,
-        parents,
-        selected_parent: h.parentLeaderDigest || null,
-        work: height,
-        timestamp_ms: Date.now() - (currentHeight - height) * 4000,
-        nonce: h.leaderAuthor ?? 0,
-        blue_score: round,
-        colour,
-        txs: [],
-      };
-    });
-  } else {
-    // Generate DAG blocks for hybrid PoW
-    const dagBlocks: ApiDagBlock[] = [];
-    const genesisHash = "0x17e79432dfbee3adad15d7a851ff78ebafcefbc547073883489cd9cbdaae60fa";
-    dagBlocks.push({
-      id: genesisHash,
-      parents: [],
-      selected_parent: null,
-      work: 0,
-      timestamp_ms: Date.now() - currentHeight * 4000,
-      nonce: 0,
-      blue_score: 0,
-      colour: "genesis",
-      txs: [],
-    });
-    let prevHash = genesisHash;
-    for (let h = Math.max(1, currentHeight - 24); h <= currentHeight; h++) {
-      const isTip = (h === currentHeight);
-      const id = isTip && tips?.tips?.[0] ? tips.tips[0] : `0xblock${h.toString(16).padStart(60, "0")}`;
-      dagBlocks.push({
-        id,
-        parents: [prevHash],
-        selected_parent: prevHash,
-        work: h,
-        timestamp_ms: Date.now() - (currentHeight - h) * 4000,
-        nonce: h % 3,
-        blue_score: h,
-        colour: isTip ? "chain" : "blue",
-        txs: [],
-      });
-      prevHash = id;
-    }
-    dag = dagBlocks;
-  }
+  /**
+   * seed1 publishes DAG tips but no per-height headers under hybrid PoW:
+   * `kovanica_getLeaderHeader` and `kovanica_getBlockHeaderByNumber` return
+   * null for every height (checked 2026-11-15). The graph is therefore empty
+   * rather than a synthetic chain of `0xblock…` ids.
+   */
+  const dag: ApiState["node"]["dag"] = [];
+  const health = summarise(probe);
 
   return {
-    selected: currentTip,
-    mining: miningInfo?.mining_enabled ?? true,
-    faucet: true,
+    selected: tipList[0] ?? null,
+    mining: typeof mining?.mining_enabled === "boolean" ? mining.mining_enabled : null,
+    faucet: faucetEndpoint() !== null,
+    // The public testnet never allows reset; dispatch rejects it before this.
     allow_reset: false,
     operator: false,
-    network: sync.networkTag,
-    listen: "0.0.0.0:8000",
-    peers: (sync.peers || []).map((p: any) => p.peerId),
+    network: NETWORK_ID,
+    chain_id: numberOrNull(tips?.chain_id) ?? numberOrNull(mining?.chain_id) ?? null,
+    health,
+    listen: null,
+    peers: peerIds,
     mesh: {
+      // Snapshot timestamp of this response, not a block timestamp.
       now: Date.now(),
-      queued: 0,
-      nodes: (sync.peers || []).map((p: any, i: number) => ({
-        name: `node${i + 1}`,
-        blocks: sync.committedHeight,
-        tip: `0x${(p.reportedTipRound ?? 0).toString(16)}`,
-        peers: ["seed1.kovanica.online:8000"],
-        mempool: 0,
+      queued: mempool,
+      nodes: peers.map((p) => ({
+        name: typeof p?.peerId === "string" ? p.peerId : "unknown",
+        blocks: null,
+        tip: null,
+        peers: [],
+        mempool: null,
       })),
       events: [],
     },
     node: {
       blocks: currentHeight,
-      tips: tips?.tips || [currentTip],
-      selected_tip: currentTip,
-      blue_score: currentHeight,
-      blue_work: currentHeight * 100,
-      k: tips?.ghostdag_k ?? 5,
-      subsidy: 2_500_000_000,
-      issuance: 2_500_000_000,
-      halving_era: 8_200_000,
-      min_fee: 10_000,
-      genesis: "0x17e79432dfbee3adad15d7a851ff78ebafcefbc547073883489cd9cbdaae60fa",
-      supply: 90_200_000_000_000_000,
-      token: "KVNC",
-      decimals: 9,
-      miner: latest ? `Miner ${latest.leaderAuthor}` : `PoW Miner`,
-      atom: 1_000_000_000,
+      tips: tipList,
+      selected_tip: tipList[0] ?? null,
+      blue_score: null,
+      blue_work: null,
+      k: numberOrNull(tips?.ghostdag_k) ?? numberOrNull(mining?.ghostdag_k) ?? 5,
+      subsidy: SUBSIDY,
+      issuance: null,
+      halving_era: HALVING_ERA,
+      min_fee: MIN_FEE,
+      genesis: null,
+      supply: null,
+      token: TOKEN,
+      decimals: DECIMALS,
+      miner: null,
+      atom: ATOM,
       ui: "hybrid",
-      utxos: 0,
-      chain_len: currentRound,
-      mempool: 0,
-      tx_count: 0,
+      utxos: null,
+      chain_len: numberOrNull(sync?.localTipRound),
+      mempool,
+      tx_count: null,
       dag,
       order: dag.map((d) => d.id),
-      pending: [],
+      pending: pendingIds,
     },
     wallets: [],
     source: "testnet",
   };
 }
 
-
 async function fetchLiveBootstrap(): Promise<ApiBootstrap> {
   const head = await fetchLiveHead();
-  const sync = await callRpc("kovanica_syncStatus");
+  const [sync, probe] = await Promise.all([callRpc<any>("kovanica_syncStatus"), probeHealth()]);
+  const health = summarise(probe);
+  const peers: string[] = Array.isArray(sync?.peers)
+    ? sync.peers
+        .map((p: any) => (typeof p?.peerId === "string" ? p.peerId : null))
+        .filter((id: string | null): id is string => id !== null)
+    : [];
   return {
     ...head,
-    network: sync.networkTag || NETWORK_ID,
+    network: NETWORK_ID,
+    chain_id: head.chain_id ?? null,
     genesis: head.genesis,
     tip: head.tip,
     blocks: head.blocks,
     admission: "open",
     poa_enabled: false,
-    atom: 1_000_000_000,
-    token: "KVNC",
-    k: 5,
-    subsidy: 2_500_000_000,
-    min_fee: 10_000,
-    finality_depth: 100,
-    block_pruning_depth: 18446744073709551615,
-    payload_pruning_depth: 1000,
-    founder_amount: 200_000 * 1_000_000_000,
-    founder_seed: 0,
-    max_supply: 90_200_000 * 1_000_000_000,
-    burned: 0,
-    circulating: 200_000 * 1_000_000_000 + head.blocks * 2_500_000_000,
-    native_minted: 200_000 * 1_000_000_000 + head.blocks * 2_500_000_000,
-    total: 90_200_000 * 1_000_000_000,
-    listen: "0.0.0.0:8000",
-    peers: ["seed1.kovanica.online:8000"],
-    upstream: {
-      ok: true,
-      head,
-      },
-  };
+    atom: ATOM,
+    token: TOKEN,
+    k: head.k ?? 5,
+    subsidy: SUBSIDY,
+    min_fee: MIN_FEE,
+    finality_depth: head.finality_depth,
+    // Not exposed by seed1: null renders as "n/a".
+    block_pruning_depth: null,
+    payload_pruning_depth: null,
+    founder_amount: 200_000 * ATOM,
+    founder_seed: 1,
+    max_supply: MAX_SUPPLY,
+    burned: null,
+    circulating: null,
+    native_minted: null,
+    total: MAX_SUPPLY,
+    listen: null,
+    peers,
+    health,
+    upstream:
+      health.state === "live"
+        ? { ok: true, head }
+        : {
+            ok: false,
+            error: health.state === "stalled" ? "Stalled — chain not advancing" : "Down",
+          },
+  } as ApiBootstrap;
 }
 
 async function fetchLiveHead(): Promise<ApiHead> {
-  const [sync, latest, tips] = await Promise.all([
-    callRpc("kovanica_syncStatus"),
-    callRpc("kovanica_getLeaderHeader").catch(() => null),
-    callRpc("kovanica_getDagTips").catch(() => null),
+  const [sync, tips, mining, probe] = await Promise.all([
+    callRpc<any>("kovanica_syncStatus"),
+    callRpc<any>("kovanica_getDagTips").catch(() => null),
+    callRpc<any>("kovanica_getMiningInfo").catch(() => null),
+    probeHealth(),
   ]);
-  const currentHeight = latest ? parseInt(latest.committedHeight, 16) : (Number(sync.committedHeight) || 0);
-  const tipHash = latest?.hash || tips?.tips?.[0] || "0x17e79432dfbee3adad15d7a851ff78ebafcefbc547073883489cd9cbdaae60fa";
+  const currentHeight = numberOrNull(sync?.committedHeight) ?? 0;
+  const tipList: string[] = Array.isArray(tips?.tips) ? tips.tips.filter((t: unknown) => typeof t === "string") : [];
   return {
-    network: sync.networkTag,
-    genesis: "0x17e79432dfbee3adad15d7a851ff78ebafcefbc547073883489cd9cbdaae60fa",
-    tip: tipHash,
+    network: NETWORK_ID,
+    chain_id: numberOrNull(tips?.chain_id) ?? numberOrNull(mining?.chain_id) ?? null,
+    // seed1 exposes no genesis-hash method; "n/a" beats a hardcoded digest.
+    genesis: null,
+    tip: tipList[0] ?? null,
     blocks: currentHeight,
-    min_fee: 10_000,
-    atom: 1_000_000_000,
+    min_fee: MIN_FEE,
+    atom: ATOM,
     finality_depth: 100,
-  };
+    k: numberOrNull(tips?.ghostdag_k) ?? numberOrNull(mining?.ghostdag_k) ?? 5,
+    health: summarise(probe),
+  } as ApiHead;
 }
 
 async function fetchLiveUtxos(address: string): Promise<any> {
-  try {
-    const canonical = toCanonicalAddress(address) || address;
-    const balHex = await callRpc("kovanica_getBalance", [canonical]);
-    const balance = typeof balHex === "string" ? parseInt(balHex, 16) : 0;
-    return {
-      address,
-      balance,
-      utxos: balance > 0 ? [
-        {
-          tx: "0x0000000000000000000000000000000000000000000000000000000000000001",
-          index: 0,
-          value: balance,
-          asset_id: null,
-        }
-      ] : [],
-    };
-  } catch {
-    return { address, balance: 0, utxos: [] };
-  }
+  const canonical = toCanonicalAddress(address) || address;
+  const balHex = await callRpc<string>("kovanica_getBalance", [canonical]);
+  const balance = typeof balHex === "string" ? parseInt(balHex, 16) : 0;
+  // Read RPCs report a balance, not a UTXO set. Never invent an outpoint.
+  return { address, balance, utxos: [] };
 }
 
 async function fetchLiveHistory(address: string): Promise<any> {
   try {
     const canonical = toCanonicalAddress(address) || address;
     const [history, balHex] = await Promise.all([
-      callRpc("kovanica_getTransactionHistory", [canonical, 20]).catch(() => []),
-      callRpc("kovanica_getBalance", [canonical]).catch(() => "0x0"),
+      callRpc<any>("kovanica_getTransactionHistory", [canonical, 20]).catch(() => []),
+      callRpc<string>("kovanica_getBalance", [canonical]).catch(() => "0x0"),
     ]);
     const balance = typeof balHex === "string" ? parseInt(balHex, 16) : 0;
     return {
@@ -451,22 +422,23 @@ async function fetchLiveHistory(address: string): Promise<any> {
 }
 
 async function fetchLiveFeeEstimate(): Promise<any> {
-  try {
-    const feeRate = await callRpc("kovanica_estimateFee");
-    return {
-      fee_rate: typeof feeRate === "number" ? feeRate : 10,
-      unit: "atoms/gas",
-      mempool: 0,
-      bytes: 250,
-    };
-  } catch {
-    return { fee_rate: 10, unit: "atoms/gas", mempool: 0, bytes: 250 };
-  }
+  const [fee, pending] = await Promise.all([
+    callRpc<any>("kovanica_estimateFee").catch(() => null),
+    callRpc<any>("kovanica_getPendingTransactions").catch(() => null),
+  ]);
+  const feeRate = typeof fee === "string" ? parseInt(fee, 16) : typeof fee === "number" ? fee : MIN_FEE;
+  return {
+    fee_rate: Number.isFinite(feeRate) ? feeRate : MIN_FEE,
+    unit: "atoms",
+    mempool: Array.isArray(pending) ? pending.length : null,
+  };
 }
 
 async function handleLiveFaucet(to: string): Promise<any> {
+  const endpoint = faucetEndpoint();
+  if (!endpoint) throw new RpcError("faucet unavailable", 503);
   const canonical = toCanonicalAddress(to) || to;
-  const res = await fetch(LIVE_FAUCET, {
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ address: canonical }),
@@ -507,30 +479,43 @@ export async function dispatchApi(req: Request): Promise<Response> {
     if (name === "reset" || name === "mine" || name === "mining") {
       return text("not allowed on public testnet", 403);
     }
+    // Liveness document: always 200 with a `state`. 503 = stalled, distinct from down.
+    if (name === "health") {
+      const probe = await probeHealth();
+      return json({
+        state: classifyHealth({ healthStatus: probe.status, failed: probe.failed }),
+        status: probe.status,
+        checkedAt: probe.checkedAt,
+      });
+    }
     if (name === "state") {
       try {
         return json(await fetchLiveState());
       } catch (e) {
-        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, 502);
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
       }
     }
     if (name === "bootstrap") {
       try {
         return json(await fetchLiveBootstrap());
       } catch (e) {
-        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, 502);
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
       }
     }
     if (name === "head") {
       try {
         return json(await fetchLiveHead());
       } catch (e) {
-        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, 502);
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
       }
     }
     if (name === "utxos") {
       const addr = q.get("address") ?? "";
-      return json(await fetchLiveUtxos(addr));
+      try {
+        return json(await fetchLiveUtxos(addr));
+      } catch (e) {
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
+      }
     }
     if (name === "history") {
       const addr = q.get("address") ?? "";
@@ -689,6 +674,9 @@ export async function dispatchApi(req: Request): Promise<Response> {
         const txHash = await callRpc("kovanica_sendRawTransaction", [rawHex]);
         return json({ ok: true, tx: txHash });
       } catch (e) {
+        if (e instanceof RpcError && e.status === 401) {
+          return text("writes are not available via the public RPC", 403);
+        }
         return text(e instanceof Error ? e.message : "token send failed", 400);
       }
     }
@@ -702,6 +690,7 @@ export async function dispatchApi(req: Request): Promise<Response> {
           } catch {}
         }
         if (!to) return text("missing recipient address", 400);
+        if (!faucetEndpoint()) return text("faucet unavailable", 503);
         return json(await handleLiveFaucet(to));
       } catch (e) {
         return text(e instanceof Error ? e.message : "faucet failed", 400);
@@ -780,6 +769,9 @@ export async function dispatchApi(req: Request): Promise<Response> {
         const txHash = await callRpc("kovanica_sendRawTransaction", [rawHex]);
         return json({ ok: true, tx: txHash });
       } catch (e) {
+        if (e instanceof RpcError && e.status === 401) {
+          return text("writes are not available via the public RPC", 403);
+        }
         return text(e instanceof Error ? e.message : "submit failed", 400);
       }
     }
@@ -791,7 +783,7 @@ export async function dispatchApi(req: Request): Promise<Response> {
       case "head":
         return json(localHead());
       case "bootstrap":
-        return json(localBootstrap({ ok: true, head: await fetchLiveHead().catch(() => localHead()) }));
+        return json(localBootstrap({ ok: false, error: "local source" }));
       case "state":
         return json(localState());
       case "utxos":

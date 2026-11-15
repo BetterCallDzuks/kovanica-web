@@ -26,6 +26,7 @@ import {
   type ApiState,
 } from "@/lib/api/contract";
 import { shortId } from "@/lib/ledger/hash";
+import { errorStatusOf, healthLabel } from "@/lib/api/health";
 import { SourceSwitch } from "@/components/layout/source-switch";
 import { DagMark } from "@/components/brand/dag-mark";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export function Dashboard() {
   const [bootstrap, setBootstrap] = useState<ApiBootstrap | null>(null);
   const [node, setNode] = useState<ApiNode | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const history = useRef<HeightSample[]>([]);
 
   useEffect(() => {
@@ -58,6 +60,7 @@ export function Dashboard() {
       setBootstrap(null);
       setNode(null);
       setError(null);
+      setErrorStatus(null);
       history.current = [];
       return;
     }
@@ -73,6 +76,7 @@ export function Dashboard() {
     const report = (e: unknown) => {
       if (!alive) return;
       setError(e instanceof Error ? e.message : "source offline");
+      setErrorStatus(errorStatusOf(e));
     };
 
     const loadHead = async () => {
@@ -82,6 +86,7 @@ export function Dashboard() {
         pushSample(h);
         setHead(h);
         setError(null);
+        setErrorStatus(null);
       } catch (e) {
         report(e);
       }
@@ -198,8 +203,14 @@ export function Dashboard() {
       </header>
 
       {error && (
-        <div className="rounded-xl border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
-          {error}
+        <div
+          className={
+            errorStatus === 503
+              ? "rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-300"
+              : "rounded-xl border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger"
+          }
+        >
+          {errorStatus === 503 ? `${healthLabel("stalled")} — ${error}` : error}
         </div>
       )}
 
@@ -219,28 +230,24 @@ export function Dashboard() {
             icon={Blocks}
             label="Blocks"
             value={h.blocks.toLocaleString()}
-            sub={`tip ${shortId(h.tip)}`}
+            sub={`tip ${h.tip ? shortId(h.tip) : "n/a"}`}
             accent="gold"
           />
           <StatCard
             icon={Coins}
             label="Supply"
-            value={
-              n
-                ? `${kvnc(n.supply)} ${TOKEN}`
-                : "—"
-            }
+            value={n?.supply != null ? `${kvnc(n.supply)} ${TOKEN}` : "n/a"}
             sub={
-              n
-                ? `${((n.supply / MAX_SUPPLY) * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% of ${kvnc(MAX_SUPPLY)}M cap`
-                : `cap ${kvnc(MAX_SUPPLY)}M ${TOKEN}`
+              n?.supply != null
+                ? `${((n.supply / MAX_SUPPLY) * 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}% of ${kvnc(MAX_SUPPLY)} ${TOKEN} cap`
+                : `cap ${kvnc(MAX_SUPPLY)} ${TOKEN} · not reported by RPC`
             }
           />
           <StatCard
             icon={Gauge}
             label="Subsidy / era"
             value={b ? `${kvnc(b.subsidy)} ${TOKEN}` : "—"}
-            sub={n ? `era ${n.halving_era} · min fee ${h.min_fee.toLocaleString()} atoms` : `min fee ${h.min_fee.toLocaleString()} atoms`}
+            sub={n ? `×3/4 decay era ${n.halving_era} · min fee ${h.min_fee.toLocaleString()} atoms` : `min fee ${h.min_fee.toLocaleString()} atoms`}
           />
         </section>
       )}
@@ -267,12 +274,27 @@ export function Dashboard() {
           <StatCard
             icon={Server}
             label="Peers"
-            value={String((b?.peers?.length ?? 0) + 1)}
-            sub={`listen ${b?.listen ?? "—"}`}
+            value={b ? String(b.peers.length) : "n/a"}
+            sub="reported by seed1"
           />
-          <StatCard icon={Layers} label="Mempool" value={n.mempool.toLocaleString()} sub="pending txs" />
-          <StatCard icon={Cpu} label="Tx count" value={n.tx_count.toLocaleString()} sub={`${n.utxos.toLocaleString()} utxos`} />
-          <StatCard icon={Shield} label="Blue score" value={n.blue_score.toLocaleString()} sub={`${n.tips.length} tips`} />
+          <StatCard
+            icon={Layers}
+            label="Mempool"
+            value={n.mempool != null ? n.mempool.toLocaleString() : "n/a"}
+            sub="pending txs"
+          />
+          <StatCard
+            icon={Cpu}
+            label="Tx count"
+            value={n.tx_count != null ? n.tx_count.toLocaleString() : "n/a"}
+            sub={n.utxos != null ? `${n.utxos.toLocaleString()} utxos` : "utxo set not reported"}
+          />
+          <StatCard
+            icon={Shield}
+            label="Blue score"
+            value={n.blue_score != null ? n.blue_score.toLocaleString() : "n/a"}
+            sub={`${n.tips.length} tips`}
+          />
         </section>
       )}
 
@@ -285,12 +307,12 @@ export function Dashboard() {
           <dl className="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
               <dt className="text-[10px] tracking-wide text-subtle uppercase">Listen</dt>
-              <dd className="mt-0.5 break-all font-mono text-xs text-fg">{b.listen}</dd>
+              <dd className="mt-0.5 break-all font-mono text-xs text-fg">{b.listen ?? "n/a"}</dd>
             </div>
             <div>
-              <dt className="text-[10px] tracking-wide text-subtle uppercase">Bootstrap seeds</dt>
+              <dt className="text-[10px] tracking-wide text-subtle uppercase">Connected peers</dt>
               <dd className="mt-0.5 break-all font-mono text-xs text-fg">
-                {b.peers.length > 0 ? b.peers.join(" · ") : "seed1.kovanica.online:8000"}
+                {b.peers.length > 0 ? b.peers.join(" · ") : "n/a"}
               </dd>
             </div>
           </dl>
@@ -300,10 +322,10 @@ export function Dashboard() {
               {b.upstream.ok ? (
                 <p className="mt-1 flex items-center gap-2 font-mono text-sm text-ok">
                   <Radio className="size-3.5" />
-                  OK · tip {shortId(b.upstream.head.tip)} · {b.upstream.head.blocks.toLocaleString()} blocks
+                  OK · tip {b.upstream.head.tip ? shortId(b.upstream.head.tip) : "n/a"} · {b.upstream.head.blocks.toLocaleString()} blocks
                 </p>
               ) : (
-                <p className="mt-1 text-sm text-danger">{b.upstream.error}</p>
+                <p className="mt-1 text-sm text-muted">{b.upstream.error}</p>
               )}
             </div>
           )}
@@ -354,9 +376,8 @@ function MainnetPlaceholder() {
           <li className="rounded-md border border-border px-2 py-1">KovanicaHash PoW</li>
           <li className="rounded-md border border-border px-2 py-1">GHOSTDAG k=5</li>
           <li className="rounded-md border border-border px-2 py-1">4s target interval</li>
-          <li className="rounded-md border border-border px-2 py-1">no consensus stake</li>
           <li className="rounded-md border border-border px-2 py-1">2.5 KVNC initial block reward</li>
-          <li className="rounded-md border border-border px-2 py-1">cap {kvnc(MAX_SUPPLY)}M</li>
+          <li className="rounded-md border border-border px-2 py-1">cap {kvnc(MAX_SUPPLY)} {TOKEN}</li>
         </ul>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild variant="gold" className="h-11 px-6">
