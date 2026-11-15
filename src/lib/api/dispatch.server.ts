@@ -37,6 +37,7 @@ import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
 import { faucetEndpoint, probeHealth, rpcCall, RpcError, type HealthProbeResult } from "./rpc-url.server";
+import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.server";
 
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -434,18 +435,14 @@ async function fetchLiveFeeEstimate(): Promise<any> {
   };
 }
 
-async function handleLiveFaucet(to: string): Promise<any> {
-  const endpoint = faucetEndpoint();
-  if (!endpoint) throw new RpcError("faucet unavailable", 503);
+/**
+ * Forward a dispense request to the faucet. The client IP travels in
+ * `X-Forwarded-For` (proxy-attested only, see `client-ip.server.ts`); the amount
+ * and the wording come back from the faucet, never from this side.
+ */
+async function handleLiveFaucet(to: string, reqHeaders: Headers): Promise<any> {
   const canonical = toCanonicalAddress(to) || to;
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ address: canonical }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || data.error || `Faucet error: ${res.status}`);
-  return { ok: true, tx_hash: data.tx_hash, amount: 10_000_000_000, message: "Dispensed 10 KVNC" };
+  return dispenseFromFaucet(canonical, reqHeaders);
 }
 
 export async function dispatchApi(req: Request): Promise<Response> {
@@ -691,8 +688,11 @@ export async function dispatchApi(req: Request): Promise<Response> {
         }
         if (!to) return text("missing recipient address", 400);
         if (!faucetEndpoint()) return text("faucet unavailable", 503);
-        return json(await handleLiveFaucet(to));
+        return json(await handleLiveFaucet(to, req.headers));
       } catch (e) {
+        if (e instanceof FaucetError) {
+          return json({ ok: false, kind: e.kind, message: e.message }, faucetHttpStatus(e.kind));
+        }
         return text(e instanceof Error ? e.message : "faucet failed", 400);
       }
     }
