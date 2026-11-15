@@ -19,7 +19,7 @@ const PROTOCOL: Item[] = [
     title: "Hybrid PoW + GHOSTDAG Consensus",
     status: "done",
     blurb:
-      "Hybrid Proof-of-Work block admission with GHOSTDAG graph ordering (4s target block interval, GHOSTDAG k=5, KovanicaHash PoW; no stake in consensus).",
+      "Hybrid Proof-of-Work block admission with GHOSTDAG graph ordering (4s target block interval, GHOSTDAG k=5, KovanicaHash PoW).",
     note: "Native PoW admission and GHOSTDAG topological sorting.",
   },
   {
@@ -104,7 +104,7 @@ const SDK: Item[] = [
     title: "Rust Workspace Crates",
     status: "done",
     blurb:
-      "27 modular crates: kovanica-types, kovanica-crypto, kovanica-dag, kovanica-consensus, kovanica-mempool, kovanica-network, kovanica-runtime, kovanica-staking, kovanica-node, kovanica-rpc.",
+      "27 modular crates: kovanica-types, kovanica-crypto, kovanica-dag, kovanica-consensus, kovanica-mempool, kovanica-network, kovanica-runtime, kovanica-node, kovanica-rpc.",
   },
   {
     id: "ts-packages",
@@ -132,10 +132,10 @@ const SDK: Item[] = [
 const NEXT: Item[] = [
   {
     id: "hybrid-testnet-m8",
-    title: "Chain 2 Hybrid Testnet & KovanicaHash Audit",
+    title: "kovanica-testnet Hardening & KovanicaHash Audit",
     status: "active",
     blurb:
-      "Deployment and hardening of Chain 2 hybrid PoW + GHOSTDAG testnet, KovanicaHash audit sign-off, and solo miner tooling.",
+      "Deployment and hardening of kovanica-testnet (chain ID 2) hybrid PoW + GHOSTDAG, KovanicaHash audit sign-off, and solo miner tooling.",
   },
   {
     id: "node-hardening",
@@ -163,7 +163,7 @@ const NEXT: Item[] = [
     title: "Mainnet Launch Readiness",
     status: "next",
     blurb:
-      "Public launch planned for 1.1.2027 following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8.2M block halving eras with × 3/4 decay).",
+      "Public launch planned for 1.1.2027 following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8,200,000-block × 3/4 decay eras).",
   },
 ];
 
@@ -260,7 +260,7 @@ export function RoadmapView() {
 
       <div className="rounded-xl border border-border bg-surface p-4 text-xs leading-relaxed text-muted space-y-2">
         <p>
-          <strong className="text-fg">Consensus:</strong> Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW; no stake).
+          <strong className="text-fg">Consensus:</strong> Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW).
         </p>
         <p>
           <strong className="text-fg">Execution:</strong> Deterministic Wasmi WebAssembly runtime.

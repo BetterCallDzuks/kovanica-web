@@ -54,7 +54,7 @@ export const Route = createRootRoute({
     const prefix = isLanding
       ? "Kovanica Protocol"
       : isMainnet
-        ? "Kovanica Mainnet"
+        ? "kovanica-mainnet (chain ID 1)"
         : role === "docs"
           ? "Kovanica Docs"
           : role === "api"
@@ -63,16 +63,16 @@ export const Route = createRootRoute({
               ? "Kovanica Playground"
               : role === "dash"
                 ? "Kovanica Dashboard"
-                : "Kovanica Testnet";
+                : "kovanica-testnet (chain ID 2)";
     const description = isLanding
-      ? "Kovanica Protocol — a BlockDAG Layer-1 with hybrid PoW + GHOSTDAG consensus, Wasmi runtime, native KVNC and privacy primitives. Testnet live."
+      ? "Kovanica Protocol — a BlockDAG Layer-1 with hybrid PoW + GHOSTDAG consensus, Wasmi runtime, native KVNC and privacy primitives. kovanica-testnet live."
       : isMainnet
-        ? "Kovanica Protocol mainnet — public launch: 1.1.2027. Explore the BlockDAG, wallet and protocol on testnet meanwhile."
+        ? "kovanica-mainnet (chain ID 1) — public launch: 1.1.2027. Explore the BlockDAG, wallet and protocol on kovanica-testnet meanwhile."
         : role === "playground"
           ? "Kovanica Playground — interactive onboarding, live API console, and code snippets for the Kovanica Protocol."
           : role === "dash"
-            ? "Kovanica network dashboard — live node stats, block height, metrics and network status for testnet and mainnet."
-            : "Kovanica Protocol testnet — BlockDAG explorer, wallet, origins map and protocol tools for KVNC.";
+            ? "Kovanica network dashboard — live node stats, block height, metrics and network status for kovanica-testnet and kovanica-mainnet."
+            : "kovanica-testnet (chain ID 2) — BlockDAG explorer, wallet, origins map and protocol tools for KVNC.";
     return {
       meta: [
         { charSet: "utf-8" },

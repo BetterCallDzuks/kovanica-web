@@ -9,26 +9,23 @@ import { parseKvnc } from "@/lib/ledger/format";
 import { cn } from "@/lib/utils";
 import { NETWORK_ID } from "@/lib/api/contract";
 import type { ApiState } from "@/lib/api/contract";
+import { classifyFaucetError, type FaucetErrorKind } from "@/lib/api/health";
 
 const CAP_KVNC = 10;
 const AMOUNTS = [1, 5, 10] as const;
 const COOLDOWN_S = 60;
 
 type Phase = "idle" | "submitting" | "success";
-type ErrorKind =
-  | "invalid-address"
-  | "cap"
-  | "dry"
-  | "offline"
-  | "cooldown"
-  | "other"
-  | null;
+type ErrorKind = "invalid-address" | FaucetErrorKind | null;
 
 const ERROR_COPY: Record<Exclude<ErrorKind, null>, string> = {
   "invalid-address":
     "That doesn't look like a Kovanica address. Paste a canonical kvnc…dag address (PRO-21, 64 chars).",
   cap: "This address has already claimed its lifetime cap — 10 KVNC per address on testnet.",
   dry: "The faucet is dry right now — the node has no funds to give. Try again in a bit.",
+  stalled:
+    "The testnet is stalled — the chain is not advancing right now. Your address is still valid; try again when blocks resume.",
+  unavailable: "The faucet is not available on this deployment.",
   offline: "The testnet node is unreachable. Check back in a moment.",
   cooldown: "The faucet is cooling down. Try again in a moment.",
   other: "",
@@ -46,24 +43,35 @@ export function FaucetView() {
   const [copied, setCopied] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [head, setHead] = useState<{ blocks: number; faucet: boolean } | null>(null);
+  const [headError, setHeadError] = useState<FaucetErrorKind | null>(null);
   const [headLoading, setHeadLoading] = useState(true);
+
+  /** 503 is a stalled chain, never "offline": keep the two states distinct. */
+  async function fetchHead(): Promise<{
+    head: { blocks: number; faucet: boolean } | null;
+    error: FaucetErrorKind | null;
+  }> {
+    try {
+      const r = await fetch("/api/state?source=testnet");
+      if (!r.ok) {
+        const body = await r.text().catch(() => "");
+        return { head: null, error: classifyFaucetError(body, r.status) };
+      }
+      const d = (await r.json()) as ApiState;
+      return { head: { blocks: d.node.blocks, faucet: d.faucet }, error: null };
+    } catch {
+      return { head: null, error: "offline" };
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
-    async function load() {
-      try {
-        const r = await fetch("/api/state?source=testnet");
-        if (!r.ok) throw new Error(String(r.status));
-        const d = (await r.json()) as ApiState;
-        if (!mounted) return;
-        setHead({ blocks: d.node.blocks, faucet: d.faucet });
-        setHeadLoading(false);
-      } catch {
-        setHead(null);
-        setHeadLoading(false);
-      }
-    }
-    void load();
+    void fetchHead().then((res) => {
+      if (!mounted) return;
+      setHead(res.head);
+      setHeadError(res.error);
+      setHeadLoading(false);
+    });
     return () => {
       mounted = false;
     };
@@ -103,16 +111,10 @@ export function FaucetView() {
               : null;
   const canSubmit = phase !== "submitting" && !disabledReason;
 
-  function classifyError(msg: string) {
-    const m = msg.toLowerCase();
-    if (/cap|limit|max|exceed|exhausted/i.test(m)) setErrorKind("cap");
-    else if (/dry|insufficient|no funds|out of funds|unfunded/i.test(m)) setErrorKind("dry");
-    else if (/cooldown|recent|too soon|wait/i.test(m)) {
-      setErrorKind("cooldown");
-      setCooldownLeft(COOLDOWN_S);
-    } else if (/unreachable|offline|timeout|aborted|502|503|upstream/i.test(m)) {
-      setErrorKind("offline");
-    } else setErrorKind("other");
+  function classifyError(msg: string, status?: number | null) {
+    const kind = classifyFaucetError(msg, status);
+    setErrorKind(kind);
+    if (kind === "cooldown") setCooldownLeft(COOLDOWN_S);
     setErrorMessage(msg);
   }
 
@@ -151,7 +153,7 @@ export function FaucetView() {
         setPhase("success");
         setCooldownLeft(COOLDOWN_S);
       } else {
-        classifyError(text);
+        classifyError(text, r.status);
         setPhase("idle");
       }
     } catch {
@@ -192,15 +194,16 @@ export function FaucetView() {
               <span className="font-mono text-fg">#{head.blocks.toLocaleString()}</span>
             ) : (
               <span className="inline-flex items-center gap-1 font-mono text-muted">
-                Unavailable
+                {headError === "stalled" ? "Stalled — chain not advancing" : "Unavailable"}
                 <button
                   type="button"
                   onClick={() => {
                     setHeadLoading(true);
-                    void fetch("/api/state?source=testnet")
-                      .then((r) => r.json())
-                      .then((d: ApiState) => setHead({ blocks: d.node.blocks, faucet: d.faucet }))
-                      .catch(() => setHead(null))
+                    void fetchHead()
+                      .then((res) => {
+                        setHead(res.head);
+                        setHeadError(res.error);
+                      })
                       .finally(() => setHeadLoading(false));
                   }}
                   className="text-xs text-gold underline underline-offset-2 hover:text-gold/80"
@@ -285,7 +288,9 @@ export function FaucetView() {
                 "mt-4 rounded-xl border p-4 text-sm",
                 errorKind === "offline" || errorKind === "other"
                   ? "border-danger/40 bg-danger/10 text-danger"
-                  : "border-border bg-surface text-muted",
+                  : errorKind === "stalled"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                    : "border-border bg-surface text-muted",
               )}
             >
               <p className="font-mono text-[10px] tracking-wide uppercase">
@@ -293,13 +298,17 @@ export function FaucetView() {
                   ? "Cap reached"
                   : errorKind === "dry"
                     ? "Faucet dry"
-                    : errorKind === "offline"
-                      ? "Network offline"
-                      : errorKind === "cooldown"
-                        ? "Cooling down"
-                        : errorKind === "invalid-address"
-                          ? "Invalid address"
-                          : "Request failed"}
+                    : errorKind === "stalled"
+                      ? "Chain stalled"
+                      : errorKind === "unavailable"
+                        ? "Faucet unavailable"
+                        : errorKind === "offline"
+                          ? "Network offline"
+                          : errorKind === "cooldown"
+                            ? "Cooling down"
+                            : errorKind === "invalid-address"
+                              ? "Invalid address"
+                              : "Request failed"}
               </p>
               <p className="mt-1">
                 {errorKind === "other" && errorMessage

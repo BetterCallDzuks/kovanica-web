@@ -15,7 +15,7 @@ import {
 
 export const SPEC_TEXT = `# ${NETWORK_ID}
 
-BlockDAG testnet. Native token **${TOKEN}** (9 decimals). Canonical chain IDs: mainnet=1, testnet=2, devnet=3, hybrid_testnet=2, local=1337.
+BlockDAG testnet. Native token **${TOKEN}** (9 decimals). Canonical chains: kovanica-mainnet (chain ID 1), kovanica-testnet (chain ID 2), kovanica-devnet (chain ID 3), local (chain ID 1337).
 Engine is the Rust node; this app speaks the same HTTP contract.
 
 || | |
@@ -24,12 +24,13 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 || Wallet | ${LIVE_WALLET} |
 || Map | ${LIVE_MAP} |
 || Site | ${LIVE_SITE} |
-|| Network | \`${NETWORK_ID}\` |
-|| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis validator allocation |
+|| Network | \`${NETWORK_ID}\` (chain ID 2) |
+|| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis allocation |
 || Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks |
 || Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) |
 || Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) |
-|| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW; no stake) |
+|| Fees | 3/4 burned, 1/4 to miner — pending (PR in progress, PRO-53) |
+|| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW) |
 || Atom | 1 KVNC = 10^9 atoms |
 || Target block time | 4.0s (target interval, not finality) |
 
@@ -105,7 +106,8 @@ POST /api/miner?addr=
   local playground: set block proposer address
 
 POST /api/faucet?to=&amount=
-  testnet open faucet. kind=faucet (default). Per-address lifetime cap: 10 KVNC.
+  testnet faucet when configured (unset KOVANICA_FAUCET_URL = unavailable).
+  Per-address lifetime cap: 10 KVNC.
 
 POST /api/reset
   local only (chain wipe is locked on the public testnet)
@@ -115,7 +117,7 @@ POST /api/origin?iso3=HRV
 
 ## Wallet
 
-Address: PRO-21 canonical format = kvnc + 57 bech32-alphabet chars + dag (64 total), 29-bit BLAKE3 checksum. Legacy hex only where chain allows (devnet: chain 3, local: 1337).
+Address: PRO-21 canonical format = kvnc + 57 bech32-alphabet chars + dag (64 total), 29-bit BLAKE3 checksum. Legacy hex is accepted on kovanica-devnet (chain ID 3) and local (chain ID 1337) only.
 Derivation: ADR-0002 — 24-word BIP-39 entropy IS the 32-byte Ed25519 seed; no PBKDF2 passphrase, no HD derivation, one phrase = one wallet address.
 Browser signs prepare's sighash; submit never receives the mnemonic.
 Hardware: Ledger (WebHID) + Trezor (WebUSB).

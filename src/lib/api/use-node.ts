@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, useApiSource } from "./client";
 import type { ApiState } from "./contract";
+import { errorStatusOf } from "./health";
 
 export const MIN_POLL_MS = 2000;
 export const MAX_BACKOFF_MS = 30000;
@@ -14,6 +15,7 @@ export function useNode(pollMs = MIN_POLL_MS) {
   const source = useApiSource();
   const [state, setState] = useState<ApiState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   const genRef = useRef(0);
@@ -70,12 +72,14 @@ export function useNode(pollMs = MIN_POLL_MS) {
       if (myGen === genRef.current && reqSource === currentSourceRef.current) {
         setState(next);
         setError(null);
+        setErrorStatus(null);
         currentDelayRef.current = pollMs; // Reset backoff on success
       }
     } catch (e: any) {
       if (e?.name === "AbortError") return;
       if (myGen === genRef.current && reqSource === currentSourceRef.current) {
         setError(e instanceof Error ? e.message : "offline");
+        setErrorStatus(errorStatusOf(e));
         currentDelayRef.current = nextBackoffMs(currentDelayRef.current, MAX_BACKOFF_MS);
       }
     } finally {
@@ -104,6 +108,7 @@ export function useNode(pollMs = MIN_POLL_MS) {
     }
     setState(null);
     setError(null);
+    setErrorStatus(null);
 
     if (source === "mainnet") {
       return;
@@ -151,5 +156,5 @@ export function useNode(pollMs = MIN_POLL_MS) {
     [refresh],
   );
 
-  return { state, error, busy, refresh, act, source };
+  return { state, error, errorStatus, busy, refresh, act, source };
 }
