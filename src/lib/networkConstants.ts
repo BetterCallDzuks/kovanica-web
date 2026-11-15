@@ -377,12 +377,12 @@ Live CORS is closed — this app proxies it server-side.
   KOVANICA_MINE=0 KOVANICA_FAUCET=0 KOVANICA_ALLOW_RESET=0 \\\\
   KOVANICA_OPERATOR=0 \\\\
   KOVANICA_LISTEN=0.0.0.0:8000 \\\\
-  KOVANICA_PEERS=seed1.kovanica.online:8000,seed2.kovanica.online:8000,seed3.kovanica.online:8000 \\\\
+  KOVANICA_PEERS=seed1.kovanica.online:8000 \\\\
   ./target/release/kovanica-node explorer 127.0.0.1:8080
 
 TCP :8000 is the P2P swarm path. Do not set peers to explorer.kovanica.online:8000
 — that name is Cloudflare-proxied and never reaches the seed. Use a DNS-only
-records (seed1.kovanica.online:8000, seed2.kovanica.online:8000, seed3.kovanica.online:8000).
+records (seed1.kovanica.online:8000).
 After sync, GET /api/head on the clone matches the genesis (and tip, once
 the seed has served its blocks).
 

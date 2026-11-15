@@ -9,8 +9,7 @@
 
 type EnvBag = Record<string, string | undefined>;
 
-export const DEFAULT_SEED_PEERS =
-  "seed1.kovanica.online:8000,seed2.kovanica.online:8000,seed3.kovanica.online:8000";
+export const DEFAULT_SEED_PEERS = "seed1.kovanica.online:8000";
 export const DEFAULT_P2P_PORT = 8000;
 
 
