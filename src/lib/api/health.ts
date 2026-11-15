@@ -115,3 +115,42 @@ export function classifyFaucetError(message: string, status?: number | null): Fa
   if (status == null) return "offline";
   return "other";
 }
+
+const FAUCET_ERROR_KINDS: readonly FaucetErrorKind[] = [
+  "cap",
+  "dry",
+  "cooldown",
+  "stalled",
+  "unavailable",
+  "offline",
+  "other",
+];
+
+/**
+ * Pick the message kind out of an `/api/faucet` failure body.
+ *
+ * The server sends `{ ok: false, kind, message }`, because a faucet 429 (cooling
+ * down) and a faucet 503 (dry) both reach the browser as 4xx/5xx responses that
+ * the generic classifier would misread. The explicit `kind` wins; anything else
+ * (plain text, an older server) falls back to `classifyFaucetError`.
+ */
+export function faucetErrorFromBody(
+  body: string,
+  status?: number | null,
+): { kind: FaucetErrorKind; message: string } {
+  // Trim any UTF-8 BOM some proxies prepend, then treat `{` as JSON.
+  const raw = body.replace(/^\uFEFF/, "").trim();
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw) as { kind?: unknown; message?: unknown };
+      const message = typeof parsed.message === "string" ? parsed.message : "";
+      if (typeof parsed.kind === "string" && FAUCET_ERROR_KINDS.includes(parsed.kind as FaucetErrorKind)) {
+        return { kind: parsed.kind as FaucetErrorKind, message };
+      }
+      return { kind: classifyFaucetError(message || raw, status), message };
+    } catch {
+      /* not JSON after all — fall through to the text path */
+    }
+  }
+  return { kind: classifyFaucetError(raw, status), message: raw };
+}

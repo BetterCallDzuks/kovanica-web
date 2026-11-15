@@ -5,14 +5,14 @@ import { NetworkBadge } from "@/components/layout/network-badge";
 import { MinimalHeader } from "@/components/layout/minimal-header";
 import { SURFACE } from "@/lib/surfaces";
 import { isAddr, hexToKvnc } from "@/lib/wallet/address";
-import { parseKvnc } from "@/lib/ledger/format";
 import { cn } from "@/lib/utils";
 import { NETWORK_ID } from "@/lib/api/contract";
 import type { ApiState } from "@/lib/api/contract";
-import { classifyFaucetError, type FaucetErrorKind } from "@/lib/api/health";
+import { classifyFaucetError, faucetErrorFromBody, type FaucetErrorKind } from "@/lib/api/health";
 
-const CAP_KVNC = 10;
-const AMOUNTS = [1, 5, 10] as const;
+/** The faucet dispenses a fixed amount; the server reports what it actually sent. */
+const FIXED_KVNC = 10;
+/** Addresses cool down for 24 h after one dispense. */
 const COOLDOWN_S = 60;
 
 type Phase = "idle" | "submitting" | "success";
@@ -21,20 +21,20 @@ type ErrorKind = "invalid-address" | FaucetErrorKind | null;
 const ERROR_COPY: Record<Exclude<ErrorKind, null>, string> = {
   "invalid-address":
     "That doesn't look like a Kovanica address. Paste a canonical kvnc…dag address (PRO-21, 64 chars).",
-  cap: "This address has already claimed its lifetime cap — 10 KVNC per address on testnet.",
+  cap: "The faucet's request budget is used up right now. Try again in an hour.",
   dry: "The faucet is dry right now — the node has no funds to give. Try again in a bit.",
   stalled:
     "The testnet is stalled — the chain is not advancing right now. Your address is still valid; try again when blocks resume.",
   unavailable: "The faucet is not available on this deployment.",
   offline: "The testnet node is unreachable. Check back in a moment.",
-  cooldown: "The faucet is cooling down. Try again in a moment.",
+  cooldown:
+    "The faucet is cooling down: one dispense per address per 24 hours, five per hour per network address.",
   other: "",
 };
 
 /** Single-task testnet faucet — one card, one job. Wire to POST /api/faucet. */
 export function FaucetView() {
   const [address, setAddress] = useState("");
-  const [chosenAmount, setChosenAmount] = useState<number>(1);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorKind, setErrorKind] = useState<ErrorKind>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -112,10 +112,10 @@ export function FaucetView() {
   const canSubmit = phase !== "submitting" && !disabledReason;
 
   function classifyError(msg: string, status?: number | null) {
-    const kind = classifyFaucetError(msg, status);
+    const { kind, message } = faucetErrorFromBody(msg, status);
     setErrorKind(kind);
     if (kind === "cooldown") setCooldownLeft(COOLDOWN_S);
-    setErrorMessage(msg);
+    setErrorMessage(message || msg);
   }
 
   async function submit() {
@@ -126,30 +126,29 @@ export function FaucetView() {
     setErrorKind(null);
     setErrorMessage("");
     setPhase("submitting");
-    const atoms = parseKvnc(String(chosenAmount)) ?? 0;
     try {
-      const r = await fetch(
-        `/api/faucet?to=${encodeURIComponent(raw)}&amount=${atoms}&source=testnet`,
-        { method: "POST" },
-      );
+      // No `amount`: the faucet dispenses a fixed amount and reports what it sent.
+      const r = await fetch(`/api/faucet?to=${encodeURIComponent(raw)}&source=testnet`, {
+        method: "POST",
+      });
       const text = await r.text();
       if (r.ok) {
         let tx = text.trim();
+        let granted = FIXED_KVNC * 1_000_000_000;
         try {
-          const j = JSON.parse(text) as unknown;
-          if (
-            j &&
-            typeof j === "object" &&
-            "tx" in j &&
-            typeof (j as { tx?: unknown }).tx === "string"
-          ) {
-            tx = (j as { tx: string }).tx;
-          }
+          const j = JSON.parse(text) as {
+            tx?: unknown;
+            tx_hash?: unknown;
+            amount?: unknown;
+          };
+          if (typeof j?.tx_hash === "string") tx = j.tx_hash;
+          else if (typeof j?.tx === "string") tx = j.tx;
+          if (typeof j?.amount === "number" && j.amount > 0) granted = j.amount;
         } catch {
-          /* plain-text tx hash from the node */
+          /* plain-text tx hash */
         }
         setTxId(tx);
-        setGrantedAtoms(atoms);
+        setGrantedAtoms(granted);
         setPhase("success");
         setCooldownLeft(COOLDOWN_S);
       } else {
@@ -186,7 +185,8 @@ export function FaucetView() {
             Testnet faucet
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Per-address lifetime cap <strong className="text-fg">{CAP_KVNC} KVNC</strong>
+            Fixed <strong className="text-fg">{FIXED_KVNC} KVNC</strong> per request, once per address
+            every 24 h
             {" · "}Chain head{" "}
             {headLoading ? (
               <span className="font-mono text-muted">Loading…</span>
@@ -245,26 +245,12 @@ export function FaucetView() {
               </p>
             )}
 
-            {/* Amount */}
-            <div className="mt-5">
+            {/* Amount is fixed server-side; the browser never chooses it. */}
+            <div className="mt-5 rounded-md border border-border bg-bg px-3 py-2">
               <span className="eyebrow">Amount</span>
-              <div className="mt-2 flex gap-2" role="group" aria-label="Amount">
-                {AMOUNTS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setChosenAmount(n)}
-                    className={cn(
-                      "h-9 flex-1 rounded-md border font-mono text-xs transition-colors duration-150",
-                      chosenAmount === n
-                        ? "border-accent bg-accent text-accent-fg"
-                        : "border-border bg-bg text-muted hover:bg-surface-2 hover:text-fg",
-                    )}
-                  >
-                    {n} KVNC
-                  </button>
-                ))}
-              </div>
+              <p className="mt-1 font-mono text-sm text-fg">
+                {FIXED_KVNC} KVNC <span className="text-subtle">· fixed by the faucet</span>
+              </p>
             </div>
 
             {/* Submit */}
@@ -274,7 +260,7 @@ export function FaucetView() {
               disabled={!canSubmit}
               onClick={() => void submit()}
             >
-              {phase === "submitting" ? "Sending…" : `Request ${chosenAmount} KVNC`}
+              {phase === "submitting" ? "Sending…" : `Request ${FIXED_KVNC} KVNC`}
             </Button>
             {disabledReason && (
               <p className="mt-2 text-center text-xs text-subtle">{disabledReason}</p>
@@ -340,10 +326,7 @@ export function FaucetView() {
                 </button>
               </div>
               <p className="mt-2 text-xs text-subtle">
-                Remaining cap for this address:{" "}
-                <span className="font-mono text-muted">
-                  {CAP_KVNC - chosenAmount} KVNC
-                </span>
+                The faucet cools down for this address for 24 hours before the next dispense.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button asChild size="sm">
