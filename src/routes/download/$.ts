@@ -1,17 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-// /download/* - redirect to the canonical artifact locations:
-//   install.sh            -> raw.githubusercontent (monorepo, always current)
-//   kovanica-node-linux-* -> GitHub Releases, v<version>-node tag (see
-//                            .github/workflows/release-node.yml)
+// /download/* redirects to the live kovanica-testnet artifacts.
+// Tag v0.3.0-node is commit e3fce499afe6637b2a594b60306aef6312ef4bbf
+// on KovanicaDAG/kovanica-l1 (chain ID 2, Hybrid PoW + GHOSTDAG, no stake).
+// install.sh on that tag defaults to the same release.
 // Redirects (302) keep binary traffic off the Nitro server.
 
-const RAW = "https://raw.githubusercontent.com/KovanicaDAG/kovanica/main";
-
-// Bump NODE_RELEASE together with the default VERSION in
-// node/scripts/install.sh.
-const NODE_RELEASE =
-  "https://github.com/KovanicaDAG/kovanica/releases/download/v0.2.0-node";
+const LIVE_NODE_TAG = "v0.3.0-node";
+const RAW = `https://raw.githubusercontent.com/KovanicaDAG/kovanica-l1/${LIVE_NODE_TAG}`;
+const NODE_RELEASE = `https://github.com/KovanicaDAG/kovanica-l1/releases/download/${LIVE_NODE_TAG}`;
 
 const DOWNLOADS: Record<string, string> = {
   "install.sh": `${RAW}/node/scripts/install.sh`,

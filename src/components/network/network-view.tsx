@@ -109,7 +109,7 @@ export function NetworkView() {
           <p className="font-mono text-[10px] tracking-brand text-gold uppercase">Status</p>
           <h1 className="font-display text-3xl tracking-tight text-fg">Network</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Live view of {live ? NETWORK_LABEL : source} from the seed1 RPC. Auto-refreshes every 15s.
+            Live view of {live ? NETWORK_LABEL : source} from the seed1 RPC. Hybrid PoW + GHOSTDAG. There is no stake in consensus. Live node tag v0.3.0-node (e3fce499). Mainnet launch 1.1.2027. Auto-refreshes every 15s.
           </p>
         </div>
         <Button
@@ -189,6 +189,9 @@ export function NetworkView() {
               <Row label="Founder seed" value={String(b.founder_seed)} />
               <Row label="Atom" value={`1 ${TOKEN} = ${h.atom.toLocaleString()} atoms`} />
               <Row label="GHOSTDAG k" value={String(b.k)} />
+              <Row label="Consensus" value="Hybrid PoW + GHOSTDAG" />
+              <Row label="Live node" value="v0.3.0-node (e3fce499)" />
+              <Row label="Mainnet launch" value="1.1.2027" />
               <Row
                 label="Finality depth"
                 value={b.finality_depth != null ? String(b.finality_depth) : "n/a — not reported by seed1"}
@@ -196,7 +199,7 @@ export function NetworkView() {
             </dl>
             <p className="mt-3 text-[11px] leading-relaxed text-subtle">
               Genesis, tip and GHOSTDAG k are read from seed1 (k falls back to the spec value 5). Token, subsidy, founder amount/seed and atom are
-              protocol spec constants, not values read from the node.
+              protocol spec constants, not values read from the node. Consensus, the live node tag v0.3.0-node (e3fce499), and the 1.1.2027 mainnet launch are published spec.
             </p>
           </section>
 
@@ -290,7 +293,7 @@ function MainnetNetworkView() {
           <p className="font-mono text-[10px] tracking-brand text-emerald-400 uppercase">Status</p>
           <h1 className="font-display text-3xl tracking-tight text-fg">Mainnet Pre-Launch</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            The production mainnet is scheduled for public launch on 1.1.2027 following the hybrid testnet and KovanicaHash audit.
+            The production mainnet is scheduled for public launch on 1.1.2027 following the hybrid testnet and KovanicaHash audit. Consensus is Hybrid PoW + GHOSTDAG. There is no stake in consensus. The live testnet node tag is v0.3.0-node (e3fce499) on chain ID 2.
           </p>
         </div>
       </header>

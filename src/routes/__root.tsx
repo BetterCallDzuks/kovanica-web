@@ -65,14 +65,14 @@ export const Route = createRootRoute({
                 ? "Kovanica Dashboard"
                 : "kovanica-testnet (chain ID 2)";
     const description = isLanding
-      ? "Kovanica Protocol — a BlockDAG Layer-1 with hybrid PoW + GHOSTDAG consensus, Wasmi runtime, native KVNC and privacy primitives. kovanica-testnet live."
+      ? "Kovanica Protocol — a BlockDAG Layer-1 with Hybrid PoW + GHOSTDAG consensus and no stake. kovanica-testnet (chain ID 2) live on node tag v0.3.0-node (e3fce499). Mainnet launch 1.1.2027."
       : isMainnet
-        ? "kovanica-mainnet (chain ID 1) — public launch: 1.1.2027. Explore the BlockDAG, wallet and protocol on kovanica-testnet meanwhile."
+        ? "kovanica-mainnet (chain ID 1) — Hybrid PoW + GHOSTDAG, no stake, public launch 1.1.2027. Live testnet is chain ID 2 on node tag v0.3.0-node (e3fce499)."
         : role === "playground"
-          ? "Kovanica Playground — interactive onboarding, live API console, and code snippets for the Kovanica Protocol."
+          ? "Kovanica Playground — interactive onboarding, live API console, and code snippets for kovanica-testnet (chain ID 2). Hybrid PoW + GHOSTDAG, no stake. Node tag v0.3.0-node (e3fce499). Mainnet launch 1.1.2027."
           : role === "dash"
-            ? "Kovanica network dashboard — live node stats, block height, metrics and network status for kovanica-testnet and kovanica-mainnet."
-            : "kovanica-testnet (chain ID 2) — BlockDAG explorer, wallet, origins map and protocol tools for KVNC.";
+            ? "Kovanica network dashboard — kovanica-testnet (chain ID 2), Hybrid PoW + GHOSTDAG, no stake, node tag v0.3.0-node (e3fce499). Mainnet launch 1.1.2027."
+            : "kovanica-testnet (chain ID 2) — Hybrid PoW + GHOSTDAG, no stake. Live node tag v0.3.0-node (e3fce499). Mainnet launch 1.1.2027.";
     return {
       meta: [
         { charSet: "utf-8" },

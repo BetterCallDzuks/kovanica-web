@@ -67,6 +67,7 @@ export function ExplorerView() {
           <p className="mt-0.5 text-xs text-muted md:text-sm">
             Native coin <strong className="text-fg">KVNC</strong> on {NETWORK_LABEL}.
             Target block interval: 4 s (not a finality guarantee) · GHOSTDAG k=5.
+            Live node tag v0.3.0-node (e3fce499). There is no stake in consensus. Mainnet launch 1.1.2027.
             {error ? (
               <span className={errorStatus === 503 ? "text-amber-400" : "text-danger"}>
                 {" "}
@@ -486,7 +487,7 @@ function MainnetExplorerPlaceholder() {
             </span>
           </div>
           <p className="mt-0.5 text-xs text-muted md:text-sm">
-            Native coin <strong className="text-fg">KVNC</strong> on {MAINNET_ID}. Target block interval: 4 s · GHOSTDAG K=5.
+            Native coin <strong className="text-fg">KVNC</strong> on {MAINNET_ID}. Hybrid PoW + GHOSTDAG. There is no stake in consensus. Target block interval: 4 s · GHOSTDAG K=5. Live testnet node tag v0.3.0-node (e3fce499) on chain ID 2.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

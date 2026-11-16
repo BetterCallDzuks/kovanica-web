@@ -154,7 +154,7 @@ export function DocsView() {
           <h2 className="font-display text-2xl tracking-tight text-fg">Getting started</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             Kovanica is a clean, from-scratch Rust Layer-1 blockchain powered by hybrid PoW + GHOSTDAG consensus (4s target block interval, GHOSTDAG k=5) and deterministic Wasmi execution. The native currency is{" "}
-            <strong className="text-fg">KVNC</strong> (9 decimals). Testnet is live; mainnet is planned.
+            <strong className="text-fg">KVNC</strong> (9 decimals). kovanica-testnet (chain ID 2) is live on node tag v0.3.0-node (e3fce499). The testnet faucet is open at /faucet. Mainnet public launch is 1.1.2027.
           </p>
           <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             <li>
@@ -320,6 +320,9 @@ export function DocsView() {
         <section id="node-ops" className="mt-10 scroll-mt-20">
           <h2 className="font-display text-2xl tracking-tight text-fg">Node operations</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
+            <li>
+              Live kovanica-testnet (chain ID 2) node tag is <code>v0.3.0-node</code> (commit e3fce499) on KovanicaDAG/kovanica-l1. <code>/download/install.sh</code> and the Linux node archives redirect to that tag.
+            </li>
             <li>Testnet RPC is available on port 8545 and proxied via <code>https://rpc-testnet.kovanica.online</code>.</li>
             <li>Transactions require an Ed25519 signature over the BLAKE3 <code>sighash</code>. All nodes verify 64-byte signatures.</li>
             <li>

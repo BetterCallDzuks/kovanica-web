@@ -30,6 +30,9 @@ export function Hero() {
         <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted md:mt-4 md:max-w-lg md:text-base">
           A high-performance Layer-1 blockchain powered by hybrid PoW + GHOSTDAG consensus, deterministic Wasmi execution, and native KVNC currency.
         </p>
+        <p className="mx-auto mt-2 max-w-lg font-mono text-[11px] leading-relaxed tracking-wide text-subtle md:max-w-xl">
+          kovanica-testnet (chain ID 2) · no stake · node v0.3.0-node (e3fce499) · faucet on /faucet · mainnet 1.1.2027
+        </p>
         <div className="mt-6 w-full max-w-lg md:mt-8 md:max-w-none">
           <CtaRow />
         </div>
