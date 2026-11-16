@@ -1,6 +1,6 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertCircle, ArrowLeft as ArrowLeftIcon, Sparkles as SparklesIcon } from "lucide-react";
-import { api, ApiError, HttpError } from "@/lib/api/client";
+import { loadDetail } from "@/lib/api/detail-lookup";
 import { shortId } from "@/lib/ledger/hash";
 import { hexToKvnc } from "@/lib/wallet/address";
 import { Shell } from "@/components/layout/shell";
@@ -17,39 +17,8 @@ interface CollectionDetailResponse {
 }
 
 export const Route = createFileRoute("/wallet/collection/$collectionId")({
-  loader: async ({ params, location }) => {
-    try {
-      const searchSource = (location.search as Record<string, unknown>)?.source;
-      const queryParam = typeof searchSource === "string" ? `?source=${encodeURIComponent(searchSource)}` : "";
-      const data = await api<CollectionDetailResponse>(`/api/collection/${encodeURIComponent(params.collectionId)}${queryParam}`);
-      if (!data || !data.collection_id) {
-        throw notFound();
-      }
-      return data;
-    } catch (err: unknown) {
-      const status =
-        err instanceof ApiError || err instanceof HttpError
-          ? err.status
-          : typeof err === "object" && err !== null && "status" in err && typeof (err as { status: unknown }).status === "number"
-            ? (err as { status: number }).status
-            : undefined;
-
-      if (status === 404) {
-        throw notFound();
-      }
-      if (status !== undefined) {
-        throw err;
-      }
-      if (
-        err instanceof Error &&
-        err.message.toLowerCase().includes("not found") &&
-        !err.message.toLowerCase().includes("method not found")
-      ) {
-        throw notFound();
-      }
-      throw err;
-    }
-  },
+  loader: ({ params, location }) =>
+    loadDetail<CollectionDetailResponse>("collection", params.collectionId, location.search, (d) => Boolean(d.collection_id)),
   notFoundComponent: CollectionNotFoundPage,
   errorComponent: CollectionErrorPage,
   component: CollectionDetailPage,

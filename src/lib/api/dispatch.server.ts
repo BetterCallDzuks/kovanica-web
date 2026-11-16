@@ -38,6 +38,7 @@ import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
 import { faucetEndpoint, probeHealth, rpcCall, RpcError, type HealthProbeResult } from "./rpc-url.server";
 import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.server";
+import { isAssetId } from "../asset-id";
 
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -97,6 +98,33 @@ function summarise(probe: HealthProbeResult): HealthSummary {
 /** Read + write calls go straight to seed1; no token, no Authorization header. */
 function callRpc<T = any>(method: string, params: unknown[] = []): Promise<T> {
   return rpcCall<T>(method, params);
+}
+
+/**
+ * NFT / RWA / collection detail lookup. A malformed id is 400, an unknown id
+ * 404, a node that does not serve the lookup 501, a stalled chain 503 and any
+ * other upstream failure 502 — a missing id never surfaces as a 5xx.
+ */
+async function detailLookup(rpcMethod: string, rawId: string): Promise<Response> {
+  let id: string;
+  try {
+    id = decodeURIComponent(rawId).trim();
+  } catch {
+    return text("invalid id: expected 32-byte hex", 400);
+  }
+  if (!isAssetId(id)) return text("invalid id: expected 32-byte hex", 400);
+  try {
+    const res = await callRpc(rpcMethod, [id]);
+    if (!res) return text("not found", 404);
+    return json(res);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/method not found/i.test(msg)) {
+      return text(`lookup not served by the testnet node (${rpcMethod})`, 501);
+    }
+    if (/not found|unknown (asset|collection)/i.test(msg)) return text("not found", 404);
+    return text(`testnet node error: ${msg}`, rpcFailureStatus(e));
+  }
 }
 
 /** 503 is a stalled chain; everything else (transport, 5xx) is down. */
@@ -384,7 +412,8 @@ async function fetchLiveHead(): Promise<ApiHead> {
     blocks: currentHeight,
     min_fee: MIN_FEE,
     atom: ATOM,
-    finality_depth: 100,
+    // seed1 exposes no finality-depth method; null renders as "n/a".
+    finality_depth: null,
     k: numberOrNull(tips?.ghostdag_k) ?? numberOrNull(mining?.ghostdag_k) ?? 5,
     health: summarise(probe),
   } as ApiHead;
@@ -522,34 +551,13 @@ export async function dispatchApi(req: Request): Promise<Response> {
       return json(await fetchLiveFeeEstimate());
     }
     if (name === "rwa") {
-      try {
-        const id = url.pathname.replace(/^\/api\/rwa\/?/, "");
-        const res = await callRpc("kovanica_getRwaAsset", [id]);
-        if (!res) return text("not found", 404);
-        return json(res);
-      } catch (e) {
-        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, 502);
-      }
+      return detailLookup("kovanica_getRwaAsset", url.pathname.replace(/^\/api\/rwa\/?/, ""));
     }
     if (name === "collection") {
-      try {
-        const id = url.pathname.replace(/^\/api\/collection\/?/, "");
-        const res = await callRpc("kovanica_getCollection", [id]);
-        if (!res) return text("not found", 404);
-        return json(res);
-      } catch (e) {
-        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, 502);
-      }
+      return detailLookup("kovanica_getCollection", url.pathname.replace(/^\/api\/collection\/?/, ""));
     }
     if (name === "nft") {
-      try {
-        const id = url.pathname.replace(/^\/api\/nft\/?/, "");
-        const res = await callRpc("kovanica_getNftAsset", [id]);
-        if (!res) return text("not found", 404);
-        return json(res);
-      } catch (e) {
-        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, 502);
-      }
+      return detailLookup("kovanica_getNftAsset", url.pathname.replace(/^\/api\/nft\/?/, ""));
     }
     if (name === "tokens") {
       try {

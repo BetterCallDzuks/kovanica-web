@@ -190,8 +190,8 @@ export function Dashboard() {
           </p>
           <h1 className="font-display text-3xl tracking-tight text-fg">Network dashboard</h1>
           <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted">
-            Live node stats for the selected source. Auto-refreshes; height is
-            sampled every 2.5&nbsp;s.
+            Node stats for the selected source, read from seed1. Auto-refreshes;
+            height is polled every 2&nbsp;s.
           </p>
         </div>
         <div className="flex items-center gap-2 pt-1">
@@ -247,7 +247,11 @@ export function Dashboard() {
             icon={Gauge}
             label="Subsidy / era"
             value={b ? `${kvnc(b.subsidy)} ${TOKEN}` : "—"}
-            sub={n ? `×3/4 decay era ${n.halving_era} · min fee ${h.min_fee.toLocaleString()} atoms` : `min fee ${h.min_fee.toLocaleString()} atoms`}
+            sub={
+              n
+                ? `spec · ×3/4 decay every ${n.halving_era.toLocaleString()} blocks · min fee ${h.min_fee.toLocaleString()} atoms`
+                : `spec · min fee ${h.min_fee.toLocaleString()} atoms`
+            }
           />
         </section>
       )}
@@ -260,7 +264,7 @@ export function Dashboard() {
               Block height
             </p>
             <p className="font-mono text-[10px] text-subtle uppercase">
-              live · {h.blocks.toLocaleString()}
+              {h.health ? healthLabel(h.health.state) : "n/a"} · {h.blocks.toLocaleString()}
             </p>
           </div>
           <div className="mt-3 h-40">

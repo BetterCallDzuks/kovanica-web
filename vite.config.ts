@@ -175,6 +175,17 @@ export default defineConfig(({ command, isPreview }) => ({
             // Auto-registers server/middleware/*. Kept (empty) so Nitro scans
             // any future server middleware; the grok PWA installer was removed.
             serverDir: "./server",
+            // Static files (/assets/*, public/*) are served before the Start
+            // request middleware, so they get the header-only subset here. The
+            // CSP (per-request nonce) and the rest live in src/start.ts.
+            routeRules: {
+              "/**": {
+                headers: {
+                  "strict-transport-security": "max-age=31536000; includeSubDomains",
+                  "x-content-type-options": "nosniff",
+                },
+              },
+            },
           }),
         ]
       : []),
