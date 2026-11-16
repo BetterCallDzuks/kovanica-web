@@ -154,7 +154,7 @@ export function DocsView() {
           <h2 className="font-display text-2xl tracking-tight text-fg">Getting started</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             Kovanica is a clean, from-scratch Rust Layer-1 blockchain powered by hybrid PoW + GHOSTDAG consensus (4s target block interval, GHOSTDAG k=5) and deterministic Wasmi execution. The native currency is{" "}
-            <strong className="text-fg">KVNC</strong> (9 decimals). kovanica-testnet (chain ID 2) is live on node tag v0.3.0-node (e3fce499). Mainnet public launch is 1.1.2027.
+            <strong className="text-fg">KVNC</strong> (9 decimals). kovanica-testnet (chain ID 2) is live on node tag v0.3.0-node (e3fce499). The testnet faucet is open at /faucet. Mainnet public launch is 1.1.2027.
           </p>
           <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             <li>

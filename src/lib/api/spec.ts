@@ -33,6 +33,7 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 || Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW). There is no stake in consensus. |
 || Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf) on kovanica-testnet (chain ID 2) |
 || Mainnet launch | 1.1.2027 |
+|| Faucet | testnet faucet on /faucet. Fixed dispense. Unset KOVANICA_FAUCET_URL reports unavailable. |
 || Atom | 1 KVNC = 10^9 atoms |
 || Target block time | 4.0s (target interval, not finality) |
 
