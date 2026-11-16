@@ -30,7 +30,9 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 || Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) |
 || Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) |
 || Fees | 3/4 burned, 1/4 to miner — pending (PR in progress, PRO-53) |
-|| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW) |
+|| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW). There is no stake in consensus. |
+|| Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf) on kovanica-testnet (chain ID 2) |
+|| Mainnet launch | 1.1.2027 |
 || Atom | 1 KVNC = 10^9 atoms |
 || Target block time | 4.0s (target interval, not finality) |
 
@@ -159,5 +161,5 @@ the seed has served its blocks).
 GET /download/kovanica-node-linux-x64
 GET /download/kovanica-node-linux-arm64
 GET /download/install.sh
-  Node binaries + installer; GitHub Actions builds on every relevant push.
+  Node binaries and install.sh for tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf) on KovanicaDAG/kovanica-l1.
 `;

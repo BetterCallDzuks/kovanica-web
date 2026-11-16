@@ -19,7 +19,7 @@ export const WHATS_NEW: readonly WhatsNewItem[] = [
   {
     date: "2026-10",
     title: "kovanica-testnet (chain ID 2) live",
-    body: "Hybrid PoW + GHOSTDAG consensus (target block 4 s, GHOSTDAG k=5, KovanicaHash PoW). Deterministic Wasmi runtime and native KVNC.",
+    body: "Hybrid PoW + GHOSTDAG consensus (target block 4 s, GHOSTDAG k=5, KovanicaHash PoW). There is no stake in consensus. Live node tag v0.3.0-node (e3fce499). Deterministic Wasmi runtime and native KVNC. Mainnet launch 1.1.2027.",
     tag: "Protocol",
     href: `${TESTNET}/explorer`,
   },

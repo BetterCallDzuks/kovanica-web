@@ -45,7 +45,7 @@ export function HomeTestnet() {
         Testnet
       </h1>
       <p className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-muted">
-        Live protocol surfaces: Explorer, wallet, faucet, smart contracts (HTLC, Vaults, Multisig, Tokens), and network status.
+        kovanica-testnet (chain ID 2). Hybrid PoW + GHOSTDAG. There is no stake in consensus. Live node tag v0.3.0-node (e3fce499). Mainnet launch 1.1.2027. Explorer, wallet, faucet, smart contracts (HTLC, Vaults, Multisig, Tokens), and network status.
       </p>
 
       <div className="mt-8 w-full max-w-xl self-center">

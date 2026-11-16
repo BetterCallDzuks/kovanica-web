@@ -135,7 +135,7 @@ const NEXT: Item[] = [
     title: "kovanica-testnet Hardening & KovanicaHash Audit",
     status: "active",
     blurb:
-      "Deployment and hardening of kovanica-testnet (chain ID 2) hybrid PoW + GHOSTDAG, KovanicaHash audit sign-off, and solo miner tooling.",
+      "Deployment and hardening of kovanica-testnet (chain ID 2) hybrid PoW + GHOSTDAG. There is no stake in consensus. Live node tag v0.3.0-node (e3fce499). KovanicaHash audit sign-off and solo miner tooling. Mainnet launch 1.1.2027.",
   },
   {
     id: "node-hardening",

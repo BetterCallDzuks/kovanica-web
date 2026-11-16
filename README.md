@@ -2,6 +2,8 @@
 
 Source of the public site **kovanica.online** (TanStack Start + Vite + Nitro 3).
 
+Public copy matches the live testnet: kovanica-testnet chain ID 2, Hybrid PoW + GHOSTDAG, no stake, node tag `v0.3.0-node` (commit `e3fce499`), mainnet launch 1.1.2027. Downloads under `/download` redirect to that tag on KovanicaDAG/kovanica-l1.
+
 ## Develop
 
 ```sh

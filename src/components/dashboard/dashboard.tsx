@@ -337,7 +337,7 @@ export function Dashboard() {
       )}
 
       <p className="text-center font-mono text-[11px] text-subtle">
-        {NETWORK_ID} · {TOKEN} · Hybrid PoW + GHOSTDAG · 4s target · k=5
+        {NETWORK_ID} · chain ID 2 · {TOKEN} · Hybrid PoW + GHOSTDAG · no stake · 4s target · k=5 · v0.3.0-node (e3fce499) · mainnet 1.1.2027
       </p>
     </div>
   );
@@ -377,6 +377,8 @@ function MainnetPlaceholder() {
         </p>
         <ul className="mx-auto mt-6 flex max-w-xl flex-wrap items-center justify-center gap-2 font-mono text-[10px] tracking-wide text-muted uppercase">
           <li className="rounded-md border border-border px-2 py-1">Hybrid PoW + GHOSTDAG</li>
+          <li className="rounded-md border border-border px-2 py-1">No stake in consensus</li>
+          <li className="rounded-md border border-border px-2 py-1">Testnet node v0.3.0-node (e3fce499)</li>
           <li className="rounded-md border border-border px-2 py-1">KovanicaHash PoW</li>
           <li className="rounded-md border border-border px-2 py-1">GHOSTDAG k=5</li>
           <li className="rounded-md border border-border px-2 py-1">4s target interval</li>
