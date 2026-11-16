@@ -1,6 +1,6 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AlertCircle, ArrowLeft, Copy, ExternalLink, Landmark, Tag } from "lucide-react";
-import { api, ApiError, HttpError } from "@/lib/api/client";
+import { loadDetail } from "@/lib/api/detail-lookup";
 import { shortId } from "@/lib/ledger/hash";
 import { hexToKvnc } from "@/lib/wallet/address";
 import { Shell } from "@/components/layout/shell";
@@ -28,39 +28,8 @@ interface RwaDetailResponse {
 }
 
 export const Route = createFileRoute("/explorer/rwa/$assetId")({
-  loader: async ({ params, location }) => {
-    try {
-      const searchSource = (location.search as Record<string, unknown>)?.source;
-      const queryParam = typeof searchSource === "string" ? `?source=${encodeURIComponent(searchSource)}` : "";
-      const data = await api<RwaDetailResponse>(`/api/rwa/${encodeURIComponent(params.assetId)}${queryParam}`);
-      if (!data || !data.asset_id) {
-        throw notFound();
-      }
-      return data;
-    } catch (err: unknown) {
-      const status =
-        err instanceof ApiError || err instanceof HttpError
-          ? err.status
-          : typeof err === "object" && err !== null && "status" in err && typeof (err as { status: unknown }).status === "number"
-            ? (err as { status: number }).status
-            : undefined;
-
-      if (status === 404) {
-        throw notFound();
-      }
-      if (status !== undefined) {
-        throw err;
-      }
-      if (
-        err instanceof Error &&
-        err.message.toLowerCase().includes("not found") &&
-        !err.message.toLowerCase().includes("method not found")
-      ) {
-        throw notFound();
-      }
-      throw err;
-    }
-  },
+  loader: ({ params, location }) =>
+    loadDetail<RwaDetailResponse>("rwa", params.assetId, location.search, (d) => Boolean(d.asset_id)),
   notFoundComponent: RwaNotFoundPage,
   errorComponent: RwaErrorPage,
   component: RwaDetailPage,

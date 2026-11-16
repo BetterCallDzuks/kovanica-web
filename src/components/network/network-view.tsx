@@ -189,10 +189,15 @@ export function NetworkView() {
               <Row label="Founder seed" value={String(b.founder_seed)} />
               <Row label="Atom" value={`1 ${TOKEN} = ${h.atom.toLocaleString()} atoms`} />
               <Row label="GHOSTDAG k" value={String(b.k)} />
-              {"finality_depth" in b && (
-                <Row label="Finality depth" value={String((b as Record<string, unknown>).finality_depth)} />
-              )}
+              <Row
+                label="Finality depth"
+                value={b.finality_depth != null ? String(b.finality_depth) : "n/a — not reported by seed1"}
+              />
             </dl>
+            <p className="mt-3 text-[11px] leading-relaxed text-subtle">
+              Genesis, tip and GHOSTDAG k are read from seed1 (k falls back to the spec value 5). Token, subsidy, founder amount/seed and atom are
+              protocol spec constants, not values read from the node.
+            </p>
           </section>
 
           <section className="rounded-xl border border-border bg-surface p-4">

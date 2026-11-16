@@ -743,9 +743,11 @@ test("Section B: missing entities (404) vs backend failure (502) render distinct
       "Missing Collection entity must render CollectionNotFoundPage ('Collection Not Found')",
     );
 
-    // 3. Backend Failure (502): RWA, NFT, and Collection on public testnet when node is unreachable
-    // dispatchApi returns 502 'testnet node error' because no live RPC is active locally
-    await gotoAndSettle(page, `${baseUrl}/explorer/rwa/failing-service-asset?source=testnet`, "RWA Endpoint Unavailable");
+    // 3. Backend Failure (501/502/503): RWA, NFT, and Collection on public testnet when the
+    // node is unreachable or does not serve the lookup. The id must be well-formed 32-byte
+    // hex: a malformed id is a 404 before the node is ever asked.
+    const FAILING_ID = "a1".repeat(32);
+    await gotoAndSettle(page, `${baseUrl}/explorer/rwa/${FAILING_ID}?source=testnet`, "RWA Endpoint Unavailable");
     const errorRwaText = await page.locator("body").innerText();
     assert.ok(
       errorRwaText.includes("RWA Endpoint Unavailable"),
@@ -760,14 +762,14 @@ test("Section B: missing entities (404) vs backend failure (502) render distinct
       "Error page must provide 'Try again' retry button",
     );
 
-    await gotoAndSettle(page, `${baseUrl}/wallet/nft/failing-nft-asset?source=testnet`, "NFT Endpoint Unavailable");
+    await gotoAndSettle(page, `${baseUrl}/wallet/nft/${FAILING_ID}?source=testnet`, "NFT Endpoint Unavailable");
     const errorNftText = await page.locator("body").innerText();
     assert.ok(
       errorNftText.includes("NFT Endpoint Unavailable"),
       "NFT backend failure must render RouteError ('NFT Endpoint Unavailable'), NOT 404",
     );
 
-    await gotoAndSettle(page, `${baseUrl}/wallet/collection/failing-coll-asset?source=testnet`, "Collection Endpoint Unavailable");
+    await gotoAndSettle(page, `${baseUrl}/wallet/collection/${FAILING_ID}?source=testnet`, "Collection Endpoint Unavailable");
     const errorCollText = await page.locator("body").innerText();
     assert.ok(
       errorCollText.includes("Collection Endpoint Unavailable"),
@@ -1212,4 +1214,53 @@ test("Network Isolation Guard: zero unintended external egress during entire tes
   }
   // The test harness successfully trapped every external network attempt
   assert.ok(true, "All public connections were intercepted and prevented");
+});
+
+test("Built server: security headers on every host role and real 404s for missing ids", async () => {
+  const hosts = [
+    "kovanica.online",
+    "testnet.kovanica.online",
+    "mainnet.kovanica.online",
+    "docs.kovanica.online",
+    "api.kovanica.online",
+    "playground.kovanica.online",
+    "dash.kovanica.online",
+  ];
+  for (const host of hosts) {
+    const res = await fetch(`${baseUrl}/wallet`, { headers: { "x-forwarded-host": host }, redirect: "manual" });
+    await res.arrayBuffer();
+    assert.match(res.headers.get("strict-transport-security") ?? "", /max-age=31536000; includeSubDomains/, host);
+    assert.equal(res.headers.get("x-content-type-options"), "nosniff", host);
+    assert.equal(res.headers.get("referrer-policy"), "strict-origin-when-cross-origin", host);
+    assert.equal(res.headers.get("x-frame-options"), "DENY", host);
+    assert.ok(res.headers.get("permissions-policy"), host);
+    const csp = res.headers.get("content-security-policy") ?? "";
+    assert.match(csp, /frame-ancestors 'none'/, host);
+    assert.match(csp, /script-src [^;]*'nonce-[A-Za-z0-9+/=]+'/, host);
+  }
+
+  // The nonce in the header is the one stamped on the SSR scripts.
+  const page = await fetch(`${baseUrl}/`);
+  const html = await page.text();
+  const nonce = /'nonce-([^']+)'/.exec(page.headers.get("content-security-policy") ?? "")?.[1];
+  assert.ok(nonce, "CSP nonce present");
+  const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+  assert.ok(scripts.length > 0, "SSR emits scripts");
+  for (const tag of scripts) assert.ok(tag.includes(`nonce="${nonce}"`), `script without nonce: ${tag}`);
+
+  for (const path of [
+    "/explorer/block/abc",
+    "/explorer/tx/" + "0".repeat(64),
+    "/explorer/address/kvncnotanaddress",
+    "/explorer/rwa/missing",
+    "/wallet/nft/missing",
+    "/wallet/collection/missing",
+  ]) {
+    const res = await fetch(`${baseUrl}${path}`);
+    const body = await res.text();
+    assert.equal(res.status, 404, path);
+    assert.match(body, /not found/i, path);
+  }
+  const api = await fetch(`${baseUrl}/api/rwa/missing?source=testnet`);
+  assert.equal(api.status, 400);
 });

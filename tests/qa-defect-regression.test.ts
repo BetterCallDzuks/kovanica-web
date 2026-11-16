@@ -23,7 +23,7 @@ test("Route definitions for RWA, Collection, and NFT export notFoundComponent an
   );
   assert.ok(rwaCode.includes("notFoundComponent: RwaNotFoundPage"), "RWA route must define notFoundComponent");
   assert.ok(rwaCode.includes("errorComponent: RwaErrorPage"), "RWA route must define errorComponent");
-  assert.ok(rwaCode.includes("throw notFound()"), "RWA loader must throw notFound() on missing asset");
+  assert.ok(rwaCode.includes("loadDetail<"), "RWA loader must throw notFound() on missing asset (via the shared loadDetail)");
 
   const collCode = await readFile(
     new URL("../src/routes/wallet/collection.$collectionId.tsx", import.meta.url),
@@ -31,7 +31,7 @@ test("Route definitions for RWA, Collection, and NFT export notFoundComponent an
   );
   assert.ok(collCode.includes("notFoundComponent: CollectionNotFoundPage"), "Collection route must define notFoundComponent");
   assert.ok(collCode.includes("errorComponent: CollectionErrorPage"), "Collection route must define errorComponent");
-  assert.ok(collCode.includes("throw notFound()"), "Collection loader must throw notFound() on missing collection");
+  assert.ok(collCode.includes("loadDetail<"), "Collection loader must throw notFound() on missing collection (via the shared loadDetail)");
 
   const nftCode = await readFile(
     new URL("../src/routes/wallet/nft.$assetId.tsx", import.meta.url),
@@ -39,7 +39,7 @@ test("Route definitions for RWA, Collection, and NFT export notFoundComponent an
   );
   assert.ok(nftCode.includes("notFoundComponent: NftNotFoundPage"), "NFT route must define notFoundComponent");
   assert.ok(nftCode.includes("errorComponent: NftErrorPage"), "NFT route must define errorComponent");
-  assert.ok(nftCode.includes("throw notFound()"), "NFT loader must throw notFound() on missing NFT");
+  assert.ok(nftCode.includes("loadDetail<"), "NFT loader must throw notFound() on missing NFT (via the shared loadDetail)");
 });
 
 test("Default router configuration provides defaultNotFoundComponent", async () => {
@@ -139,4 +139,11 @@ test("Wallet view prevents transactions on mainnet source", async () => {
   assert.ok(walletCode.includes("Mainnet Prelaunch · Launch Scheduled 1.1.2027"), "Wallet must explain mainnet restrictions");
   assert.ok(walletCode.includes('toast.error("Mainnet transactions are disabled prior to 1.1.2027 launch")'), "Wallet toast must block send on mainnet");
   assert.ok(walletCode.includes("Mainnet disabled (launch 1.1.2027)"), "Submit button must display disabled status on mainnet");
+});
+
+test("shared detail loader throws notFound() for malformed and unknown ids", async () => {
+  const code = await readFile(new URL("../src/lib/api/detail-lookup.ts", import.meta.url), "utf8");
+  assert.ok(code.includes("if (!isAssetId(id)) throw notFound();"), "malformed id must be notFound()");
+  assert.ok(code.includes("if (status === 404) throw notFound();"), "API 400/404 must be notFound()");
+  assert.ok(code.includes("if (!data || !isPresent(data)) throw notFound();"), "empty result must be notFound()");
 });

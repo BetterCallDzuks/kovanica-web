@@ -54,7 +54,7 @@ test("route files handle missing entities with notFound and provide notFoundComp
   );
   assert.ok(rwaCode.includes("notFoundComponent"), "RWA detail route must have notFoundComponent");
   assert.ok(rwaCode.includes("errorComponent"), "RWA detail route must have errorComponent");
-  assert.ok(rwaCode.includes("throw notFound()"), "RWA loader must throw notFound() on 404");
+  assert.ok(rwaCode.includes("loadDetail<"), "RWA loader must throw notFound() on 404 (via the shared loadDetail)");
   assert.ok(!rwaCode.includes('const source = "local";'), "RWA loader must not hardcode local source");
 
   const collectionCode = await readFile(
@@ -63,7 +63,7 @@ test("route files handle missing entities with notFound and provide notFoundComp
   );
   assert.ok(collectionCode.includes("notFoundComponent"), "Collection detail route must have notFoundComponent");
   assert.ok(collectionCode.includes("errorComponent"), "Collection detail route must have errorComponent");
-  assert.ok(collectionCode.includes("throw notFound()"), "Collection loader must throw notFound() on 404");
+  assert.ok(collectionCode.includes("loadDetail<"), "Collection loader must throw notFound() on 404 (via the shared loadDetail)");
   assert.ok(!collectionCode.includes('const source = "local";'), "Collection loader must not hardcode local source");
 
   const nftCode = await readFile(
@@ -72,7 +72,7 @@ test("route files handle missing entities with notFound and provide notFoundComp
   );
   assert.ok(nftCode.includes("notFoundComponent"), "NFT detail route must have notFoundComponent");
   assert.ok(nftCode.includes("errorComponent"), "NFT detail route must have errorComponent");
-  assert.ok(nftCode.includes("throw notFound()"), "NFT loader must throw notFound() on 404");
+  assert.ok(nftCode.includes("loadDetail<"), "NFT loader must throw notFound() on 404 (via the shared loadDetail)");
   assert.ok(!nftCode.includes('const source = "local";'), "NFT loader must not hardcode local source");
 });
 

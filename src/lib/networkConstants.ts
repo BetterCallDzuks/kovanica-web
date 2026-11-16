@@ -166,7 +166,7 @@ export type ApiHead = {
   blocks: number;
   min_fee: number;
   atom: number;
-  finality_depth: number;
+  finality_depth: number | null;
   k?: number;
   health?: HealthSummary;
 };
@@ -183,7 +183,7 @@ export type ApiBootstrap = {
   k: number;
   subsidy: number;
   min_fee: number;
-  finality_depth: number;
+  finality_depth: number | null;
   block_pruning_depth: number | null;
   payload_pruning_depth: number | null;
   founder_amount: number;
