@@ -65,6 +65,30 @@ const PROTOCOL: Item[] = [
     blurb:
       "CW20-style deterministic WASM token contract with minting, transfers, allowances, and burn capabilities.",
   },
+  {
+    id: "contract-name-service",
+    title: "Decentralized Name Registry (kovanica-name)",
+    status: "done",
+    blurb:
+      "CW-style domain name registration, record management, and reverse resolution contract with sub-second lookups.",
+    note: "Canonical name_register, name_transfer, and name_resolve entry points.",
+  },
+  {
+    id: "peer-reputation",
+    title: "P2P Peer Reputation & InboundGate Ban Scoring",
+    status: "done",
+    blurb:
+      "Sub-second penalty matrix and socket-level IP banning for malformed frames (+50), invalid PoW/target (+100 instant ban), and flood spam (+20).",
+    note: "Banned IPs rejected before socket buffer allocation.",
+  },
+  {
+    id: "soak-simulation",
+    title: "Mempool & Out-of-Gas Soak Simulation (SIM-1)",
+    status: "done",
+    blurb:
+      "Multi-threaded 20-account concurrent stress test achieving 7,113.13 TPS, bounded RSS memory (13.59 MiB), and zero node panics with deterministic gas rollback.",
+    note: "Deterministic out-of-gas rollback verified under Wasmi fuel limit.",
+  },
 ];
 
 const SURFACE: Item[] = [
@@ -88,6 +112,22 @@ const SURFACE: Item[] = [
     status: "done",
     blurb:
       "Automated testnet faucet dispensing 10 KVNC with rate limiting and canonical PRO-21 address verification.",
+  },
+  {
+    id: "global-search",
+    title: "Universal Explorer Global Search (PR #24)",
+    status: "done",
+    blurb:
+      "Deep-linking resolver supporting canonical PRO-21 addresses (kvnc...dag), Ed25519 public keys, block/tx digests, token symbols, NFT IDs, and RWA certificates.",
+    note: "Instant resolution with asynchronous smart contract state probing.",
+  },
+  {
+    id: "apps-ecosystem",
+    title: "Desktop & Mobile Applications (kovanica-apps)",
+    status: "done",
+    blurb:
+      "Native cross-platform shell suite: Android node & wallet with Rust FFI, Desktop node controller (node-desktop, console-desktop), and unified smart contract call dispatcher.",
+    note: "100% clean builds across desktop and mobile suites.",
   },
   {
     id: "cli-tooling",
@@ -114,6 +154,22 @@ const SDK: Item[] = [
       "Modular client libraries: @kovanica/api-client, @kovanica/signer, @kovanica/console, and @kovanica/web.",
   },
   {
+    id: "sdk-v030",
+    title: "TypeScript SDK v0.3.0 Release",
+    status: "done",
+    blurb:
+      "End-to-end typed smart contract encoders and decoders for Name Registry, NFT, and Escrow, BIP-39 HD wallet derivation, and strict 0x prefix enforcement.",
+    note: "Published to npm registry with zero-dependency crypto runtime.",
+  },
+  {
+    id: "playground-v030",
+    title: "Interactive Contract Playground (kovanica-playground)",
+    status: "done",
+    blurb:
+      "Browser-based contract testing environment pinned to SDK v0.3.0 with live Wasmi execution and hybrid PoW consensus visualization.",
+    note: "All 7 test suites passing (65 tests) with clean production build.",
+  },
+  {
     id: "sdk-wasm",
     title: "WASM In-Browser Engine",
     status: "done",
@@ -132,38 +188,43 @@ const SDK: Item[] = [
 const NEXT: Item[] = [
   {
     id: "hybrid-testnet-m8",
-    title: "kovanica-testnet Hardening & KovanicaHash Audit",
+    title: "Canonical kovanica-testnet (Chain ID 2) Live Operation",
+    status: "done",
+    blurb:
+      "Live operation of canonical hybrid PoW + GHOSTDAG testnet (network tag 2-24cdb5fadd98b207). Active 3-node cluster + observer + faucet on seed1.kovanica.online with non-compounding DAA.",
+    note: "Over 4,700 committed rounds with 100% healthy consensus.",
+  },
+  {
+    id: "audit-dossier",
+    title: "External Security Audit Dossier & Inspection Harness",
     status: "active",
     blurb:
-      "Deployment and hardening of kovanica-testnet (chain ID 2) hybrid PoW + GHOSTDAG. There is no stake in consensus. Live node tag v0.3.0-node (e3fce499). KovanicaHash audit sign-off and solo miner tooling. Mainnet launch 1.1.2027.",
+      "Immutable audit archive packaging (scripts/package-audit-dossier.sh) and automated reproduction harness (auditor-reproduce.sh) prepared for accredited external security firms.",
+    note: "Scope covers KovanicaHash 2 MiB scratchpad, Wasmi sandbox, and P2P peer scorer.",
   },
   {
-    id: "node-hardening",
-    title: "P2P Network & State Snapshot Hardening",
+    id: "solo-miner",
+    title: "Solo Miner Tooling & Stratum Gateway",
     status: "active",
     blurb:
-      "Fast snapshot sync, DAG block payload pruning, multi-seed peer discovery, and catch-up validation under network turbulence.",
+      "Public CPU/GPU solo mining scripts, Stratum mining gateway dispatcher, and local hash-rate telemetry for decentralized mining participation.",
+    note: "Zero stake in consensus path; 100% PoW block admission.",
   },
   {
-    id: "contract-abi",
-    title: "Contract UX & Typed ABI Pipeline",
+    id: "ceremony-mainnet",
+    title: "Mainnet Genesis Ceremony & Premine Lock Verification",
     status: "next",
     blurb:
-      "Typed ABI code-generation, extended Wasmi gas metering tables, and streamlined contract deployment workflows.",
-  },
-  {
-    id: "observability-indexer",
-    title: "Observability & Real-Time Indexer Hooks",
-    status: "next",
-    blurb:
-      "Committed subdag execution hooks, Prometheus metrics, structured tracing, and WebSocket event feeds.",
+      "Execution of the final genesis ceremony with the 5 zero-stake bootstrap seed operators, founder premine verification (200,000 KVNC), and frozen genesis bundle sign-off.",
+    note: "Frozen mainnet network tag 1-f35df34c92001436.",
   },
   {
     id: "mainnet-readiness",
-    title: "Mainnet Launch Readiness",
+    title: "Mainnet Launch Event (1.1.2027)",
     status: "next",
     blurb:
-      "Public launch planned for 1.1.2027 on kovanica-mainnet (chain ID 1, frozen network tag 1-f35df34c92001436) following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8,200,000-block × 3/4 decay eras).",
+      "Public launch on kovanica-mainnet (chain ID 1) with 90,200,000 KVNC hard cap, 82M mining subsidy budget (8,200,000-block × 3/4 decay eras), and zero stake in consensus.",
+    note: "Target block time: 4000 ms, GHOSTDAG K = 5.",
   },
 ];
 
@@ -233,10 +294,11 @@ function Section({ title, items }: { title: string; items: Item[] }) {
 }
 
 export function RoadmapView() {
-  const done = [...PROTOCOL, ...SURFACE, ...SDK].filter((i) => i.status === "done").length;
-  const inProgress = NEXT.filter((i) => i.status === "active").length;
-  const queued = NEXT.filter((i) => i.status === "next").length;
-  const total = PROTOCOL.length + SURFACE.length + SDK.length + NEXT.length;
+  const allItems = [...PROTOCOL, ...SURFACE, ...SDK, ...NEXT];
+  const done = allItems.filter((i) => i.status === "done").length;
+  const inProgress = allItems.filter((i) => i.status === "active").length;
+  const queued = allItems.filter((i) => i.status === "next").length;
+  const total = allItems.length;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-4 py-8 md:px-6 md:py-10">
