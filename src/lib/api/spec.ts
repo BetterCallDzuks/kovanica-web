@@ -15,7 +15,7 @@ import {
 
 export const SPEC_TEXT = `# ${NETWORK_ID}
 
-BlockDAG testnet. Native token **${TOKEN}** (9 decimals). Canonical chains: kovanica-mainnet (chain ID 1), kovanica-testnet (chain ID 2), kovanica-devnet (chain ID 3), local (chain ID 1337).
+BlockDAG testnet. Native token **${TOKEN}** (9 decimals). Canonical chains: kovanica-mainnet (chain ID 1), kovanica-testnet (chain ID 2), kovanica-devnet (chain ID 3).
 Engine is the Rust node; this app speaks the same HTTP contract.
 
 || | |
@@ -29,7 +29,7 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 || Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks |
 || Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) |
 || Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) |
-|| Fees | 3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet/local |
+|| Fees | 3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet |
 || Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW). There is no stake in consensus. |
 || Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf); seed1 live at 9758ffe0 (#259 LWMA DAA) on kovanica-testnet (chain ID 2, tag 2-acfdf6a6c80fd28a) |
 || Mainnet launch | 1.1.2027 |
@@ -120,7 +120,7 @@ POST /api/origin?iso3=HRV
 
 ## Wallet
 
-Address: PRO-21 canonical format = kvnc + 57 bech32-alphabet chars + dag (64 total), 29-bit BLAKE3 checksum. Legacy hex is accepted on kovanica-devnet (chain ID 3) and local (chain ID 1337) only.
+Address: PRO-21 canonical format = kvnc + 57 bech32-alphabet chars + dag (64 total), 29-bit BLAKE3 checksum. Legacy hex is accepted on kovanica-devnet (chain ID 3) only.
 Derivation: ADR-0002 — 24-word BIP-39 entropy IS the 32-byte Ed25519 seed; no PBKDF2 passphrase, no HD derivation, one phrase = one wallet address.
 Browser signs prepare's sighash; submit never receives the mnemonic.
 Hardware: Ledger (WebHID) + Trezor (WebUSB).

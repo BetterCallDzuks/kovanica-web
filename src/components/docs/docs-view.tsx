@@ -312,7 +312,7 @@ export function DocsView() {
             <Fact k="Subsidy Era" v="8,200,000 blocks" />
             <Fact k="Decay Factor" v="× 3/4 each era" />
             <Fact k="Target Block" v="4.0s (target interval)" />
-            <Fact k="Fees" v="3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet/local" />
+            <Fact k="Fees" v="3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet" />
           </dl>
         </section>
 
