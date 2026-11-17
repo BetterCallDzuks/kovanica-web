@@ -74,7 +74,7 @@ export function DocsView() {
       : boot !== null;
 
   const statusLines: string[] = isMainnet
-    ? ["Mainnet launch: 1.1.2027", "Pre-launch audit in progress", "No public node endpoint yet"]
+    ? ["Mainnet launch: 1.1.2027", "Network tag: 1-4d827d40dd9655db", "Pre-launch audit in progress", "No public node endpoint yet"]
     : loading
       ? ["Connecting to node telemetry…"]
       : boot
@@ -154,7 +154,7 @@ export function DocsView() {
           <h2 className="font-display text-2xl tracking-tight text-fg">Getting started</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             Kovanica is a clean, from-scratch Rust Layer-1 blockchain powered by hybrid PoW + GHOSTDAG consensus (4s target block interval, GHOSTDAG k=5) and deterministic Wasmi execution. The native currency is{" "}
-            <strong className="text-fg">KVNC</strong> (9 decimals). kovanica-testnet (chain ID 2) is live on node tag v0.3.0-node (e3fce499). The testnet faucet is open at /faucet. Mainnet public launch is 1.1.2027.
+            <strong className="text-fg">KVNC</strong> (9 decimals). kovanica-testnet (chain ID 2, network tag <code>2-acfdf6a6c80fd28a</code>) is live on node tag v0.3.0-node (e3fce499). The testnet faucet is open at /faucet. kovanica-mainnet (chain ID 1, network tag <code>1-4d827d40dd9655db</code>) public launch is 1.1.2027.
           </p>
           <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             <li>
@@ -321,7 +321,7 @@ export function DocsView() {
           <h2 className="font-display text-2xl tracking-tight text-fg">Node operations</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             <li>
-              Live kovanica-testnet (chain ID 2, network tag <code>2-acfdf6a6c80fd28a</code>) node release tag is <code>v0.3.0-node</code> (commit <code>e3fce499</code>) on KovanicaDAG/kovanica-l1, with non-compounding LWMA DAA (<code>#259</code>, <code>9758ffe0</code>) active on <code>seed1.kovanica.online</code>. <code>/download/install.sh</code> and the Linux node archives redirect to <code>v0.3.0-node</code>.
+              Live kovanica-testnet (chain ID 2, network tag <code>2-acfdf6a6c80fd28a</code>) node release tag is <code>v0.3.0-node</code> (commit <code>e3fce499</code>) on KovanicaDAG/kovanica-l1, with non-compounding LWMA DAA (<code>#259</code>, <code>9758ffe0</code>) active on <code>seed1.kovanica.online</code>. <code>/download/install.sh</code> and the Linux node archives redirect to <code>v0.3.0-node</code>. Official kovanica-mainnet (chain ID 1) network tag is <code>1-4d827d40dd9655db</code> (genesis ceremony <code>#290</code>).
             </li>
             <li>Testnet RPC is available on port 8545 and proxied via <code>https://rpc-testnet.kovanica.online</code>.</li>
             <li>Transactions require an Ed25519 signature over the BLAKE3 <code>sighash</code>. All nodes verify 64-byte signatures.</li>

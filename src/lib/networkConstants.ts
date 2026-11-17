@@ -9,6 +9,8 @@ export const LIVE_SITE = "https://kovanica.online";
 export const NETWORK_ID = "kovanica-testnet";
 export const MAINNET_ID = "kovanica-mainnet";
 export const DEVNET_ID = "kovanica-devnet";
+export const MAINNET_NETWORK_TAG = "1-4d827d40dd9655db";
+export const TESTNET_NETWORK_TAG = "2-acfdf6a6c80fd28a";
 /** kovanica-testnet is chain ID 2 (reported by seed1 in `kovanica_getDagTips`). */
 export const CHAIN_ID = 2;
 /** Canonical label for the only live network. */
@@ -265,7 +267,7 @@ export function getSpecText(network: PublicSource): string {
 
   return `# ${networkId}
 
-BlockDAG ${isMainnet ? "mainnet" : "testnet"}. Native token **${TOKEN}** (9 decimals). Canonical chains: kovanica-mainnet (chain ID 1), kovanica-testnet (chain ID 2), kovanica-devnet (chain ID 3).
+BlockDAG ${isMainnet ? "mainnet" : "testnet"}. Native token **${TOKEN}** (9 decimals). Canonical chains: kovanica-mainnet (chain ID 1, tag ${MAINNET_NETWORK_TAG}), kovanica-testnet (chain ID 2, tag ${TESTNET_NETWORK_TAG}), kovanica-devnet (chain ID 3).
 Engine is the Rust node; this app speaks the same HTTP contract.
 
 ||| | |
@@ -274,15 +276,15 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 ||| Wallet | ${liveWallet} ||
 ||| Map | ${liveMap} ||
 ||| Site | ${liveSite} ||
-||| Network | \`${networkId}\` (chain ID ${isMainnet ? 1 : CHAIN_ID}) ||
+||| Network | \`${networkId}\` (chain ID ${isMainnet ? 1 : CHAIN_ID}, tag ${isMainnet ? MAINNET_NETWORK_TAG : TESTNET_NETWORK_TAG}) ||
 ||| Premine | 200,000 KVNC founder premine; 8,000,000 KVNC linear treasury; 82,000,000 KVNC mining subsidy budget; 0 KVNC genesis allocation ||
 ||| Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks ||
 ||| Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) ||
 ||| Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) ||
 ||| Fees | 3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet ||
 ||| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW). There is no stake in consensus. ||
-||| Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf); seed1 live at 9758ffe0 (#259 LWMA DAA) on kovanica-testnet (chain ID 2, tag 2-acfdf6a6c80fd28a) ||
-||| Mainnet launch | 1.1.2027 ||
+||| Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf); seed1 live at 9758ffe0 (#259 LWMA DAA) on kovanica-testnet (chain ID 2, tag ${TESTNET_NETWORK_TAG}) ||
+||| Mainnet launch | 1.1.2027 (kovanica-mainnet, chain ID 1, tag ${MAINNET_NETWORK_TAG}) ||
 ||| Faucet | testnet faucet on /faucet. Fixed dispense. Unset KOVANICA_FAUCET_URL reports unavailable. ||
 ||| Atom | 1 KVNC = 10^9 atoms ||
 ||| Finality depth | 100 blue score ||
