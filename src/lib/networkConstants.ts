@@ -279,9 +279,9 @@ Engine is the Rust node; this app speaks the same HTTP contract.
 ||| Initial block reward | ${SUBSIDY / ATOM} KVNC / block, decays × 3/4 every ${HALVING_ERA.toLocaleString()} blocks ||
 ||| Hard cap | ${MAX_SUPPLY / Number(ATOM.toLocaleString().replace(/,/g, ''))} KVNC (90.2M) ||
 ||| Min fee | ${MIN_FEE} atoms (${MIN_FEE / ATOM} KVNC) ||
-||| Fees | 3/4 burned, 1/4 to miner — pending (PR in progress, PRO-53) ||
+||| Fees | 3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet/local ||
 ||| Consensus | Hybrid PoW + GHOSTDAG (target block 4 s, GHOSTDAG K = 5, KovanicaHash PoW). There is no stake in consensus. ||
-||| Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf) on kovanica-testnet (chain ID 2) ||
+||| Live testnet node | tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf); seed1 live at 9758ffe0 (#259 LWMA DAA) on kovanica-testnet (chain ID 2, tag 2-acfdf6a6c80fd28a) ||
 ||| Mainnet launch | 1.1.2027 ||
 ||| Faucet | testnet faucet on /faucet. Fixed dispense. Unset KOVANICA_FAUCET_URL reports unavailable. ||
 ||| Atom | 1 KVNC = 10^9 atoms ||

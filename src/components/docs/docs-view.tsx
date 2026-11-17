@@ -312,7 +312,7 @@ export function DocsView() {
             <Fact k="Subsidy Era" v="8,200,000 blocks" />
             <Fact k="Decay Factor" v="× 3/4 each era" />
             <Fact k="Target Block" v="4.0s (target interval)" />
-            <Fact k="Fees" v="3/4 burned, 1/4 to miner — pending (PR in progress, PRO-53)" />
+            <Fact k="Fees" v="3/4 burned, 1/4 to miner (mainnet & testnet); 100% burned on devnet/local" />
           </dl>
         </section>
 
@@ -321,7 +321,7 @@ export function DocsView() {
           <h2 className="font-display text-2xl tracking-tight text-fg">Node operations</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             <li>
-              Live kovanica-testnet (chain ID 2) node tag is <code>v0.3.0-node</code> (commit e3fce499) on KovanicaDAG/kovanica-l1. <code>/download/install.sh</code> and the Linux node archives redirect to that tag.
+              Live kovanica-testnet (chain ID 2, network tag <code>2-acfdf6a6c80fd28a</code>) node release tag is <code>v0.3.0-node</code> (commit <code>e3fce499</code>) on KovanicaDAG/kovanica-l1, with non-compounding LWMA DAA (<code>#259</code>, <code>9758ffe0</code>) active on <code>seed1.kovanica.online</code>. <code>/download/install.sh</code> and the Linux node archives redirect to <code>v0.3.0-node</code>.
             </li>
             <li>Testnet RPC is available on port 8545 and proxied via <code>https://rpc-testnet.kovanica.online</code>.</li>
             <li>Transactions require an Ed25519 signature over the BLAKE3 <code>sighash</code>. All nodes verify 64-byte signatures.</li>
@@ -390,9 +390,22 @@ export function DocsView() {
                   <td className="px-4 py-2.5 text-fg">[]</td>
                   <td className="px-4 py-2.5 font-sans text-muted">Current DAG tip block hashes for topological consensus ordering</td>
                 </tr>
+                <tr className="border-t border-border">
+                  <td className="px-4 py-2.5 text-amber-400">kovanica_getMiningInfo</td>
+                  <td className="px-4 py-2.5 text-fg">[]</td>
+                  <td className="px-4 py-2.5 font-sans text-muted">Chain ID, target_bits, difficulty, GHOSTDAG k, and 4,000 ms target interval</td>
+                </tr>
+                <tr className="border-t border-border">
+                  <td className="px-4 py-2.5 text-amber-400">kovanica_getBlockHeaderByNumber</td>
+                  <td className="px-4 py-2.5 text-fg">[height]</td>
+                  <td className="px-4 py-2.5 font-sans text-muted">PoW block header, round, timestamp, and target_bits at a committed height</td>
+                </tr>
               </tbody>
             </table>
           </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted">
+            Legacy staking and committee RPCs (<code>kovanica_getValidators</code>, <code>kovanica_getStake</code>, <code>kovanica_getLeaderSchedule</code>) return JSON-RPC <code>-32600</code> (<code>InvalidRequest</code>) on hybrid PoW + GHOSTDAG chains 1 and 2 (<code>kovanica-mainnet</code> and <code>kovanica-testnet</code>).
+          </p>
         </section>
 
         {/* Roadmap */}
