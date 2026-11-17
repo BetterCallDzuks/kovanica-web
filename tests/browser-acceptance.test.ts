@@ -2,7 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { dispatchApi } from "../src/lib/api/dispatch.server";
@@ -262,11 +262,32 @@ const blockedExternalRequests: string[] = [];
 // Tracking mutation interception: prohibited mutation attempts intercepted locally
 const interceptedMutations: string[] = [];
 
+/**
+ * Returns true if `.output/server/index.mjs` is missing or older than any
+ * source/config file, preventing stale-build false failures locally after
+ * `git pull` or `npm run build` (which writes `.vercel/output`, not `.output`).
+ */
+function isVpsBuildStale(outputEntry = ".output/server/index.mjs"): boolean {
+  if (!existsSync(outputEntry)) return true;
+  const outputMtime = statSync(outputEntry).mtimeMs;
+  const newestMtime = (target: string): number => {
+    if (!existsSync(target)) return 0;
+    const st = statSync(target);
+    if (!st.isDirectory()) return st.mtimeMs;
+    let max = st.mtimeMs;
+    for (const entry of readdirSync(target, { withFileTypes: true })) {
+      max = Math.max(max, newestMtime(join(target, entry.name)));
+    }
+    return max;
+  };
+  return ["src", "public", "vite.config.ts", "package.json"].some((p) => newestMtime(p) > outputMtime);
+}
+
 before(async () => {
   port = await getFreePort();
   baseUrl = `http://127.0.0.1:${port}`;
 
-  if (!existsSync(".output/server/index.mjs")) {
+  if (isVpsBuildStale()) {
     const { execSync } = await import("node:child_process");
     execSync("npm run build:vps", { stdio: "inherit" });
   }
