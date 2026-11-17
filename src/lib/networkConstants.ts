@@ -10,7 +10,7 @@ export const NETWORK_ID = "kovanica-testnet";
 export const MAINNET_ID = "kovanica-mainnet";
 export const DEVNET_ID = "kovanica-devnet";
 export const MAINNET_NETWORK_TAG = "1-f35df34c92001436";
-export const TESTNET_NETWORK_TAG = "2-acfdf6a6c80fd28a";
+export const TESTNET_NETWORK_TAG = "2-24cdb5fadd98b207";
 /** kovanica-testnet is chain ID 2 (reported by seed1 in `kovanica_getDagTips`). */
 export const CHAIN_ID = 2;
 /** Canonical label for the only live network. */
