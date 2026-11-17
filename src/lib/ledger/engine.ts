@@ -1,6 +1,13 @@
 import { hashHex } from "./hash";
 import { HALVING_ERA } from "../api/contract";
-import { K, SUBSIDY, type Block, type Colour, type Tx } from "./types";
+import { ATOM, K, SUBSIDY, type Block, type Colour, type Tx } from "./types";
+import {
+  bytesToHex,
+  buildNameRegisterCall,
+  buildHtlcCreateCall,
+  buildNftMintCall,
+  buildEscrowCreateCall,
+} from "../contracts/decoders";
 
 const TREASURY = "cecc1507dc1ddd7295951c290888f095adb9044d1b73d696e6df065d683bd4fc";
 
@@ -44,7 +51,103 @@ export function seedDag(): Block[] {
 
   for (let i = 1; i <= 8; i += 1) {
     const parents = i % 3 === 0 ? [tip, side] : [tip];
-    const next = mineBlock(blocks, parents, TREASURY, { nonce: i * 17, timestamp: i * 4_000 });
+    const sampleTxs: Tx[] = [];
+    if (i === 1) {
+      sampleTxs.push({
+        id: txId("sample-transfer-1"),
+        coinbase: false,
+        from: TREASURY,
+        to: "44".repeat(32),
+        amount: 25 * ATOM,
+        kind: "Transfer",
+      });
+    } else if (i === 2) {
+      sampleTxs.push({
+        id: txId("sample-name-register"),
+        coinbase: false,
+        kind: "Call",
+        contract: "11".repeat(32),
+        method: "name_register",
+        args: bytesToHex(
+          buildNameRegisterCall("alice", new Uint8Array(32).fill(0x11), [
+            "https://relay1.kovanica.org",
+            "https://relay2.kovanica.org",
+          ]),
+        ),
+        amount: 0,
+        call_value: 0,
+        gas_limit: 100_000,
+      });
+    } else if (i === 3) {
+      sampleTxs.push({
+        id: txId("sample-htlc-create"),
+        coinbase: false,
+        kind: "Call",
+        contract: "22".repeat(32),
+        method: "htlc_create",
+        args: bytesToHex(
+          buildHtlcCreateCall(
+            new Uint8Array(32).fill(0xaa),
+            1750000000n,
+            new Uint8Array(32).fill(0xbb),
+          ),
+        ),
+        amount: 5 * ATOM,
+        call_value: 5 * ATOM,
+        gas_limit: 100_000,
+      });
+    } else if (i === 4) {
+      sampleTxs.push({
+        id: txId("sample-nft-mint"),
+        coinbase: false,
+        kind: "Call",
+        contract: "33".repeat(32),
+        method: "nft_mint",
+        args: bytesToHex(
+          buildNftMintCall(
+            new Uint8Array(32).fill(0xcc),
+            new Uint8Array(32).fill(0xdd),
+            42n,
+            "ipfs://bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+          ),
+        ),
+        amount: 0,
+        call_value: 0,
+        gas_limit: 120_000,
+      });
+    } else if (i === 5) {
+      sampleTxs.push({
+        id: txId("sample-escrow-create"),
+        coinbase: false,
+        kind: "Call",
+        contract: "44".repeat(32),
+        method: "escrow_create",
+        args: bytesToHex(
+          buildEscrowCreateCall(
+            [new Uint8Array(32).fill(0x11), new Uint8Array(32).fill(0x22)],
+            2,
+            500_000_000n,
+            1750000000n,
+          ),
+        ),
+        amount: 500_000_000,
+        call_value: 500_000_000,
+        gas_limit: 150_000,
+      });
+    } else if (i === 6) {
+      sampleTxs.push({
+        id: txId("sample-deploy"),
+        coinbase: false,
+        kind: "Deploy",
+        amount: 0,
+      });
+    }
+
+    const next = mineBlock(blocks, parents, TREASURY, {
+      nonce: i * 17,
+      timestamp: i * 4_000,
+      txs: sampleTxs,
+    });
     blocks.push(next);
     if (i % 2 === 0) side = next.id;
     else tip = next.id;
@@ -57,7 +160,7 @@ export function mineBlock(
   blocks: Block[],
   parentIds?: string[],
   miner?: string,
-  opts?: { nonce?: number; timestamp?: number },
+  opts?: { nonce?: number; timestamp?: number; txs?: Tx[] },
 ): Block {
   const tips = tipsOf(blocks);
   const parents = (parentIds && parentIds.length ? parentIds : pickParents(tips)).slice(0, K);
@@ -84,7 +187,7 @@ export function mineBlock(
     blueScore,
     colour: "blue",
     height,
-    txs: [coinbase],
+    txs: [coinbase, ...(opts?.txs ?? [])],
   };
 }
 

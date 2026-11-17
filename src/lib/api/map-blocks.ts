@@ -18,6 +18,15 @@ export function dagToBlocks(dag: ApiDagBlock[], order: string[]): Block[] {
       coinbase: t.coinbase,
       to: t.outputs[0]?.owner,
       amount: t.outputs.reduce((n, o) => n + o.value, 0),
+      type: t.type,
+      kind: t.kind,
+      contract: t.contract,
+      method: t.method,
+      args: t.args,
+      call_value: t.call_value,
+      value: t.value,
+      gas_limit: t.gas_limit,
+      raw: t.raw,
     })),
   }));
 }

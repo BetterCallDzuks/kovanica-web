@@ -13,6 +13,7 @@ import { healthLabel } from "@/lib/api/health";
 import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
+import { ExplorerTxCard } from "@/components/explorer/tx-card";
 
 const TABS = ["Graph", "Blocks", "Mempool", "Order", "Console", "Analytics", "Docs"] as const;
 type Tab = (typeof TABS)[number];
@@ -306,8 +307,10 @@ function GraphPanel({ selected, apiBlock }: { selected: Block | null; apiBlock: 
   if (!selected) return <p className="text-sm text-muted">Select a block on the graph or table to view details.</p>;
   const ageSec = Math.max(0, Math.floor((Date.now() - selected.timestamp) / 1000));
   const ageStr = ageSec < 60 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  const txs = (apiBlock?.txs && apiBlock.txs.length > 0) ? apiBlock.txs : (selected?.txs ?? []);
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
       <article className="rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center justify-between">
           <p className="text-[10px] tracking-wide text-subtle uppercase">
@@ -351,18 +354,13 @@ function GraphPanel({ selected, apiBlock }: { selected: Block | null; apiBlock: 
         )}
       </article>
       <aside className="rounded-lg border border-border bg-surface p-4">
-        <p className="text-[10px] tracking-wide text-subtle uppercase">Executed Transactions ({apiBlock?.txs?.length ?? 0})</p>
-        {(apiBlock?.txs?.length ?? 0) === 0 ? (
+        <p className="text-[10px] tracking-wide text-subtle uppercase">Executed Transactions ({txs.length})</p>
+        {txs.length === 0 ? (
           <p className="mt-3 text-xs text-muted">No user transactions in this block (coinbase/heartbeat).</p>
         ) : (
           <ul className="mt-3 space-y-3">
-            {(apiBlock?.txs ?? []).map((tx) => (
-              <li key={tx.id} className="rounded-lg border border-border/70 bg-bg/30 p-2.5">
-                <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
-                  <span className="text-fg">{shortId(tx.id)}</span>
-                  <span className="text-ok">Success</span>
-                </div>
-              </li>
+            {txs.map((tx) => (
+              <ExplorerTxCard key={tx.id} tx={tx} />
             ))}
           </ul>
         )}

@@ -6,6 +6,26 @@ export type Tx = {
   from?: string;
   to?: string;
   amount: number;
+  type?: string;
+  kind?: string | {
+    type?: string;
+    contract?: string;
+    method?: string;
+    args?: string | Uint8Array;
+    call_value?: number | bigint | string;
+    value?: number | bigint | string;
+    gas_limit?: number | bigint | string;
+    to?: string;
+    amount?: number | bigint | string;
+    code?: string;
+  };
+  contract?: string;
+  method?: string;
+  args?: string | Uint8Array;
+  call_value?: number | bigint | string;
+  value?: number | bigint | string;
+  gas_limit?: number | bigint | string;
+  raw?: string;
 };
 
 export type Block = {

@@ -62,11 +62,33 @@ export type ApiOutput = {
   /** RFC-002: omitted or null = native KVNC */
   asset_id?: string | null;
 };
+export type ApiTxKindObject = {
+  type?: string;
+  contract?: string;
+  method?: string;
+  args?: string | Uint8Array;
+  call_value?: number | bigint | string;
+  value?: number | bigint | string;
+  gas_limit?: number | bigint | string;
+  to?: string;
+  amount?: number | bigint | string;
+  code?: string;
+};
+
 export type ApiTx = {
   id: string;
   coinbase: boolean;
   inputs: number;
   outputs: ApiOutput[];
+  type?: string;
+  kind?: string | ApiTxKindObject;
+  contract?: string;
+  method?: string;
+  args?: string | Uint8Array;
+  call_value?: number | bigint | string;
+  value?: number | bigint | string;
+  gas_limit?: number | bigint | string;
+  raw?: string;
 };
 export type ApiDagBlock = {
   id: string;
