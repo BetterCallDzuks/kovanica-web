@@ -175,7 +175,7 @@ export function DocsView() {
               .
             </li>
             <li>
-              Send your first transaction — the browser signs canonical BLAKE3 sighashes (<code>KUNA-TX-v1</code> compatibility domain) with Ed25519 keys; the node never sees your seed phrase.
+              Send your first transaction — the browser signs canonical BLAKE3 sighashes (<code>KVNC-TX-v1</code> / <code>KVNC/tx/v1</code> domain) with Ed25519 keys; the node never sees your seed phrase.
             </li>
             <li>
               Watch the DAG grow in real-time on the{" "}
@@ -231,7 +231,7 @@ export function DocsView() {
             />
             <Fact
               k="Sighash"
-              v="BLAKE3 KUNA-TX-v1 sighash byte-identical to kovanica-consensus"
+              v="BLAKE3 KVNC-TX-v1 (KVNC/tx/v1) sighash byte-identical to kovanica-consensus"
             />
             <Fact k="Builders" v="TransferBuilder, HtlcBuilder, VaultBuilder, MultisigSigner" />
             <Fact k="RPC" v="kovanica_syncStatus · kovanica_getLeaderHeader · kovanica_getBalance · kovanica_sendRawTransaction" />

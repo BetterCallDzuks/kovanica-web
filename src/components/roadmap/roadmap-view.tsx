@@ -28,7 +28,7 @@ const PROTOCOL: Item[] = [
     status: "done",
     blurb:
       "Account-based state model with sequence nonces and canonical PRO-21 addresses (64 chars: kvnc + 57 base32 + dag).",
-    note: "BLAKE3 KUNA-TX-v1 compatibility sighashes signed client-side with Ed25519 keys.",
+    note: "BLAKE3 KVNC-TX-v1 (KVNC/tx/v1) sighashes signed client-side with Ed25519 keys.",
   },
   {
     id: "wasmi-runtime",
@@ -163,7 +163,7 @@ const NEXT: Item[] = [
     title: "Mainnet Launch Readiness",
     status: "next",
     blurb:
-      "Public launch planned for 1.1.2027 following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8,200,000-block × 3/4 decay eras).",
+      "Public launch planned for 1.1.2027 on kovanica-mainnet (chain ID 1, frozen network tag 1-4d827d40dd9655db) following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8,200,000-block × 3/4 decay eras).",
   },
 ];
 

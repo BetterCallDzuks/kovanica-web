@@ -143,8 +143,8 @@ function asciiPad(text: string, size: number): Uint8Array {
   out.set(bytes);
   return out;
 }
-const TX_DOMAIN = asciiPad("KUNA/tx/v1", 16);
-const TX_KEY = asciiPad("KUNA-TX-v1", 32);
+const TX_DOMAIN = asciiPad("KVNC/tx/v1", 16);
+const TX_KEY = asciiPad("KVNC-TX-v1", 32);
 
 function concat(parts: Uint8Array[]): Uint8Array {
   const length = parts.reduce((sum, part) => sum + part.length, 0);
