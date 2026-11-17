@@ -163,7 +163,7 @@ const NEXT: Item[] = [
     title: "Mainnet Launch Readiness",
     status: "next",
     blurb:
-      "Public launch planned for 1.1.2027 on kovanica-mainnet (chain ID 1, frozen network tag 1-4d827d40dd9655db) following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8,200,000-block × 3/4 decay eras).",
+      "Public launch planned for 1.1.2027 on kovanica-mainnet (chain ID 1, frozen network tag 1-f35df34c92001436) following hybrid testnet milestones and security audit sign-off (90.2M KVNC cap, 82M mining subsidy budget, 8,200,000-block × 3/4 decay eras).",
   },
 ];
 

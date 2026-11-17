@@ -14,7 +14,7 @@ These values represent network names, chain IDs, domain tags, and consensus grap
 
 | Category | Location | Symbol / Literal | Current Value | Role & `canonical2` Impact |
 | :--- | :--- | :--- | :--- | :--- |
-| **Chain ID Mapping** | `src/lib/networkConstants.ts:268` | Spec text chain ID table | `mainnet=1 (tag 1-4d827d40dd9655db), testnet=2 (tag 2-acfdf6a6c80fd28a), devnet=3` | Canonical numeric chain ID mapping (`mainnet=1, testnet=2, devnet=3`; chain 1337 retired 2026-11-17, chains 4 and 5 retired). |
+| **Chain ID Mapping** | `src/lib/networkConstants.ts:268` | Spec text chain ID table | `mainnet=1 (tag 1-f35df34c92001436), testnet=2 (tag 2-acfdf6a6c80fd28a), devnet=3` | Canonical numeric chain ID mapping (`mainnet=1, testnet=2, devnet=3`; chain 1337 retired 2026-11-17, chains 4 and 5 retired). |
 | **Chain ID Fallback Label** | `src/components/docs/docs-view.tsx:74,389` | `boot.network ?? "Chain 2"`, `"Chain 2 hybrid testnet verification"` | `"Chain 2"` | UI fallback/copy referring to Chain 2 (`testnet=2` / `hybrid_testnet=2`). |
 | **Network Identifier** | `src/lib/networkConstants.ts:8-9`, `src/lib/ledger/types.ts:78` | `NETWORK_ID`, `MAINNET_ID`, `NETWORK` | `"kovanica-testnet"`, `"kovanica-mainnet"` | Canonical network string identifiers returned by `/api/head`, `/api/bootstrap`, and `getNetworkId()`. |
 | **Legacy Hex Chain Rule** | `src/lib/networkConstants.ts:373` | Spec text wallet address rule | `devnet: chain 3` | Documents which numeric chain IDs permit legacy hex addresses versus strict PRO-21 `kvnc…dag` (chain 1337 retired 2026-11-17, chains 4 and 5 retired). |
