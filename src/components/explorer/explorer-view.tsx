@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { DagMark } from "@/components/brand/dag-mark";
 import { ATOM, MIN_FEE, MAINNET_ID, NETWORK_LABEL } from "@/lib/networkConstants";
 import { SURFACE } from "@/lib/surfaces";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
+import { GlobalSearch } from "@/components/search/global-search";
 
 const TABS = ["Graph", "Blocks", "Mempool", "Order", "Console", "Analytics", "Docs"] as const;
 type Tab = (typeof TABS)[number];
@@ -23,6 +24,8 @@ export function ExplorerView() {
   const { state, error, errorStatus, refresh, source } = useNode(2000);
   const [tab, setTab] = useState<Tab>("Graph");
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
+  const [searchedId, setSearchedId] = useState<string | null>(null);
+  const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
   const blocks = useMemo(
@@ -31,11 +34,38 @@ export function ExplorerView() {
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const search = new URLSearchParams(window.location.search);
+    const blockParam = search.get("block");
+    const txParam = search.get("tx");
+
+    if (blockParam) {
+      setSearchedId(blockParam);
+      setSelectedBlock(blockParam);
+      setTab("Graph");
+    } else if (txParam) {
+      setSearchedId(txParam);
+      if (blocks.length > 0) {
+        const match = blocks.find((b) =>
+          b.txs.some((t) => t.id.toLowerCase() === txParam.toLowerCase()),
+        );
+        if (match) {
+          setSelectedBlock(match.id);
+        } else {
+          setSelectedBlock(txParam);
+        }
+        setTab("Graph");
+      }
+    }
+  }, [blocks, locationSearch]);
+
+  useEffect(() => {
     if (!state) return;
+    if (searchedId && selectedBlock === searchedId) return;
     if (!selectedBlock || !blocks.some((b) => b.id === selectedBlock)) {
       setSelectedBlock(state.node.selected_tip);
     }
-  }, [state, blocks, selectedBlock]);
+  }, [state, blocks, selectedBlock, searchedId]);
 
   const selected = blocks.find((b) => b.id === selectedBlock) ?? null;
   const selectedApi = state?.node.dag.find((b) => b.id === selectedBlock) ?? null;
@@ -92,6 +122,11 @@ export function ExplorerView() {
             source · {source}
           </span>
         </div>
+      </div>
+
+      {/* Explorer Global Search Toolbar */}
+      <div className="border-b border-border bg-surface-2/40 px-4 py-2.5 md:px-6">
+        <GlobalSearch variant="explorer" />
       </div>
 
       {/* Liveness: a stalled chain is not a down endpoint */}
@@ -271,7 +306,7 @@ export function ExplorerView() {
 
       {/* Tab Panels */}
       <section className="px-4 py-5 md:px-6">
-        {tab === "Graph" ? <GraphPanel selected={selected} apiBlock={selectedApi} /> : null}
+        {tab === "Graph" ? <GraphPanel selected={selected} apiBlock={selectedApi} searchedId={searchedId} /> : null}
         {tab === "Blocks" ? (
           <BlocksTable
             blocks={[...blocks].reverse()}
@@ -303,8 +338,31 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GraphPanel({ selected, apiBlock }: { selected: Block | null; apiBlock: ApiDagBlock | null }) {
-  if (!selected) return <p className="text-sm text-muted">Select a block on the graph or table to view details.</p>;
+function GraphPanel({
+  selected,
+  apiBlock,
+  searchedId,
+}: {
+  selected: Block | null;
+  apiBlock: ApiDagBlock | null;
+  searchedId?: string | null;
+}) {
+  if (!selected) {
+    return (
+      <div className="rounded-lg border border-border bg-surface p-6 text-center">
+        <p className="text-sm font-medium text-fg">
+          {searchedId
+            ? `Digest “${shortId(searchedId, 8)}” is not in the active DAG window`
+            : "No block selected"}
+        </p>
+        <p className="mt-1 text-xs text-muted max-w-md mx-auto">
+          {searchedId
+            ? `The query “${searchedId}” was not found in the recent committed heights returned by the live node. The testnet node does not serve deep historic block queries.`
+            : "Select a block on the graph or table to view details."}
+        </p>
+      </div>
+    );
+  }
   const ageSec = Math.max(0, Math.floor((Date.now() - selected.timestamp) / 1000));
   const ageStr = ageSec < 60 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
   const txs = (apiBlock?.txs && apiBlock.txs.length > 0) ? apiBlock.txs : (selected?.txs ?? []);

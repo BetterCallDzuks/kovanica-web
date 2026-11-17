@@ -25,12 +25,14 @@ import {
   ChevronDown,
   Menu,
   X,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SourceSwitch } from "@/components/layout/source-switch";
 import { NetworkBadge } from "@/components/layout/network-badge";
 import { getBadgeColor } from "@/lib/network";
 import { Button } from "@/components/ui/button";
+import { GlobalSearch } from "@/components/search/global-search";
 
 const CORE_NAV = [
   { to: "/explorer", label: "Explorer", icon: Compass },
@@ -55,6 +57,7 @@ const SECONDARY_NAV = [
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const isItemActive = (to: string) =>
     to === "/" ? pathname === "/" : pathname === to || pathname.startsWith(`${to}/`);
@@ -247,8 +250,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
+        {/* Top Navbar Global Search */}
+        <div className="hidden md:flex flex-1 max-w-xs xl:max-w-sm mx-1.5 min-w-0">
+          <GlobalSearch variant="navbar" />
+        </div>
+
         {/* Header right: Network badges & source switches */}
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen((o) => !o)}
+            className={cn(
+              "inline-flex size-9 items-center justify-center rounded-md border border-border md:hidden",
+              mobileSearchOpen ? "text-gold bg-surface-2 border-gold/40" : "text-muted hover:text-fg hover:bg-surface-2",
+            )}
+            aria-label="Toggle search bar"
+          >
+            <Search className="size-4" />
+          </button>
           <span className="hidden md:inline-flex">
             <NetworkBadge />
           </span>
@@ -280,6 +299,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
       </header>
+
+      {/* Mobile search bar dropdown */}
+      {mobileSearchOpen && (
+        <div className="border-b border-border bg-bg/95 p-3 backdrop-blur-sm md:hidden animate-in fade-in slide-in-from-top-2">
+          <GlobalSearch variant="navbar" onResolved={() => setMobileSearchOpen(false)} />
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0">
         {children}
@@ -343,6 +369,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         <X className="size-4" />
                       </Button>
                     </Dialog.Close>
+                  </div>
+
+                  {/* Search in mobile sheet */}
+                  <div className="mt-3">
+                    <GlobalSearch variant="navbar" onResolved={() => setMobileOpen(false)} />
                   </div>
 
                   {/* Contracts group */}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { ChevronDown, Copy, Eye, EyeOff, Gem, Lock, Unlock, Usb } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -80,9 +81,18 @@ export function WalletView() {
   const [tokenAddr, setTokenAddr] = useState<string | null>(null);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
 
+  const locationSearch = useRouterState({ select: (s) => s.location.search });
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const search = new URLSearchParams(window.location.search);
+    const addressParam = search.get("address");
+    if (addressParam) {
+      const parsed = parseAddr(addressParam);
+      if (parsed) {
+        setWallet({ address: parsed, index: 0, shown: false, kind: "watch" });
+      }
+    }
     if (search.has("action") || search.has("token") || search.has("direction")) {
       const res = validatePoolHandoff(search, source);
       if (!res.ok) {
@@ -93,7 +103,7 @@ export function WalletView() {
         );
       }
     }
-  }, [source]);
+  }, [source, locationSearch]);
 
   // M-05: recovery phrase generation is two-phase — show the words, then
   // require an explicit "I wrote it down" confirmation before wallet creation.
