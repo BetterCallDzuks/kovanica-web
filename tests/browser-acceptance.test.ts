@@ -121,6 +121,14 @@ const FIXTURES = {
       chain_len: 12450,
       mempool: 0,
       tx_count: 12,
+      mining_info: {
+        target_bits: 0x1d00ffff,
+        difficulty: 1.0,
+        target_block_time_ms: 4000,
+        ghostdag_k: 5,
+        mining_enabled: true,
+        pow_algorithm: "KovanicaHash",
+      },
       dag: [
         {
           id: "0x3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
@@ -335,11 +343,19 @@ async function setupIsolatedPage(
     delayUtxos?: Promise<void>;
     customRouteHandler?: (route: any, url: URL) => Promise<boolean>;
     watchWalletAddressHex?: string;
+    apiSource?: "testnet" | "local" | "mainnet";
   } = {},
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
     viewport: options.viewport ?? { width: 1280, height: 800 },
   });
+
+  if (options.apiSource) {
+    const src = options.apiSource;
+    await context.addInitScript((s: string) => {
+      window.localStorage.setItem("kovanica.source", s);
+    }, src);
+  }
 
   if (options.watchWalletAddressHex) {
     const addrHex = options.watchWalletAddressHex;
@@ -382,6 +398,11 @@ async function setupIsolatedPage(
 
     // 2. Intercept potential mutation requests locally (never hit real backends or cause unintended writes)
     if (req.method() === "POST") {
+      // Read-only Wasmi dry-runs against the local in-memory node never mutate state or hit external hosts
+      if (url.pathname === "/api/contract_call" && url.searchParams.get("source") === "local") {
+        await route.continue();
+        return;
+      }
       interceptedMutations.push(req.url());
       if (url.searchParams.get("source") === "mainnet") {
         await route.fulfill({
@@ -410,6 +431,12 @@ async function setupIsolatedPage(
     const source = url.searchParams.get("source") || "testnet";
 
     if (path.startsWith("/api/")) {
+      // Local in-memory mock node runs deterministically on loopback
+      if (source === "local") {
+        await route.continue();
+        return;
+      }
+
       // Mainnet isolation: 503 launching soon
       if (source === "mainnet") {
         if (path === "/api/spec") {
@@ -1219,6 +1246,224 @@ test("Section D: pool handoff to wallet renders capability gap blocker, rejects 
     assert.equal(interceptedMutations.length, 0, "Handoff must not trigger any mutation or submission");
   } catch (err) {
     await saveFailureArtifact(page, "section-d-handoff-back-nav", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
+// -----------------------------------------------------------------------------
+// SECTION E: Explorer Contract Read / Dry-Run Inspector & Live Mining Telemetry
+// -----------------------------------------------------------------------------
+test("Section E: Explorer Contract Inspector (?tab=contracts & tab click) runs name_resolve dry-runs and structured reverts", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+    apiSource: "local",
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    // 1. Navigate to /explorer and open Contracts tab via tab click
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "BlockDAG Explorer");
+    const contractsTab = page.locator('button[role="tab"]', { hasText: "Contracts" });
+    await contractsTab.click();
+    await waitForBodyText(page, "Contract Read & Dry-Run Inspector");
+    assert.equal(
+      await contractsTab.getAttribute("aria-selected"),
+      "true",
+      "Contracts tab must become selected after clicking it",
+    );
+
+    // 2. Navigate directly via ?tab=contracts query parameter
+    await gotoAndSettle(
+      page,
+      `${baseUrl}/explorer?tab=contracts`,
+      "Contract Read & Dry-Run Inspector",
+    );
+    const directContractsTab = page.locator('button[role="tab"]', { hasText: "Contracts" });
+    assert.equal(
+      await directContractsTab.getAttribute("aria-selected"),
+      "true",
+      "Contracts tab must be selected when navigating directly to ?tab=contracts",
+    );
+    const panelIntro = await page.locator("body").innerText();
+    assert.ok(
+      panelIntro.includes("target · local"),
+      "Contract Inspector must indicate local target source",
+    );
+
+    // 3. Select name_resolve preset and run dry-run for known local name ("alice")
+    const nameResolveBtn = page.locator('button[aria-pressed]', { hasText: "name_resolve" });
+    await nameResolveBtn.click();
+    assert.equal(
+      await nameResolveBtn.getAttribute("aria-pressed"),
+      "true",
+      "name_resolve preset button must be active",
+    );
+
+    const nameInput = page.locator("#inspector-field-name_resolve-name");
+    await nameInput.fill("alice");
+
+    const executeBtn = page.locator('button[type="submit"]', { hasText: "Execute Dry-Run" });
+    await executeBtn.click();
+
+    await waitForBodyText(page, "https://relay1.kovanica.online");
+    const successText = await page.locator("body").innerText();
+
+    // Verify decoded NameEntry output
+    assert.ok(successText.includes("Success"), "Known local name must succeed");
+    assert.match(
+      successText,
+      /decoded output \(name_entry\)/i,
+      "Known local name must decode as NameEntry",
+    );
+    assert.ok(
+      successText.includes("https://relay1.kovanica.online") &&
+        successText.includes("https://relay2.kovanica.online"),
+      "Decoded NameEntry must render both registered relay endpoints for alice",
+    );
+
+    // Verify telemetry strip (Gas Used, Output Size, Contract Code, Latency)
+    assert.match(successText, /gas used/i, "Telemetry strip must render Gas Used");
+    assert.ok(successText.includes("24,850"), "Local name_resolve must report 24,850 gas used");
+    assert.match(successText, /output size/i, "Telemetry strip must render Output Size");
+    assert.match(successText, /latency/i, "Telemetry strip must render Latency");
+    assert.match(successText, /\d+\s*ms/, "Telemetry strip must render numeric latency in ms");
+
+    // Verify session history entry
+    assert.match(
+      successText,
+      /recent dry-runs \(session\)/i,
+      "Session dry-run history section must render after execution",
+    );
+    assert.ok(
+      successText.includes("24,850 gas"),
+      "Session history entry must display gas used for name_resolve",
+    );
+
+    // 4. Run dry-run for unknown name and verify structured revert state (NotFound / -5)
+    await nameInput.fill("unknown-name-e2e");
+    await executeBtn.click();
+
+    await waitForBodyText(page, "Contract Reverted · NotFound (code 4)");
+    const revertText = await page.locator("body").innerText();
+    assert.ok(revertText.includes("Reverted"), "Unknown name must render Reverted status badge");
+    assert.ok(
+      revertText.includes("NotFound") && revertText.includes("-5"),
+      "Unknown name must render structured NotFound / -5 revert diagnostic",
+    );
+    assert.ok(
+      revertText.includes("unknown-name-e2e"),
+      "Revert diagnostic must reference the queried unknown name",
+    );
+
+    // 5. Verify zero uncaught page or console errors
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Contract Inspector flow must not throw uncaught page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Contract Inspector flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-contract-inspector", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
+test("Section E: Explorer Live Mining & DAG Telemetry panel renders truthful telemetry with zero console/page errors", async () => {
+  const { context, page } = await setupIsolatedPage({ viewport: { width: 1280, height: 800 } });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+    await waitForBodyText(page, "Live · GHOSTDAG K=5");
+
+    const panel = page.locator('section[aria-label="Live Mining and DAG Telemetry"]');
+    const panelText = await panel.innerText();
+
+    // Header & live consensus badge
+    assert.ok(
+      panelText.includes("Live Mining & DAG Telemetry"),
+      "Panel must render Live Mining & DAG Telemetry heading",
+    );
+    assert.ok(
+      panelText.includes("Live · GHOSTDAG K=5"),
+      "Panel must render live GHOSTDAG K=5 badge",
+    );
+
+    // Card 1: Active DAG Tips
+    assert.match(panelText, /active dag tips/i, "Panel must render Active DAG Tips card");
+    assert.match(panelText, /\bhead\b/i, "Active DAG Tips must mark the selected head tip");
+
+    // Card 2: PoW Difficulty & target_bits
+    assert.match(panelText, /pow difficulty/i, "Panel must render PoW Difficulty card");
+    assert.ok(panelText.includes("KovanicaHash"), "PoW Difficulty card must show KovanicaHash");
+    assert.ok(panelText.includes("0x1d00ffff"), "PoW Difficulty card must show target_bits hex");
+    assert.ok(
+      panelText.includes("Node miner active · LWMA DAA"),
+      "PoW Difficulty card must reflect active miner & LWMA DAA",
+    );
+
+    // Card 3: Target vs Observed Block Interval
+    assert.match(panelText, /block interval/i, "Panel must render Block Interval card");
+    assert.ok(panelText.includes("4.0s target"), "Block Interval card must show 4.0s target");
+    assert.ok(
+      panelText.includes("Measured across 2 recent DAG blocks."),
+      "Block Interval card must report observed DAG sample count",
+    );
+
+    // Card 4: NoStake82M Emission Era
+    assert.match(
+      panelText,
+      /nostake82m emission/i,
+      "Panel must render NoStake82M Emission card",
+    );
+    assert.ok(panelText.includes("Era #0"), "NoStake82M Emission must report Era #0");
+    assert.ok(panelText.includes("2.5 KVNC"), "NoStake82M Emission must report 2.5 KVNC reward");
+    assert.ok(
+      panelText.includes("12,450 / 8,200,000"),
+      "NoStake82M Emission must report height progress in current era",
+    );
+    assert.ok(
+      panelText.includes("Next era: 1.875 KVNC"),
+      "NoStake82M Emission must report next era reward",
+    );
+
+    // Zero uncaught page or console errors
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Live Mining & DAG Telemetry panel must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Live Mining & DAG Telemetry panel must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-mining-dag-telemetry", err);
     throw err;
   } finally {
     await context.close();
