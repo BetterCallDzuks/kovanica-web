@@ -1,4 +1,17 @@
 import { parseAddr } from "@/lib/wallet/address";
+import {
+  buildContractCallRequest,
+  encodeNameEntry,
+  type ContractCallRequest,
+  type ContractCallResponse,
+} from "@/lib/contracts/dry-run";
+import {
+  BincodeReader,
+  bytesToHex,
+  decodeContractCall,
+  hexToBytes,
+  readBincodeString,
+} from "@/lib/contracts/decoders";
 import { hashHex } from "@/lib/ledger/hash";
 import {
   linearize,
@@ -503,4 +516,143 @@ export function localOrigin(iso3: string | null): { ok: true; iso3: string; puls
   const s = store();
   s.originPulses[code] = (s.originPulses[code] ?? 0) + 1;
   return { ok: true, iso3: code, pulses: s.originPulses[code] };
+}
+
+const LOCAL_NAME_ENTRIES: Record<
+  string,
+  { ownerByte: number; pubkeyByte: number; relays: string[] }
+> = {
+  alice: {
+    ownerByte: 0x11,
+    pubkeyByte: 0xa1,
+    relays: ["https://relay1.kovanica.online", "https://relay2.kovanica.online"],
+  },
+  kovanica: {
+    ownerByte: 0x22,
+    pubkeyByte: 0xb2,
+    relays: ["https://seed1.kovanica.online"],
+  },
+};
+
+/**
+ * Deterministic read-only contract dry-run simulator for `source=local`.
+ * Mirrors the `kovanica_call` + `kovanica_estimateGas` response contract.
+ */
+export function localContractCall(
+  rawBody: Partial<Record<keyof ContractCallRequest, unknown>>,
+): ContractCallResponse | string {
+  const started = Date.now();
+  const built = buildContractCallRequest(rawBody);
+  if (!built.ok) return built.error;
+
+  const { call } = built;
+  const entry = (call.entry ?? "call").toLowerCase();
+  const argBytes = hexToBytes(call.data) ?? new Uint8Array(0);
+  const codeBytes = 4096;
+
+  if (call.gas) {
+    const gasLimit = BigInt(call.gas);
+    if (gasLimit < 21_000n) {
+      return {
+        ok: false,
+        reverted: true,
+        error: "Execution reverted or failed: OutOfGas (code -9): gas limit below 21,000 base cost",
+        codeBytes,
+        latencyMs: Math.max(1, Date.now() - started),
+        source: "local",
+        rpcMethod: "kovanica_call",
+        call,
+      };
+    }
+  }
+
+  if (entry === "name_resolve") {
+    const reader = new BincodeReader(argBytes);
+    const name = readBincodeString(reader);
+    if (name === null || !reader.isEof()) {
+      return {
+        ok: false,
+        reverted: true,
+        error: "Execution reverted or failed: InvalidInput (code -3): expected Bincode (String,)",
+        codeBytes,
+        latencyMs: Math.max(1, Date.now() - started),
+        source: "local",
+        rpcMethod: "kovanica_call",
+        call,
+      };
+    }
+    const record = LOCAL_NAME_ENTRIES[name.trim().toLowerCase()];
+    if (!record) {
+      return {
+        ok: false,
+        reverted: true,
+        error: `Execution reverted or failed: NotFound (code -5): name '${name}' is not registered in local fixture`,
+        codeBytes,
+        latencyMs: Math.max(1, Date.now() - started),
+        source: "local",
+        rpcMethod: "kovanica_call",
+        call,
+      };
+    }
+    const owner = new Uint8Array(32).fill(record.ownerByte);
+    const pubkey = new Uint8Array(32).fill(record.pubkeyByte);
+    const encoded = encodeNameEntry(owner, pubkey, record.relays);
+    return {
+      ok: true,
+      reverted: false,
+      outputHex: `0x${bytesToHex(encoded)}`,
+      gasUsed: 24_850,
+      codeBytes,
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "local",
+      rpcMethod: "kovanica_call",
+      call,
+    };
+  }
+
+  if (
+    entry === "name_register" ||
+    entry === "token_transfer" ||
+    entry === "nft_mint" ||
+    entry === "escrow_create" ||
+    entry === "htlc_create" ||
+    entry === "vault_create"
+  ) {
+    const decoded = decodeContractCall(entry, argBytes);
+    if (!decoded.recognized) {
+      return {
+        ok: false,
+        reverted: true,
+        error: `Execution reverted or failed: InvalidInput (code -3): ${decoded.error ?? "malformed bincode payload"}`,
+        codeBytes,
+        latencyMs: Math.max(1, Date.now() - started),
+        source: "local",
+        rpcMethod: "kovanica_call",
+        call,
+      };
+    }
+    return {
+      ok: true,
+      reverted: false,
+      outputHex: "0x",
+      gasUsed: 31_400 + argBytes.length * 16,
+      codeBytes,
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "local",
+      rpcMethod: "kovanica_call",
+      call,
+    };
+  }
+
+  return {
+    ok: true,
+    reverted: false,
+    outputHex: argBytes.length > 0 ? `0x${bytesToHex(argBytes)}` : "0x",
+    gasUsed: 22_100 + argBytes.length * 12,
+    codeBytes,
+    latencyMs: Math.max(1, Date.now() - started),
+    source: "local",
+    rpcMethod: "kovanica_call",
+    call,
+  };
 }

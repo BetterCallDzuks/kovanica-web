@@ -15,9 +15,19 @@ import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
 import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
+import { ContractInspectorPanel } from "@/components/explorer/contract-inspector-panel";
 import { GlobalSearch } from "@/components/search/global-search";
 
-const TABS = ["Graph", "Blocks", "Mempool", "Order", "Console", "Analytics", "Docs"] as const;
+const TABS = [
+  "Graph",
+  "Blocks",
+  "Contracts",
+  "Mempool",
+  "Order",
+  "Console",
+  "Analytics",
+  "Docs",
+] as const;
 type Tab = (typeof TABS)[number];
 
 /** Explorer BlockDAG surface. Truthful hybrid consensus metrics and DAG inspection. */
@@ -26,6 +36,7 @@ export function ExplorerView() {
   const [tab, setTab] = useState<Tab>("Graph");
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [searchedId, setSearchedId] = useState<string | null>(null);
+  const [inspectContract, setInspectContract] = useState<string | null>(null);
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
@@ -39,8 +50,13 @@ export function ExplorerView() {
     const search = new URLSearchParams(window.location.search);
     const blockParam = search.get("block");
     const txParam = search.get("tx");
+    const tabParam = search.get("tab");
+    const contractParam = search.get("contract");
 
-    if (blockParam) {
+    if (tabParam?.toLowerCase() === "contracts" || contractParam) {
+      if (contractParam) setInspectContract(contractParam);
+      setTab("Contracts");
+    } else if (blockParam) {
       setSearchedId(blockParam);
       setSelectedBlock(blockParam);
       setTab("Graph");
@@ -332,6 +348,9 @@ export function ExplorerView() {
               setTab("Graph");
             }}
           />
+        ) : null}
+        {tab === "Contracts" ? (
+          <ContractInspectorPanel source={source} initialContract={inspectContract} />
         ) : null}
         {tab === "Mempool" ? <MempoolPanel node={n} /> : null}
         {tab === "Order" ? <OrderPanel node={n} /> : null}

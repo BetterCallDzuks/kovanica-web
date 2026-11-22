@@ -43,6 +43,12 @@ export const ENDPOINTS: EndpointRow[] = [
   { method: "GET", path: "/api/rwa/{id}", note: "RWA asset metadata", read: true },
   { method: "GET", path: "/api/light_proof", note: "SPV/light-node proof", read: true },
   { method: "GET", path: "/api/light_sync", note: "light-node sync slice", read: true },
+  {
+    method: "POST",
+    path: "/api/contract_call",
+    note: "read-only contract dry-run simulation (kovanica_call + estimateGas)",
+    read: true,
+  },
   { method: "POST", path: "/api/prepare", note: "sighash + fee + change" },
   { method: "POST", path: "/api/submit", note: "queue signed tx" },
   {

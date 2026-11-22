@@ -1,0 +1,89 @@
+name: PR Policy Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  pr-policy:
+    name: Enforce PR-to-main policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch and PR metadata
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          if [ "$BASE_REF" != "main" ]; then
+            echo "::error::PRs must target main (got: $BASE_REF)"
+            exit 1
+          fi
+
+          if [ "$HEAD_REF" = "main" ] || [ "$HEAD_REF" = "master" ]; then
+            echo "::error::PR head branch must not be main/master."
+            exit 1
+          fi
+
+          if ! printf '%s' "$HEAD_REF" | grep -Eq '^(feat|fix|docs|chore|refactor|test|ci|perf|build|security|release)/[a-zA-Z0-9._/-]+$'; then
+            echo "::error::Branch '$HEAD_REF' must use a standard prefix (feat/, fix/, docs/, chore/, refactor/, test/, ci/, perf/, build/, security/, release/)."
+            exit 1
+          fi
+
+          if ! printf '%s' "$PR_TITLE" | grep -Eq '^(feat|fix|docs|chore|refactor|test|ci|perf|build|security|revert)(\([a-zA-Z0-9._/-]+\))?!?: .+'; then
+            echo "::error::PR title must follow Conventional Commits (e.g. 'feat(scope): summary'). Got: $PR_TITLE"
+            exit 1
+          fi
+
+          BODY_LEN=$(printf '%s' "$PR_BODY" | tr -d '[:space:]' | wc -c)
+          if [ "$BODY_LEN" -lt 20 ]; then
+            echo "::error::PR description must document the changes and verification results (at least 20 non-whitespace chars)."
+            exit 1
+          fi
+
+          echo "PR metadata valid: $HEAD_REF -> $BASE_REF ($PR_TITLE)"
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Block secrets and forbidden files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only --diff-filter=AMR "$BASE_SHA" "$HEAD_SHA")
+          FAILED=0
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              .env|.env.local|.env.production|*/.env|*/.env.local|*/.env.production)
+                echo "::error::Forbidden env file in PR: $file"
+                FAILED=1
+                ;;
+              *.pem|*.key|*.p12|*.keystore|*.jks)
+                case "$file" in
+                  *test*|*fixture*|*mock*) ;;
+                  *)
+                    echo "::error::Forbidden key/cert file in PR: $file"
+                    FAILED=1
+                    ;;
+                esac
+                ;;
+            esac
+          done <<< "$CHANGED"
+
+          if [ "$FAILED" -ne 0 ]; then
+            exit 1
+          fi
+          echo "No forbidden secret/env files detected."
