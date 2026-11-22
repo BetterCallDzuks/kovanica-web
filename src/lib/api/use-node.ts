@@ -11,7 +11,17 @@ export function nextBackoffMs(currentMs: number, maxMs = MAX_BACKOFF_MS): number
   return Math.min(Math.max(currentMs * 2, MIN_POLL_MS), maxMs);
 }
 
-export function useNode(pollMs = MIN_POLL_MS) {
+export type UseNodeOptions = {
+  /** Pause automatic polling and visibility-change refreshes (manual `refresh()` still works). */
+  paused?: boolean;
+  /** Suppress recurring poll timers while an external push transport (e.g. WebSocket) is active. */
+  suspendPolling?: boolean;
+};
+
+export function useNode(pollMs = MIN_POLL_MS, options: UseNodeOptions = {}) {
+  const paused = options.paused ?? false;
+  const suspendPolling = options.suspendPolling ?? false;
+
   const source = useApiSource();
   const [state, setState] = useState<ApiState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +35,10 @@ export function useNode(pollMs = MIN_POLL_MS) {
   const abortCtrlRef = useRef<AbortController | null>(null);
   const currentSourceRef = useRef(source);
   currentSourceRef.current = source;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const suspendPollingRef = useRef(suspendPolling);
+  suspendPollingRef.current = suspendPolling;
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -38,6 +52,9 @@ export function useNode(pollMs = MIN_POLL_MS) {
   const scheduleNext = useCallback(
     (delayMs: number, expectedGen: number) => {
       clearTimer();
+      if (pausedRef.current || suspendPollingRef.current) {
+        return;
+      }
       if (typeof document !== "undefined" && document.hidden) {
         return; // Pause when document is hidden
       }
@@ -121,12 +138,15 @@ export function useNode(pollMs = MIN_POLL_MS) {
       return;
     }
 
-    // Reset delay when source changes and execute poll
+    // Reset delay when source changes and execute initial poll unless paused
     currentDelayRef.current = pollMs;
-    void executePoll();
+    if (!pausedRef.current) {
+      void executePoll();
+    }
 
     const handleVisibilityChange = () => {
       if (!document.hidden) {
+        if (pausedRef.current) return;
         // Immediate refresh on visible and resume schedule
         clearTimer();
         currentDelayRef.current = pollMs;
@@ -149,6 +169,21 @@ export function useNode(pollMs = MIN_POLL_MS) {
       }
     };
   }, [source, pollMs, clearTimer, executePoll]);
+
+  // React to pause / suspendPolling transitions without resetting cached state
+  const prevPausedOrSuspendedRef = useRef(paused || suspendPolling);
+  useEffect(() => {
+    const inactive = paused || suspendPolling;
+    const wasInactive = prevPausedOrSuspendedRef.current;
+    prevPausedOrSuspendedRef.current = inactive;
+
+    if (inactive) {
+      clearTimer();
+    } else if (wasInactive && source !== "mainnet") {
+      currentDelayRef.current = pollMs;
+      void executePoll();
+    }
+  }, [paused, suspendPolling, source, pollMs, clearTimer, executePoll]);
 
   const act = useCallback(
     async (path: string) => {

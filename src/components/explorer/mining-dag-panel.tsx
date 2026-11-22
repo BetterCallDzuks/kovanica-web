@@ -8,10 +8,14 @@ import {
   Copy,
   Cpu,
   GitBranch,
+  Pause,
+  Play,
+  Radio,
   RefreshCw,
 } from "lucide-react";
 import type { ApiState } from "@/lib/api/contract";
 import { healthLabel } from "@/lib/api/health";
+import type { LiveStreamTransport } from "@/lib/api/ws-stream";
 import {
   BLOCKS_PER_ERA,
   TARGET_BLOCK_INTERVAL_MS,
@@ -32,6 +36,9 @@ export type MiningDagPanelProps = {
   error: string | null;
   errorStatus: number | null;
   selectedBlockId?: string | null;
+  transport?: LiveStreamTransport;
+  paused?: boolean;
+  onTogglePause?: () => void;
   onSelectTip?: (tipHash: string) => void;
   onRefresh?: () => void;
 };
@@ -51,6 +58,9 @@ export function MiningDagPanel({
   error,
   errorStatus,
   selectedBlockId,
+  transport = "polling",
+  paused = false,
+  onTogglePause,
   onSelectTip,
   onRefresh,
 }: MiningDagPanelProps) {
@@ -156,18 +166,82 @@ export function MiningDagPanel({
           )}
         </div>
 
-        {isOffline && onRefresh ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            className="h-7 gap-1.5 text-xs"
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            data-testid="live-stream-badge"
+            data-transport={transport}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium",
+              transport === "ws"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : transport === "reconnecting"
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                  : transport === "paused"
+                    ? "border-border bg-surface text-muted"
+                    : "border-border bg-bg text-muted",
+            )}
           >
-            <RefreshCw className="size-3" />
-            Retry
-          </Button>
-        ) : null}
+            {transport === "ws" ? (
+              <Radio className="size-3 text-emerald-400 animate-pulse" />
+            ) : (
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  transport === "reconnecting"
+                    ? "bg-amber-400 animate-pulse"
+                    : transport === "paused"
+                      ? "bg-subtle"
+                      : "bg-gold/80",
+                )}
+              />
+            )}
+            {transport === "ws"
+              ? "WS Live"
+              : transport === "reconnecting"
+                ? "Reconnecting"
+                : transport === "paused"
+                  ? "Paused"
+                  : "Polling"}
+          </span>
+
+          {onTogglePause ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-testid="live-stream-toggle"
+              aria-pressed={paused}
+              aria-label={paused ? "Resume live updates" : "Pause live updates"}
+              onClick={onTogglePause}
+              className="h-7 gap-1 px-2 text-[11px]"
+            >
+              {paused ? (
+                <>
+                  <Play className="size-3" />
+                  <span>Resume</span>
+                </>
+              ) : (
+                <>
+                  <Pause className="size-3" />
+                  <span>Pause</span>
+                </>
+              )}
+            </Button>
+          ) : null}
+
+          {isOffline && onRefresh ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRefresh}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <RefreshCw className="size-3" />
+              Retry
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {/* 4-card telemetry grid */}

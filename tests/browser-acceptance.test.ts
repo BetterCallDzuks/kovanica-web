@@ -1470,6 +1470,259 @@ test("Section E: Explorer Live Mining & DAG Telemetry panel renders truthful tel
   }
 });
 
+test("Section E: Explorer live stream indicator supports Polling fallback, WS Live streaming, and Pause/Resume with zero errors", async () => {
+  // 1. Default Polling mode + Pause/Resume toggle freezes & resumes Explorer height updates
+  {
+    let currentBlocks = FIXTURES.state.node.blocks;
+    const { context, page } = await setupIsolatedPage({
+      viewport: { width: 1280, height: 800 },
+      customRouteHandler: async (route, url) => {
+        if (url.pathname === "/api/state") {
+          const dynamicState = {
+            ...FIXTURES.state,
+            node: {
+              ...FIXTURES.state.node,
+              blocks: currentBlocks,
+            },
+          };
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(dynamicState),
+          });
+          return true;
+        }
+        return false;
+      },
+    });
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+    page.on("console", (msg) => {
+      if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    try {
+      await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+      await waitForBodyText(page, "12450");
+      const badge = page.getByTestId("live-stream-badge");
+      const toggle = page.getByTestId("live-stream-toggle");
+
+      await badge.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+      assert.equal(await badge.getAttribute("data-transport"), "polling");
+      assert.ok((await badge.innerText()).includes("Polling"), "Default badge must show Polling");
+
+      // Pause live updates and advance upstream height -> UI must stay frozen at 12450
+      await toggle.click();
+      assert.equal(await badge.getAttribute("data-transport"), "paused");
+      assert.ok((await badge.innerText()).includes("Paused"), "Paused badge must show Paused");
+      assert.equal(await toggle.getAttribute("aria-pressed"), "true");
+      assert.ok((await toggle.innerText()).includes("Resume"), "Toggle button must show Resume");
+
+      currentBlocks = 12499;
+      await new Promise((r) => setTimeout(r, 2300));
+      const frozenText = await page.locator("body").innerText();
+      assert.ok(
+        !frozenText.includes("12499"),
+        "Explorer must not poll/update committed height while live updates are paused",
+      );
+
+      // Resume live updates -> UI immediately refreshes to 12499
+      await toggle.click();
+      assert.equal(await badge.getAttribute("data-transport"), "polling");
+      assert.equal(await toggle.getAttribute("aria-pressed"), "false");
+      await waitForBodyText(page, "12499");
+
+      assert.deepEqual(pageErrors, [], `Polling mode page errors: ${pageErrors.join("; ")}`);
+      assert.deepEqual(consoleErrors, [], `Polling mode console errors: ${consoleErrors.join("; ")}`);
+    } catch (err) {
+      await saveFailureArtifact(page, "section-e-live-stream-polling", err);
+      throw err;
+    } finally {
+      await context.close();
+    }
+  }
+
+  // 2. Live WebSocket mode (deterministic loopback mock WS) + Push + Pause/Resume + Reconnecting
+  {
+    let stateRequests = 0;
+    const { context, page } = await setupIsolatedPage({
+      viewport: { width: 1280, height: 800 },
+      customRouteHandler: async (route, url) => {
+        if (url.pathname === "/api/state") {
+          stateRequests += 1;
+        }
+        return false;
+      },
+    });
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+    page.on("console", (msg) => {
+      if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    await context.addInitScript(`
+      window.localStorage.setItem("kovanica.ws_url", "ws://127.0.0.1:8545/ws");
+      const state = { instances: [], subscribes: [], unsubscribes: [] };
+      window.__mockWsState = state;
+
+      class DeterministicMockWebSocket {
+        constructor(url) {
+          this.readyState = 0;
+          this.url = url;
+          this.onopen = null;
+          this.onmessage = null;
+          this.onerror = null;
+          this.onclose = null;
+          this.headsSubId = null;
+          state.instances.push(this);
+          setTimeout(() => {
+            if (this.readyState !== 0) return;
+            this.readyState = 1;
+            if (this.onopen) this.onopen({});
+          }, 15);
+        }
+
+        send(raw) {
+          const msg = JSON.parse(raw);
+          if (msg.method === "kovanica_subscribe") {
+            const topic = msg.params && msg.params[0];
+            state.subscribes.push(topic);
+            const subId = "sub-" + topic + "-" + state.subscribes.length;
+            if (topic === "newHeads") this.headsSubId = subId;
+            setTimeout(() => {
+              if (this.onmessage) {
+                this.onmessage({
+                  data: JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: subId }),
+                });
+              }
+            }, 5);
+          } else if (msg.method === "kovanica_unsubscribe") {
+            state.unsubscribes.push(String((msg.params && msg.params[0]) || ""));
+          }
+        }
+
+        close() {
+          this.readyState = 3;
+        }
+
+        pushHead(hash) {
+          if (!this.headsSubId || !this.onmessage) return;
+          this.onmessage({
+            data: JSON.stringify({
+              jsonrpc: "2.0",
+              method: "kovanica_subscription",
+              params: {
+                subscription: this.headsSubId,
+                result: { hash, round: 12451 },
+              },
+            }),
+          });
+        }
+
+        drop() {
+          this.readyState = 3;
+          if (this.onclose) this.onclose({ code: 1006, reason: "simulated drop" });
+        }
+      }
+      DeterministicMockWebSocket.OPEN = 1;
+      DeterministicMockWebSocket.CLOSING = 2;
+      DeterministicMockWebSocket.CLOSED = 3;
+
+      window.WebSocket = DeterministicMockWebSocket;
+    `);
+
+    try {
+      await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+      const badge = page.getByTestId("live-stream-badge");
+      const toggle = page.getByTestId("live-stream-toggle");
+
+      // Wait for WS subscription handshake to complete -> WS Live
+      await page.waitForFunction(
+        () =>
+          document.querySelector('[data-testid="live-stream-badge"]')?.getAttribute("data-transport") ===
+          "ws",
+        undefined,
+        { timeout: HYDRATION_TIMEOUT },
+      );
+      assert.ok((await badge.innerText()).includes("WS Live"), "Badge must display WS Live");
+
+      // Verify newHeads & newCommittedLeader subscriptions were sent
+      const subscribedTopics = await page.evaluate(() => (window as any).__mockWsState.subscribes);
+      assert.ok(subscribedTopics.includes("newHeads"), "WS must subscribe to newHeads");
+      assert.ok(
+        subscribedTopics.includes("newCommittedLeader"),
+        "WS must subscribe to newCommittedLeader",
+      );
+
+      // Push a newHeads frame and verify it triggers a state refresh
+      const beforePushCount = stateRequests;
+      await page.evaluate(() => {
+        const instances = (window as any).__mockWsState.instances;
+        instances[instances.length - 1]?.pushHead("0xfeed000000000000000000000000000000000000000000000000000000000001");
+      });
+      await page.waitForFunction(
+        () => true,
+        undefined,
+        { timeout: 2000 },
+      );
+      await new Promise((r) => setTimeout(r, 150));
+      assert.ok(
+        stateRequests > beforePushCount,
+        "Incoming WS newHeads event must trigger an immediate /api/state refresh",
+      );
+
+      // Pause cleanly unsubscribes & switches badge to Paused
+      await toggle.click();
+      assert.equal(await badge.getAttribute("data-transport"), "paused");
+      const unsubCount = await page.evaluate(
+        () => (window as any).__mockWsState.unsubscribes.length,
+      );
+      assert.ok(unsubCount >= 1, "Pausing WS stream must send kovanica_unsubscribe");
+
+      // Resume reconnects back to WS Live
+      await toggle.click();
+      await page.waitForFunction(
+        () =>
+          document.querySelector('[data-testid="live-stream-badge"]')?.getAttribute("data-transport") ===
+          "ws",
+        undefined,
+        { timeout: HYDRATION_TIMEOUT },
+      );
+
+      // Drop socket -> transitions to Reconnecting
+      await page.evaluate(() => {
+        const instances = (window as any).__mockWsState.instances;
+        instances[instances.length - 1]?.drop();
+      });
+      await page.waitForFunction(
+        () =>
+          document.querySelector('[data-testid="live-stream-badge"]')?.getAttribute("data-transport") ===
+          "reconnecting",
+        undefined,
+        { timeout: HYDRATION_TIMEOUT },
+      );
+      assert.ok(
+        (await badge.innerText()).includes("Reconnecting"),
+        "Badge must show Reconnecting after socket drop",
+      );
+
+      assert.deepEqual(pageErrors, [], `WS mode page errors: ${pageErrors.join("; ")}`);
+      assert.deepEqual(consoleErrors, [], `WS mode console errors: ${consoleErrors.join("; ")}`);
+    } catch (err) {
+      await saveFailureArtifact(page, "section-e-live-stream-ws", err);
+      throw err;
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------

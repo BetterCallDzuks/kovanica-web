@@ -6,7 +6,7 @@ import { SURFACE } from "@/lib/surfaces";
 import { Compass, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
 import { DagCanvas, DagLegend } from "@/components/explorer/dag-canvas";
 import { createDagBlocksCache } from "@/lib/api/map-blocks";
-import { useNode } from "@/lib/api/use-node";
+import { useLiveStream } from "@/lib/api/use-live-stream";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 import { healthLabel } from "@/lib/api/health";
@@ -32,7 +32,8 @@ type Tab = (typeof TABS)[number];
 
 /** Explorer BlockDAG surface. Truthful hybrid consensus metrics and DAG inspection. */
 export function ExplorerView() {
-  const { state, error, errorStatus, refresh, source } = useNode(2000);
+  const { state, error, errorStatus, refresh, source, transport, paused, togglePause } =
+    useLiveStream({ pollMs: 2000 });
   const [tab, setTab] = useState<Tab>("Graph");
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [searchedId, setSearchedId] = useState<string | null>(null);
@@ -143,7 +144,7 @@ export function ExplorerView() {
 
       {/* Explorer Global Search Toolbar */}
       <div className="border-b border-border bg-surface-2/40 px-4 py-2.5 md:px-6">
-        <GlobalSearch variant="explorer" />
+        <GlobalSearch variant="explorer" externalState={state} />
       </div>
 
       {/* Liveness: a stalled chain is not a down endpoint */}
@@ -242,6 +243,9 @@ export function ExplorerView() {
         error={error}
         errorStatus={errorStatus}
         selectedBlockId={selectedBlock}
+        transport={transport}
+        paused={paused}
+        onTogglePause={togglePause}
         onSelectTip={(tipHash) => {
           setSearchedId(tipHash);
           setSelectedBlock(tipHash);
