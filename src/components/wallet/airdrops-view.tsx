@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Copy, Loader2, CheckCircle, AlertCircle, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { api, apiPostJson, useApiSource, isPublic } from "@/lib/api/client";
+import { apiPostJson } from "@/lib/api/client";
 import { ATOM } from "@/lib/ledger/types";
 import { useLedger } from "@/lib/ledger/store";
 import { signSighash } from "@/lib/wallet/keys";
@@ -46,8 +46,6 @@ type ClaimTx = {
 
 export function AirdropsView() {
   const hydrated = useHydrated();
-  const source = useApiSource();
-  const live = isPublic(source);
   const walletStore = useLedger((s) => s.wallet);
   const wallet = hydrated ? walletStore : null;
 
@@ -66,12 +64,6 @@ export function AirdropsView() {
   // Claim
   const [claimTx, setClaimTx] = useState<ClaimTx | null>(null);
   const [signedTx, setSignedTx] = useState<string | null>(null);
-
-  function parseKvnc(amountKvnc: string): number | null {
-    const decimal = parseFloat(amountKvnc.trim());
-    if (isNaN(decimal) || decimal <= 0) return null;
-    return Math.round(decimal * ATOM);
-  }
 
   async function loadCampaign(file: File) {
     try {

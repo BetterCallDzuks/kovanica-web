@@ -5,7 +5,7 @@ import type { Block, Colour } from "@/lib/ledger/types";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 
-export const FILL: Record<Colour, string> = {
+const FILL: Record<Colour, string> = {
   genesis: "#ffffff",
   chain: "#f59e0b",
   blue: "#38bdf8",

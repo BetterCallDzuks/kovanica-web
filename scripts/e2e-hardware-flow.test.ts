@@ -1,13 +1,9 @@
 import assert from "node:assert/strict";
 import * as ed from "@noble/ed25519";
-import { sha256, sha512 } from "@noble/hashes/sha2.js";
-import { bytesToHex, hexToBytes, utf8ToBytes } from "@noble/hashes/utils.js";
+import { sha512 } from "@noble/hashes/sha2.js";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import {
   MockHardwareProvider,
-  getHardwareProvider,
-  getActiveHardwareProvider,
-  setActiveHardwareProvider,
-  formatDerivationPath,
   parseAccountOrPath,
   validateSighash,
   KOVANICA_COIN_TYPE,
@@ -76,7 +72,6 @@ async function runE2EHardwareChallenge() {
 
   // Check address encoding
   const acc0Kvnc = hexToKvnc(acc0.address);
-  const acc1Kvnc = hexToKvnc(acc1.address);
   countAssert(() => assert.ok(acc0Kvnc.startsWith("kvnc") && acc0Kvnc.endsWith("dag"), "kvnc...dag format"));
   countAssert(() => assert.equal(parseAddr(acc0Kvnc), parseAddr(acc0.address), "parseAddr(hexToKvnc(addr)) == parseAddr(addr)"));
   countAssert(() => assert.equal(parseAddr(acc0.address), `00${acc0.address}`, "parseAddr(rawHex) == versioned 66-hex"));

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
+import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
 import { GlobalSearch } from "@/components/search/global-search";
 
 const TABS = ["Graph", "Blocks", "Mempool", "Order", "Console", "Analytics", "Docs"] as const;
@@ -217,6 +218,21 @@ export function ExplorerView() {
           <span>Max Supply: <strong>90.2M KVNC</strong></span>
         </div>
       </div>
+
+      {/* Live Mining & DAG Telemetry Dashboard */}
+      <MiningDagPanel
+        state={state}
+        blocks={blocks}
+        error={error}
+        errorStatus={errorStatus}
+        selectedBlockId={selectedBlock}
+        onSelectTip={(tipHash) => {
+          setSearchedId(tipHash);
+          setSelectedBlock(tipHash);
+          setTab("Graph");
+        }}
+        onRefresh={() => void refresh()}
+      />
 
       {/* Main DAG Graph canvas section with distinct state handling */}
       <section className="border-b border-border bg-surface px-4 py-4 md:px-6">

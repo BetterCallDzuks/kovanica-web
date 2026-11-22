@@ -36,6 +36,7 @@ import { listPools, listTokens, getTokenState } from "./tokens.server";
 import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
+import { parseTargetBits } from "@/lib/explorer/mining-metrics";
 import { faucetEndpoint, probeHealth, rpcCall, RpcError, type HealthProbeResult } from "./rpc-url.server";
 import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.server";
 import { isAssetId } from "../asset-id";
@@ -291,6 +292,33 @@ async function fetchLiveState(): Promise<ApiState> {
   const dag: ApiState["node"]["dag"] = [];
   const health = summarise(probe);
 
+  const rawDifficulty =
+    typeof mining?.difficulty === "number"
+      ? mining.difficulty
+      : typeof mining?.difficulty === "string"
+        ? Number(mining.difficulty)
+        : null;
+  const difficulty =
+    typeof rawDifficulty === "number" && Number.isFinite(rawDifficulty) && rawDifficulty > 0
+      ? rawDifficulty
+      : null;
+  const miningInfo = mining
+    ? {
+        target_bits: parseTargetBits(mining.target_bits ?? mining.targetBits),
+        difficulty,
+        target_block_time_ms:
+          numberOrNull(mining.target_block_time_ms) ??
+          numberOrNull(mining.target_interval_ms) ??
+          numberOrNull(mining.targetBlockTimeMs),
+        ghostdag_k:
+          numberOrNull(mining.ghostdag_k) ?? numberOrNull(tips?.ghostdag_k),
+        mining_enabled:
+          typeof mining.mining_enabled === "boolean" ? mining.mining_enabled : null,
+        pow_algorithm:
+          typeof mining.pow_algorithm === "string" ? mining.pow_algorithm : null,
+      }
+    : null;
+
   return {
     selected: tipList[0] ?? null,
     mining: typeof mining?.mining_enabled === "boolean" ? mining.mining_enabled : null,
@@ -338,6 +366,7 @@ async function fetchLiveState(): Promise<ApiState> {
       chain_len: numberOrNull(sync?.localTipRound),
       mempool,
       tx_count: null,
+      mining_info: miningInfo,
       dag,
       order: dag.map((d) => d.id),
       pending: pendingIds,

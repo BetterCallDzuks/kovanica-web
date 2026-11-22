@@ -3,18 +3,17 @@
  * Simplified maker/taker flow: create offer → fund → claim/refund.
  */
 import { useEffect, useState } from "react";
-import { Copy, ShieldCheck, Lock, Unlock, ArrowLeftRight, Loader2 } from "lucide-react";
+import { Copy, ShieldCheck, Lock, Unlock, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { api, apiPostJson, useApiSource, isPublic } from "@/lib/api/client";
-import { MIN_FEE, TOKEN } from "@/lib/api/contract";
+import { api, apiPostJson } from "@/lib/api/client";
+import { TOKEN } from "@/lib/api/contract";
 import { ATOM } from "@/lib/ledger/types";
 import { useLedger } from "@/lib/ledger/store";
 import { signSighash } from "@/lib/wallet/keys";
 import { blake3 } from "@noble/hashes/blake3.js";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { useHydrated } from "@/lib/use-hydrated";
-import { cn } from "@/lib/utils";
 
 type DexRole = "maker" | "taker";
 type DexState = "idle" | "creating" | "offer_created" | "funding" | "claiming" | "refunding" | "completed";
@@ -42,8 +41,6 @@ type HtlcInfo = {
 
 export function DexView() {
   const hydrated = useHydrated();
-  const source = useApiSource();
-  const live = isPublic(source);
   const walletStore = useLedger((s) => s.wallet);
   const wallet = hydrated ? walletStore : null;
 
@@ -53,9 +50,9 @@ export function DexView() {
 
   // Form inputs
   const [giveAmount, setGiveAmount] = useState("");
-  const [giveAsset, setGiveAsset] = useState("native");
+  const [giveAsset] = useState("native");
   const [takeAmount, setTakeAmount] = useState("");
-  const [takeAsset, setTakeAsset] = useState("native");
+  const [takeAsset] = useState("native");
   const [recipient, setRecipient] = useState("");
   const [timeoutBlocks, setTimeoutBlocks] = useState("100");
 

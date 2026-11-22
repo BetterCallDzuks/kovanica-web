@@ -5,17 +5,13 @@
 
 import assert from "node:assert/strict";
 import * as ed from "@noble/ed25519";
-import { sha256, sha512 } from "@noble/hashes/sha2.js";
-import { bytesToHex, hexToBytes, randomBytes, utf8ToBytes } from "@noble/hashes/utils.js";
+import { sha512 } from "@noble/hashes/sha2.js";
+import { bytesToHex, hexToBytes, randomBytes } from "@noble/hashes/utils.js";
 import {
   MockHardwareProvider,
-  LedgerHardwareProvider,
-  TrezorHardwareProvider,
-  getHardwareProvider,
   getActiveHardwareProvider,
   setActiveHardwareProvider,
   disconnectActiveHardwareProvider,
-  formatDerivationPath,
   parseAccountOrPath,
   validateSighash,
   KOVANICA_COIN_TYPE,
@@ -24,7 +20,6 @@ import {
 } from "../src/lib/wallet/hardware/index.ts";
 import { serializeBip44Path, mapLedgerError } from "../src/lib/wallet/hardware/ledger-provider.ts";
 import { mapTrezorError } from "../src/lib/wallet/hardware/trezor-provider.ts";
-import { hexToKvnc, parseAddr } from "../src/lib/wallet/address.ts";
 
 ed.hashes.sha512 = sha512;
 

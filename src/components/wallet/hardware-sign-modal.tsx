@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { ShieldCheck, Loader2, AlertTriangle, CheckCircle2, ArrowRight, X } from "lucide-react";
+import { ShieldCheck, Loader2, AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   HardwareDeviceType,

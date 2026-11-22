@@ -1,4 +1,4 @@
-import { Coins, Gem, Sparkles, Landmark, Tag } from "lucide-react";
+import { Coins, Gem, Landmark } from "lucide-react";
 import { TOKEN, assetLabel, isNativeAsset } from "@/lib/api/contract";
 import { cn } from "@/lib/utils";
 

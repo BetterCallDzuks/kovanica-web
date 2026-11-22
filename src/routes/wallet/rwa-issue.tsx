@@ -21,7 +21,7 @@ const ASSET_CLASSES = [
   { value: "OTHER", label: "Other (OTHER)" },
 ] as const;
 
-export async function loader() {
+async function loader() {
   // No server-side data needed for this page
   return {};
 }

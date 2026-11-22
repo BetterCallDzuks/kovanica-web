@@ -3,11 +3,11 @@
  * Follows the same prepare → sign → submit pattern as atomic-swap-view.
  */
 import { useState } from "react";
-import { Copy, ExternalLink, Loader2, Search, TrendingUp } from "lucide-react";
+import { Loader2, Search, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { api, apiPostJson, useApiSource, isPublic } from "@/lib/api/client";
-import { MIN_FEE, TOKEN } from "@/lib/api/contract";
+import { api, apiPostJson } from "@/lib/api/client";
+import { TOKEN } from "@/lib/api/contract";
 import { useLedger } from "@/lib/ledger/store";
 import { signSighash } from "@/lib/wallet/keys";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -28,8 +28,6 @@ type TokenInfo = {
 
 export function TokenListingsView() {
   const hydrated = useHydrated();
-  const source = useApiSource();
-  const live = isPublic(source);
   const walletStore = useLedger((s) => s.wallet);
   const wallet = hydrated ? walletStore : null;
 

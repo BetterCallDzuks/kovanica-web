@@ -1,6 +1,5 @@
 import {
   ATOM,
-  FOUNDER_AMOUNT,
   HALVING_ERA,
   LIVE_EXPLORER,
   LIVE_MAP,

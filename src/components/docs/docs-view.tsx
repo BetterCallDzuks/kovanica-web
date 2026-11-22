@@ -9,7 +9,7 @@ import { getCurrentSpecText, getNetworkId } from "@/lib/network";
 import { shortId } from "@/lib/ledger/hash";
 import { SURFACE } from "@/lib/surfaces";
 
-export const SECTIONS = [
+const SECTIONS = [
   { id: "getting-started", label: "Getting started" },
   { id: "wallet", label: "Wallet" },
   { id: "sdk", label: "SDK" },

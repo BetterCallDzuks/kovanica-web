@@ -128,6 +128,14 @@ export type ApiHistoryTx = {
   /** KVP-106: collection ID for NFTs */
   collection_id?: string | null;
 };
+export type ApiMiningInfo = {
+  target_bits: number | null;
+  difficulty: number | null;
+  target_block_time_ms: number | null;
+  ghostdag_k: number | null;
+  mining_enabled: boolean | null;
+  pow_algorithm: string | null;
+};
 export type ApiNode = {
   blocks: number;
   tips: string[];
@@ -151,6 +159,7 @@ export type ApiNode = {
   chain_len: number | null;
   mempool: number | null;
   tx_count: number | null;
+  mining_info?: ApiMiningInfo | null;
   dag: ApiDagBlock[];
   order: string[];
   pending: string[];

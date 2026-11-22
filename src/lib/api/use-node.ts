@@ -26,27 +26,32 @@ export function useNode(pollMs = MIN_POLL_MS) {
   const currentSourceRef = useRef(source);
   currentSourceRef.current = source;
 
-  const clearTimer = () => {
+  const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-  };
+  }, []);
 
-  const scheduleNext = (delayMs: number, expectedGen: number) => {
-    clearTimer();
-    if (typeof document !== "undefined" && document.hidden) {
-      return; // Pause when document is hidden
-    }
-    if (expectedGen !== genRef.current || currentSourceRef.current === "mainnet") {
-      return;
-    }
-    timerRef.current = window.setTimeout(() => {
-      void executePoll();
-    }, delayMs);
-  };
+  const executePollRef = useRef<() => Promise<void>>(async () => {});
 
-  const executePoll = async () => {
+  const scheduleNext = useCallback(
+    (delayMs: number, expectedGen: number) => {
+      clearTimer();
+      if (typeof document !== "undefined" && document.hidden) {
+        return; // Pause when document is hidden
+      }
+      if (expectedGen !== genRef.current || currentSourceRef.current === "mainnet") {
+        return;
+      }
+      timerRef.current = window.setTimeout(() => {
+        void executePollRef.current();
+      }, delayMs);
+    },
+    [clearTimer],
+  );
+
+  const executePoll = useCallback(async () => {
     const reqSource = currentSourceRef.current;
     if (reqSource === "mainnet") return;
     const myGen = genRef.current;
@@ -90,13 +95,15 @@ export function useNode(pollMs = MIN_POLL_MS) {
         scheduleNext(currentDelayRef.current, myGen);
       }
     }
-  };
+  }, [pollMs, scheduleNext]);
+
+  executePollRef.current = executePoll;
 
   const refresh = useCallback(async () => {
     clearTimer();
     currentDelayRef.current = pollMs;
     await executePoll();
-  }, [pollMs]);
+  }, [pollMs, clearTimer, executePoll]);
 
   useEffect(() => {
     genRef.current += 1;
@@ -141,7 +148,7 @@ export function useNode(pollMs = MIN_POLL_MS) {
         abortCtrlRef.current = null;
       }
     };
-  }, [source, pollMs]);
+  }, [source, pollMs, clearTimer, executePoll]);
 
   const act = useCallback(
     async (path: string) => {

@@ -77,8 +77,10 @@ export function FaucetView() {
     };
   }, []);
 
+  const isCoolingDown = cooldownLeft > 0;
+
   useEffect(() => {
-    if (cooldownLeft <= 0) return;
+    if (!isCoolingDown) return;
     const id = window.setInterval(() => {
       setCooldownLeft((v) => {
         if (v <= 1) {
@@ -89,7 +91,7 @@ export function FaucetView() {
       });
     }, 1000);
     return () => window.clearInterval(id);
-  }, [cooldownLeft > 0]);
+  }, [isCoolingDown]);
 
   const raw = address.trim();
   const addrState = raw === "" ? "empty" : isAddr(raw) ? "valid" : "invalid";
