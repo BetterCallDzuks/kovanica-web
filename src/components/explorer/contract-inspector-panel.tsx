@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -10,6 +10,7 @@ import {
   FileCode,
   Fuel,
   History,
+  Link2,
   Play,
   RotateCcw,
   ShieldAlert,
@@ -21,10 +22,14 @@ import type { ApiSource } from "@/lib/api/contract";
 import { Button } from "@/components/ui/button";
 import {
   CONTRACT_PRESETS,
+  buildContractCurlSnippet,
+  buildContractInspectorDeepLink,
+  buildContractSdkSnippet,
   decodeContractOutput,
   encodePresetArgs,
   getContractPreset,
   parseContractError,
+  parseContractInspectorDeepLink,
   type ContractCallRequest,
   type ContractCallResponse,
   type ContractPresetId,
@@ -38,6 +43,8 @@ import { parseAddr, toCanonicalAddress } from "@/lib/wallet/address";
 export type ContractInspectorPanelProps = {
   source: ApiSource;
   initialContract?: string | null;
+  initialPreset?: ContractPresetId | null;
+  initialFields?: Record<string, string> | null;
 };
 
 type DryRunHistoryItem = {
@@ -95,13 +102,28 @@ function CopyInline({ text, label }: { text: string; label?: string }) {
 export function ContractInspectorPanel({
   source,
   initialContract,
+  initialPreset,
+  initialFields,
 }: ContractInspectorPanelProps) {
-  const [presetId, setPresetId] = useState<ContractPresetId>("name_resolve");
+  const initialDeepLink = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return parseContractInspectorDeepLink(window.location.search);
+  }, []);
+
+  const resolvedInitialPreset: ContractPresetId =
+    initialPreset ?? initialDeepLink?.presetId ?? "name_resolve";
+
+  const [presetId, setPresetId] = useState<ContractPresetId>(resolvedInitialPreset);
   const [contractAddress, setContractAddress] = useState<string>(
-    () => initialContract?.trim() ?? (source === "local" ? SAMPLE_LOCAL_CONTRACT : ""),
+    () =>
+      initialContract?.trim() ||
+      initialDeepLink?.contractAddress ||
+      (source === "local" ? SAMPLE_LOCAL_CONTRACT : ""),
   );
   const [fields, setFields] = useState<Record<string, string>>(() => ({
-    ...getContractPreset("name_resolve").defaults,
+    ...getContractPreset(resolvedInitialPreset).defaults,
+    ...(initialDeepLink?.fields ?? {}),
+    ...(initialFields ?? {}),
   }));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [caller, setCaller] = useState("");
@@ -113,8 +135,89 @@ export function ContractInspectorPanel({
   const [transportError, setTransportError] = useState<string | null>(null);
   const [showRpcPayload, setShowRpcPayload] = useState(false);
   const [history, setHistory] = useState<DryRunHistoryItem[]>([]);
+  const [copiedAction, setCopiedAction] = useState<"link" | "curl" | "sdk" | null>(null);
+
+  useEffect(() => {
+    if (initialContract?.trim()) {
+      setContractAddress(initialContract.trim());
+    }
+  }, [initialContract]);
+
+  useEffect(() => {
+    if (initialPreset) {
+      setPresetId(initialPreset);
+      setFields({
+        ...getContractPreset(initialPreset).defaults,
+        ...(initialFields ?? {}),
+      });
+    } else if (initialFields && Object.keys(initialFields).length > 0) {
+      setFields((prev) => ({ ...prev, ...initialFields }));
+    }
+  }, [initialPreset, initialFields]);
 
   const preset = useMemo(() => getContractPreset(presetId), [presetId]);
+
+  const rpcUrlForSnippets =
+    source === "local"
+      ? "http://127.0.0.1:8545"
+      : "https://testnet.kovanica.online/rpc";
+
+  const shareDeepLink = useMemo(() => {
+    const baseUrl =
+      typeof window !== "undefined" ? window.location.origin : "https://testnet.kovanica.online";
+    return buildContractInspectorDeepLink({
+      baseUrl,
+      contractAddress,
+      presetId,
+      fields,
+    });
+  }, [contractAddress, presetId, fields]);
+
+  const curlSnippet = useMemo(
+    () =>
+      buildContractCurlSnippet({
+        rpcUrl: rpcUrlForSnippets,
+        contractAddress,
+        presetId,
+        fields,
+        from: caller,
+        value: callValue,
+        gas: gasLimit,
+      }),
+    [rpcUrlForSnippets, contractAddress, presetId, fields, caller, callValue, gasLimit],
+  );
+
+  const sdkSnippet = useMemo(
+    () =>
+      buildContractSdkSnippet({
+        rpcUrl: rpcUrlForSnippets,
+        contractAddress,
+        presetId,
+        fields,
+        from: caller,
+        value: callValue,
+        gas: gasLimit,
+      }),
+    [rpcUrlForSnippets, contractAddress, presetId, fields, caller, callValue, gasLimit],
+  );
+
+  function copyDeveloperArtifact(kind: "link" | "curl" | "sdk", text: string) {
+    setCopiedAction(kind);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        setCopiedAction((curr) => (curr === kind ? null : curr));
+      }, 1800);
+    }
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(text).catch(() => {
+          // Ignore clipboard write rejection in headless/non-secure environments
+        });
+      }
+    } catch {
+      // Clipboard may be restricted in headless/non-secure environments
+    }
+  }
 
   const encodedPreview = useMemo(
     () => encodePresetArgs(presetId, fields),
@@ -258,7 +361,64 @@ export function ContractInspectorPanel({
             broadcast transactions, require no private key, and do not modify on-chain state.
           </p>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[11px] text-subtle">
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-subtle">
+          <button
+            type="button"
+            data-testid="copy-share-link-btn"
+            onClick={() => void copyDeveloperArtifact("link", shareDeepLink)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg/70 px-2.5 py-1 font-mono text-[11px] text-fg transition-colors hover:border-gold/50 hover:text-gold"
+            title="Copy shareable deep-link URL for current contract preset and arguments"
+          >
+            {copiedAction === "link" ? (
+              <>
+                <Check className="size-3.5 text-ok" />
+                <span>Link Copied</span>
+              </>
+            ) : (
+              <>
+                <Link2 className="size-3.5 text-gold" />
+                <span>Copy Share Link</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            data-testid="copy-curl-snippet-btn"
+            onClick={() => void copyDeveloperArtifact("curl", curlSnippet)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg/70 px-2.5 py-1 font-mono text-[11px] text-fg transition-colors hover:border-gold/50 hover:text-gold"
+            title="Copy ready-to-run JSON-RPC kovanica_call cURL command"
+          >
+            {copiedAction === "curl" ? (
+              <>
+                <Check className="size-3.5 text-ok" />
+                <span>cURL Copied</span>
+              </>
+            ) : (
+              <>
+                <Terminal className="size-3.5 text-gold" />
+                <span>Copy JSON-RPC cURL</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            data-testid="copy-sdk-snippet-btn"
+            onClick={() => void copyDeveloperArtifact("sdk", sdkSnippet)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg/70 px-2.5 py-1 font-mono text-[11px] text-fg transition-colors hover:border-gold/50 hover:text-gold"
+            title="Copy ready-to-run TypeScript kovanica-sdk snippet"
+          >
+            {copiedAction === "sdk" ? (
+              <>
+                <Check className="size-3.5 text-ok" />
+                <span>SDK Copied</span>
+              </>
+            ) : (
+              <>
+                <Code2 className="size-3.5 text-gold" />
+                <span>Copy SDK Snippet</span>
+              </>
+            )}
+          </button>
           <span>target · {source}</span>
         </div>
       </div>

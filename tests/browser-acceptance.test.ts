@@ -1365,7 +1365,55 @@ test("Section E: Explorer Contract Inspector (?tab=contracts & tab click) runs n
       "Revert diagnostic must reference the queried unknown name",
     );
 
-    // 5. Verify zero uncaught page or console errors
+    // 5. Navigate via shareable deep-link URL (?tab=contracts&contract=...&preset=name_resolve&args=...)
+    const deepLinkContract = "0000000000000000000000000000000000000000000000000000000000000001";
+    const deepLinkArgs = encodeURIComponent(JSON.stringify({ name: "alice" }));
+    await gotoAndSettle(
+      page,
+      `${baseUrl}/explorer?tab=contracts&contract=${deepLinkContract}&preset=name_resolve&args=${deepLinkArgs}`,
+      "Contract Read & Dry-Run Inspector",
+    );
+
+    const hydratedContractInput = page.locator("#inspector-contract-address");
+    assert.equal(
+      await hydratedContractInput.inputValue(),
+      deepLinkContract,
+      "Deep-link must hydrate contract address input",
+    );
+    const hydratedNameInput = page.locator("#inspector-field-name_resolve-name");
+    assert.equal(
+      await hydratedNameInput.inputValue(),
+      "alice",
+      "Deep-link must hydrate preset argument input",
+    );
+
+    // Verify Copy Share Link, Copy JSON-RPC cURL, and Copy SDK Snippet controls
+    const copyLinkBtn = page.getByTestId("copy-share-link-btn");
+    const copyCurlBtn = page.getByTestId("copy-curl-snippet-btn");
+    const copySdkBtn = page.getByTestId("copy-sdk-snippet-btn");
+
+    await copyLinkBtn.click();
+    await waitForBodyText(page, "Link Copied");
+    assert.ok(
+      (await copyLinkBtn.innerText()).includes("Link Copied"),
+      "Copy Share Link button must confirm Link Copied",
+    );
+
+    await copyCurlBtn.click();
+    await waitForBodyText(page, "cURL Copied");
+    assert.ok(
+      (await copyCurlBtn.innerText()).includes("cURL Copied"),
+      "Copy JSON-RPC cURL button must confirm cURL Copied",
+    );
+
+    await copySdkBtn.click();
+    await waitForBodyText(page, "SDK Copied");
+    assert.ok(
+      (await copySdkBtn.innerText()).includes("SDK Copied"),
+      "Copy SDK Snippet button must confirm SDK Copied",
+    );
+
+    // 6. Verify zero uncaught page or console errors
     assert.deepEqual(
       pageErrors,
       [],

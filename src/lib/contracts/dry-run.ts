@@ -989,3 +989,280 @@ export function parseContractError(message: string, reverted = false): ParsedCon
     detail: msg,
   };
 }
+
+// --- Shareable Deep-Link URLs & Developer Snippets ---
+
+const MAX_DEEP_LINK_QUERY_LENGTH = 2048;
+const MAX_DEEP_LINK_ARGS_LENGTH = 1024;
+const MAX_DEEP_LINK_FIELD_VALUE_LENGTH = 512;
+
+export type ContractInspectorDeepLinkState = {
+  isContractsTab: boolean;
+  contractAddress: string | null;
+  presetId: ContractPresetId | null;
+  fields: Record<string, string>;
+};
+
+export function isContractPresetId(value: string): value is ContractPresetId {
+  return CONTRACT_PRESETS.some((p) => p.id === value);
+}
+
+/**
+ * Parse and sanitize URL query parameters for the Explorer Contract Inspector:
+ * `?tab=contracts&contract=<addr>&preset=<id>&args=<json-or-params>`
+ *
+ * Enforces strict length bounds and allowed preset field keys, gracefully
+ * ignoring invalid or oversized parameters.
+ */
+export function parseContractInspectorDeepLink(
+  search: string | URLSearchParams,
+): ContractInspectorDeepLinkState {
+  const empty: ContractInspectorDeepLinkState = {
+    isContractsTab: false,
+    contractAddress: null,
+    presetId: null,
+    fields: {},
+  };
+
+  let params: URLSearchParams;
+  if (typeof search === "string") {
+    if (search.length > MAX_DEEP_LINK_QUERY_LENGTH) {
+      return empty;
+    }
+    params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  } else {
+    const serialized = search.toString();
+    if (serialized.length > MAX_DEEP_LINK_QUERY_LENGTH) {
+      return empty;
+    }
+    params = search;
+  }
+
+  const tabRaw = (params.get("tab") ?? "").trim().toLowerCase();
+  const contractRaw = (params.get("contract") ?? "").trim();
+  const presetRaw = (params.get("preset") ?? "").trim();
+  const argsRaw = (params.get("args") ?? "").trim();
+
+  let contractAddress: string | null = null;
+  if (contractRaw && contractRaw.length <= 128 && toCanonicalAddress(contractRaw) !== null) {
+    contractAddress = contractRaw;
+  }
+
+  let presetId: ContractPresetId | null = null;
+  if (presetRaw && isContractPresetId(presetRaw)) {
+    presetId = presetRaw;
+  }
+
+  const targetPreset = getContractPreset(presetId ?? "name_resolve");
+  const allowedKeys = new Set(targetPreset.fields.map((f) => f.key));
+  const fields: Record<string, string> = {};
+
+  if (argsRaw && argsRaw.length <= MAX_DEEP_LINK_ARGS_LENGTH) {
+    if (argsRaw.startsWith("{") && argsRaw.endsWith("}")) {
+      try {
+        const parsed: unknown = JSON.parse(argsRaw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+            if (!allowedKeys.has(k)) continue;
+            if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+              const strVal = String(v);
+              if (strVal.length <= MAX_DEEP_LINK_FIELD_VALUE_LENGTH) {
+                fields[k] = strVal;
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore malformed JSON
+      }
+    } else {
+      const subParams = new URLSearchParams(argsRaw);
+      for (const [k, v] of subParams.entries()) {
+        if (!allowedKeys.has(k)) continue;
+        if (v.length <= MAX_DEEP_LINK_FIELD_VALUE_LENGTH) {
+          fields[k] = v;
+        }
+      }
+    }
+  }
+
+  const isContractsTab =
+    tabRaw === "contracts" || contractAddress !== null || presetId !== null;
+
+  return {
+    isContractsTab,
+    contractAddress,
+    presetId,
+    fields,
+  };
+}
+
+export type BuildContractDeepLinkOptions = {
+  baseUrl?: string;
+  contractAddress?: string;
+  presetId: ContractPresetId;
+  fields: Record<string, string>;
+};
+
+/**
+ * Serialize current Contract Inspector state into a canonical shareable deep-link URL:
+ * `/explorer?tab=contracts&contract=<addr>&preset=<id>&args=<json>`
+ */
+export function buildContractInspectorDeepLink(
+  options: BuildContractDeepLinkOptions,
+): string {
+  const preset = getContractPreset(options.presetId);
+  const params = new URLSearchParams();
+  params.set("tab", "contracts");
+
+  const trimmedContract = (options.contractAddress ?? "").trim();
+  if (trimmedContract && toCanonicalAddress(trimmedContract) !== null) {
+    params.set("contract", trimmedContract);
+  }
+
+  params.set("preset", preset.id);
+
+  const sanitizedFields: Record<string, string> = {};
+  for (const fieldDef of preset.fields) {
+    const val = (options.fields[fieldDef.key] ?? "").trim();
+    if (val && val.length <= MAX_DEEP_LINK_FIELD_VALUE_LENGTH) {
+      sanitizedFields[fieldDef.key] = val;
+    }
+  }
+
+  if (Object.keys(sanitizedFields).length > 0) {
+    const encodedArgs = JSON.stringify(sanitizedFields);
+    if (encodedArgs.length <= MAX_DEEP_LINK_ARGS_LENGTH) {
+      params.set("args", encodedArgs);
+    }
+  }
+
+  const pathWithQuery = `/explorer?${params.toString()}`;
+  if (!options.baseUrl) {
+    return pathWithQuery;
+  }
+
+  try {
+    const url = new URL(pathWithQuery, options.baseUrl);
+    return url.toString();
+  } catch {
+    return pathWithQuery;
+  }
+}
+
+export type ContractSnippetOptions = {
+  rpcUrl?: string;
+  contractAddress: string;
+  presetId: ContractPresetId;
+  fields: Record<string, string>;
+  from?: string;
+  value?: string;
+  gas?: string;
+};
+
+function escapeSingleQuotesForShell(input: string): string {
+  return input.replace(/'/g, "'\\''");
+}
+
+/**
+ * Build a ready-to-run JSON-RPC `curl -X POST` command invoking `kovanica_call`
+ * with the encoded Bincode payload for the current preset and arguments.
+ */
+export function buildContractCurlSnippet(options: ContractSnippetOptions): string {
+  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://testnet.kovanica.online/rpc";
+  const encoded = encodePresetArgs(options.presetId, options.fields);
+  const toAddr =
+    toCanonicalAddress(options.contractAddress.trim()) ||
+    options.contractAddress.trim() ||
+    "0000000000000000000000000000000000000000000000000000000000000001";
+
+  const callObj: Record<string, string> = {
+    to: toAddr,
+  };
+
+  const entry = encoded.ok ? encoded.entry : getContractPreset(options.presetId).entry;
+  if (entry) {
+    callObj.entry = entry;
+  }
+  callObj.data = encoded.ok ? encoded.dataHex : "0x";
+
+  const fromTrimmed = (options.from ?? "").trim();
+  if (fromTrimmed) {
+    callObj.from = toCanonicalAddress(fromTrimmed) ?? fromTrimmed;
+  }
+  const valueRes = parseUintQuantity(options.value ?? "", "value", MAX_U64);
+  if (valueRes.ok && valueRes.hex) {
+    callObj.value = valueRes.hex;
+  }
+  const gasRes = parseUintQuantity(options.gas ?? "", "gas", MAX_U64);
+  if (gasRes.ok && gasRes.hex) {
+    callObj.gas = gasRes.hex;
+  }
+
+  const rpcPayload = {
+    jsonrpc: "2.0",
+    method: "kovanica_call",
+    params: [callObj],
+    id: 1,
+  };
+
+  const jsonBody = escapeSingleQuotesForShell(JSON.stringify(rpcPayload));
+  return [
+    `curl -X POST '${escapeSingleQuotesForShell(rpcUrl)}' \\`,
+    `  -H 'content-type: application/json' \\`,
+    `  -d '${jsonBody}'`,
+  ].join("\n");
+}
+
+/**
+ * Build a ready-to-run TypeScript snippet using `kovanica-sdk` (`KovanicaClient`
+ * and `estimateAndBuildCall`) matching the current preset and arguments.
+ */
+export function buildContractSdkSnippet(options: ContractSnippetOptions): string {
+  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://testnet.kovanica.online/rpc";
+  const encoded = encodePresetArgs(options.presetId, options.fields);
+  const toAddr =
+    toCanonicalAddress(options.contractAddress.trim()) ||
+    options.contractAddress.trim() ||
+    "0000000000000000000000000000000000000000000000000000000000000001";
+  const entry =
+    (encoded.ok ? encoded.entry : getContractPreset(options.presetId).entry) || "call";
+  const dataHex = encoded.ok ? encoded.dataHex : "0x";
+
+  const callProps: string[] = [
+    `  to: ${JSON.stringify(toAddr)},`,
+    `  entry: ${JSON.stringify(entry)},`,
+    `  data: ${JSON.stringify(dataHex)},`,
+  ];
+
+  const fromTrimmed = (options.from ?? "").trim();
+  if (fromTrimmed) {
+    callProps.push(`  from: ${JSON.stringify(toCanonicalAddress(fromTrimmed) ?? fromTrimmed)},`);
+  }
+  const valueRes = parseUintQuantity(options.value ?? "", "value", MAX_U64);
+  if (valueRes.ok && valueRes.hex) {
+    callProps.push(`  value: ${JSON.stringify(valueRes.hex)},`);
+  }
+  const gasRes = parseUintQuantity(options.gas ?? "", "gas", MAX_U64);
+  if (gasRes.ok && gasRes.hex) {
+    callProps.push(`  gas: ${JSON.stringify(gasRes.hex)},`);
+  }
+
+  return [
+    `import { KovanicaClient, estimateAndBuildCall } from "kovanica-sdk";`,
+    ``,
+    `const client = new KovanicaClient({ rpcUrl: ${JSON.stringify(rpcUrl)} });`,
+    `const callRequest = {`,
+    ...callProps,
+    `};`,
+    ``,
+    `// 1. Read-only Wasmi simulation via kovanica_call`,
+    `const outputHex = await client.call(callRequest);`,
+    `console.log("kovanica_call output:", outputHex);`,
+    ``,
+    `// 2. Estimate gas and build a call transaction descriptor`,
+    `const prepared = await estimateAndBuildCall(client, callRequest);`,
+    `console.log("Estimated gas:", prepared.gasLimit);`,
+  ].join("\n");
+}
+

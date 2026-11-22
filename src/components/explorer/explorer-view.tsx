@@ -16,6 +16,7 @@ import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
 import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
 import { ContractInspectorPanel } from "@/components/explorer/contract-inspector-panel";
+import { parseContractInspectorDeepLink } from "@/lib/contracts/dry-run";
 import { GlobalSearch } from "@/components/search/global-search";
 
 const TABS = [
@@ -38,6 +39,10 @@ export function ExplorerView() {
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [searchedId, setSearchedId] = useState<string | null>(null);
   const [inspectContract, setInspectContract] = useState<string | null>(null);
+  const [inspectPreset, setInspectPreset] = useState<
+    ReturnType<typeof parseContractInspectorDeepLink>["presetId"]
+  >(null);
+  const [inspectFields, setInspectFields] = useState<Record<string, string> | null>(null);
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
@@ -51,11 +56,12 @@ export function ExplorerView() {
     const search = new URLSearchParams(window.location.search);
     const blockParam = search.get("block");
     const txParam = search.get("tx");
-    const tabParam = search.get("tab");
-    const contractParam = search.get("contract");
+    const deepLink = parseContractInspectorDeepLink(window.location.search);
 
-    if (tabParam?.toLowerCase() === "contracts" || contractParam) {
-      if (contractParam) setInspectContract(contractParam);
+    if (deepLink.isContractsTab) {
+      if (deepLink.contractAddress) setInspectContract(deepLink.contractAddress);
+      if (deepLink.presetId) setInspectPreset(deepLink.presetId);
+      if (Object.keys(deepLink.fields).length > 0) setInspectFields(deepLink.fields);
       setTab("Contracts");
     } else if (blockParam) {
       setSearchedId(blockParam);
@@ -354,7 +360,12 @@ export function ExplorerView() {
           />
         ) : null}
         {tab === "Contracts" ? (
-          <ContractInspectorPanel source={source} initialContract={inspectContract} />
+          <ContractInspectorPanel
+            source={source}
+            initialContract={inspectContract}
+            initialPreset={inspectPreset}
+            initialFields={inspectFields}
+          />
         ) : null}
         {tab === "Mempool" ? <MempoolPanel node={n} /> : null}
         {tab === "Order" ? <OrderPanel node={n} /> : null}

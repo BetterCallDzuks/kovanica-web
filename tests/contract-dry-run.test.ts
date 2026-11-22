@@ -3,14 +3,19 @@ import assert from "node:assert/strict";
 import {
   CONTRACT_PRESETS,
   buildContractCallRequest,
+  buildContractCurlSnippet,
+  buildContractInspectorDeepLink,
+  buildContractSdkSnippet,
   decodeContractOutput,
   decodeNameEntry,
   encodeNameEntry,
   encodePresetArgs,
   getContractPreset,
+  isContractPresetId,
   normalizeHexData,
   parseAddressBytes32,
   parseContractError,
+  parseContractInspectorDeepLink,
   parseUintQuantity,
   type ContractCallResponse,
 } from "../src/lib/contracts/dry-run";
@@ -359,5 +364,100 @@ describe("POST /api/contract_call dispatchApi integration", () => {
     });
     const res = await dispatchApi(req);
     assert.equal(res.status, 403);
+  });
+});
+
+describe("Contract Inspector Shareable Deep-Links & Developer Snippets", () => {
+  it("serializes and parses deep-link URLs round-trip with JSON and query-param args", () => {
+    const url = buildContractInspectorDeepLink({
+      baseUrl: "https://testnet.kovanica.online",
+      contractAddress: SAMPLE_ADDR_A,
+      presetId: "name_resolve",
+      fields: { name: "alice", ignoredKey: "drop-me" },
+    });
+    assert.ok(url.startsWith("https://testnet.kovanica.online/explorer?"));
+    assert.ok(url.includes("tab=contracts"));
+    assert.ok(url.includes("preset=name_resolve"));
+
+    const parsed = parseContractInspectorDeepLink(new URL(url).search);
+    assert.equal(parsed.isContractsTab, true);
+    assert.equal(parsed.contractAddress, SAMPLE_ADDR_A);
+    assert.equal(parsed.presetId, "name_resolve");
+    assert.deepEqual(parsed.fields, { name: "alice" });
+
+    // Also supports URLSearchParams-formatted args (`args=name=bob`)
+    const fromSubQuery = parseContractInspectorDeepLink(
+      `?tab=contracts&contract=${SAMPLE_HEX_B}&preset=name_resolve&args=name%3Dbob`,
+    );
+    assert.equal(fromSubQuery.isContractsTab, true);
+    assert.equal(fromSubQuery.contractAddress, SAMPLE_HEX_B);
+    assert.equal(fromSubQuery.presetId, "name_resolve");
+    assert.deepEqual(fromSubQuery.fields, { name: "bob" });
+  });
+
+  it("gracefully ignores invalid presets, bad addresses, unknown fields, and oversized query params", () => {
+    assert.equal(isContractPresetId("name_resolve"), true);
+    assert.equal(isContractPresetId("unknown_preset"), false);
+
+    const invalid = parseContractInspectorDeepLink(
+      "?tab=contracts&contract=not-an-address&preset=not_a_preset&args=%7Bbroken-json",
+    );
+    assert.equal(invalid.isContractsTab, true);
+    assert.equal(invalid.contractAddress, null);
+    assert.equal(invalid.presetId, null);
+    assert.deepEqual(invalid.fields, {});
+
+    // Oversized query string (> 2048 chars) is rejected cleanly
+    const hugeQuery = `?tab=contracts&preset=name_resolve&args=${"a".repeat(3000)}`;
+    const oversized = parseContractInspectorDeepLink(hugeQuery);
+    assert.equal(oversized.isContractsTab, false);
+    assert.equal(oversized.contractAddress, null);
+    assert.equal(oversized.presetId, null);
+    assert.deepEqual(oversized.fields, {});
+
+    // Oversized field value (> 512 chars) is ignored
+    const hugeFieldJson = encodeURIComponent(JSON.stringify({ name: "x".repeat(600) }));
+    const oversizedField = parseContractInspectorDeepLink(
+      `?tab=contracts&preset=name_resolve&args=${hugeFieldJson}`,
+    );
+    assert.equal(oversizedField.isContractsTab, true);
+    assert.deepEqual(oversizedField.fields, {});
+  });
+
+  it("generates ready-to-run JSON-RPC cURL commands with encoded Bincode payload", () => {
+    const curl = buildContractCurlSnippet({
+      rpcUrl: "https://testnet.kovanica.online/rpc",
+      contractAddress: SAMPLE_HEX_A,
+      presetId: "name_resolve",
+      fields: { name: "alice" },
+      from: SAMPLE_HEX_B,
+      value: "1000",
+      gas: "50000",
+    });
+
+    assert.match(curl, /^curl -X POST 'https:\/\/testnet\.kovanica\.online\/rpc'/);
+    assert.ok(curl.includes(`"method":"kovanica_call"`));
+    assert.ok(curl.includes(`"entry":"name_resolve"`));
+    assert.ok(curl.includes(`"to":"${SAMPLE_ADDR_A}"`));
+    assert.ok(curl.includes(`"from":"${SAMPLE_ADDR_B}"`));
+    assert.ok(curl.includes(`"data":"0x0500000000000000616c696365"`));
+    assert.ok(curl.includes(`"value":"0x3e8"`));
+    assert.ok(curl.includes(`"gas":"0xc350"`));
+  });
+
+  it("generates ready-to-run TypeScript kovanica-sdk snippets using KovanicaClient and estimateAndBuildCall", () => {
+    const sdk = buildContractSdkSnippet({
+      rpcUrl: "https://testnet.kovanica.online/rpc",
+      contractAddress: SAMPLE_HEX_A,
+      presetId: "token_transfer",
+      fields: { to: SAMPLE_ADDR_B, amount: "2500000000" },
+    });
+
+    assert.ok(sdk.includes(`import { KovanicaClient, estimateAndBuildCall } from "kovanica-sdk";`));
+    assert.ok(sdk.includes(`new KovanicaClient({ rpcUrl: "https://testnet.kovanica.online/rpc" })`));
+    assert.ok(sdk.includes(`to: "${SAMPLE_ADDR_A}"`));
+    assert.ok(sdk.includes(`entry: "token_transfer"`));
+    assert.ok(sdk.includes(`await client.call(callRequest)`));
+    assert.ok(sdk.includes(`await estimateAndBuildCall(client, callRequest)`));
   });
 });
