@@ -28,7 +28,9 @@ This document outlines the architecture, milestone status, and deployment progre
 | `web-faucet` | Testnet Faucet | **Shipped** | Automated testnet faucet dispensing 10 KVNC with rate limiting and canonical PRO-21 address verification. |
 | `global-search` | Universal Explorer Global Search (PR #24) | **Shipped** | Deep-linking resolver supporting canonical PRO-21 addresses (`kvnc...dag`), Ed25519 public keys, block/tx digests, token symbols, NFT IDs, and RWA certificates. |
 | `apps-ecosystem` | Desktop & Mobile Applications (`kovanica-apps`) | **Shipped** | Native cross-platform shell suite: Android node & wallet with Rust FFI, Desktop node controller (`node-desktop`, `console-desktop`), and unified smart contract call dispatcher. |
-| `cli-tooling` | Node CLI & Tooling (`kovanica-cli`) | **Shipped** | Full command-line toolkit for node administration, key generation, RPC inspection, and genesis orchestration. |
+| `cli-tooling` | Node CLI & Tooling (`kovanica-cli`) | **Shipped** | Full command-line toolkit for node administration, key generation, RPC inspection, and genesis orchestration, including `node doctor`, `rpc probe`, `snapshot verify`, `address inspect`, `tx decode`, and `tx envelope`. |
+| `explorer-inspector-telemetry` | Explorer Inspector, Miner Builder & Live Telemetry | **Shipped** | Inline TxCard Bincode decoder & inspector deep-links, offline universal Transfer+Call raw wire tx decoder, PRO-21 Address Checksum & Raw Payload inspector, Contract Event Log Timeline, Diagnostics RPC Latency Sparkline & Sync-Lag badge, LiveDagDrawer Fee Pressure pill, and collapsible KovanicaHash Miner & Stratum TLS Command Builder. |
+| `ecosystem-surfaces-sync` | Ecosystem Pre-Flight Guards & Canonical Identity Surfaces | **Shipped** | `/faucet` PRO-21 pre-flight guard (`2-24cdb5fadd98b207`), `/network` canonical identities & readiness strip (`1-f35df34c92001436` / `2-24cdb5fadd98b207`), `/pool` Stratum TLS & frozen emission spec strip, and `/api-reference` identity headers (`X-Kovanica-Chain-Id`, `X-Kovanica-Network-Tag`, `X-Kovanica-Rpc-Version`) & `kovanica_mempoolStats`. |
 
 ### SDK & Developer Tooling
 | ID | Milestone | Status | Description |
@@ -36,6 +38,7 @@ This document outlines the architecture, milestone status, and deployment progre
 | `rust-crates` | Rust Workspace Crates | **Shipped** | 27 modular crates: `kovanica-types`, `kovanica-crypto`, `kovanica-dag`, `kovanica-consensus`, `kovanica-mempool`, `kovanica-network`, `kovanica-runtime`, `kovanica-node`, `kovanica-rpc`. |
 | `ts-packages` | TypeScript SDK Packages | **Shipped** | Modular client libraries: `@kovanica/api-client`, `@kovanica/signer`, `@kovanica/console`, and `@kovanica/web`. |
 | `sdk-v030` | TypeScript SDK v0.3.0 Release | **Shipped** | End-to-end typed smart contract encoders and decoders for Name Registry, NFT, and Escrow, BIP-39 HD wallet derivation, and strict 0x prefix enforcement. |
+| `sdk-v050` | SDK v0.5.0 Release | **Shipped** | Updated SDK tooling aligned with canonical network identity headers, `kovanica_mempoolStats`, and L1 CLI transaction/address diagnostics. |
 | `playground-v030` | Interactive Contract Playground (`kovanica-playground`) | **Shipped** | Browser-based contract testing environment pinned to SDK v0.3.0 with live Wasmi execution and hybrid PoW consensus visualization. |
 | `sdk-wasm` | WASM In-Browser Engine | **Shipped** | Wasm-bindgen client engine for in-browser transaction preparation, BLAKE3 sighash derivation, and zero-knowledge seed protection. |
 | `json-rpc` | JSON-RPC 2.0 Interface | **Shipped** | Node-parity RPC endpoints for syncStatus, getLeaderHeader, getBalance, getNonce, sendRawTransaction, and DAG inspection. |
