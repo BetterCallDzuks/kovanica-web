@@ -17,6 +17,27 @@ const DOCS = "https://docs.kovanica.online";
 
 export const WHATS_NEW: readonly WhatsNewItem[] = [
   {
+    date: "2026-11",
+    title: "Explorer Inspector, Miner Builder & Live Telemetry",
+    body: "Shipped inline TxCard Bincode decoding with inspector deep-links, offline universal Transfer+Call raw wire tx decoding, PRO-21 address checksum & raw payload inspection, Contract Event Log Timeline, LiveDagDrawer Fee Pressure pill, Diagnostics RPC Latency Sparkline & Sync-Lag badge, and a collapsible KovanicaHash Miner & Stratum TLS Command Builder.",
+    tag: "Infra",
+    href: `${TESTNET}/explorer`,
+  },
+  {
+    date: "2026-11",
+    title: "Ecosystem Surfaces, Identity Headers & Pre-Flight Guards",
+    body: "Updated /faucet with a PRO-21 pre-flight guard (2-24cdb5fadd98b207), /network with canonical identities & readiness strip (1-f35df34c92001436 / 2-24cdb5fadd98b207), /pool with Stratum TLS & frozen emission specs, and /api-reference with X-Kovanica-Chain-Id, X-Kovanica-Network-Tag, X-Kovanica-Rpc-Version headers and kovanica_mempoolStats.",
+    tag: "Docs",
+    href: `${TESTNET}/network`,
+  },
+  {
+    date: "2026-11",
+    title: "SDK v0.5.0 & L1 CLI Operational Tooling",
+    body: "Released kovanica-sdk v0.5.0 alongside expanded L1 CLI operator and diagnostics commands: node doctor, rpc probe, snapshot verify, address inspect, tx decode, and tx envelope.",
+    tag: "Protocol",
+    href: DOCS,
+  },
+  {
     date: "2026-10",
     title: "kovanica-testnet (chain ID 2) live",
     body: "Hybrid PoW + GHOSTDAG consensus (target block 4 s, GHOSTDAG k=5, KovanicaHash PoW). There is no stake in consensus. Live node tag v0.3.0-node (e3fce499). The testnet faucet is open at /faucet. Deterministic Wasmi runtime and native KVNC. Mainnet launch 1.1.2027.",
