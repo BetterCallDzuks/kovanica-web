@@ -29,6 +29,7 @@ import { shortId } from "@/lib/ledger/hash";
 import type { Block } from "@/lib/ledger/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { MinerCommandBuilder } from "@/components/explorer/miner-command-builder";
 
 export type MiningDagPanelProps = {
   state: ApiState | null;
@@ -491,6 +492,8 @@ export function MiningDagPanel({
           </p>
         </article>
       </div>
+
+      <MinerCommandBuilder />
     </section>
   );
 }

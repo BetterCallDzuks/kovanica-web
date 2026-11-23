@@ -1,9 +1,21 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useMemo, useState } from "react";
-import { ChevronDown, Copy, Check, ExternalLink, ShieldCheck, FileCode } from "lucide-react";
+import {
+  ArrowUpRight,
+  ChevronDown,
+  Copy,
+  Check,
+  ExternalLink,
+  ScrollText,
+  ShieldCheck,
+  FileCode,
+} from "lucide-react";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 import type { ApiTx } from "@/lib/networkConstants";
 import type { Tx } from "@/lib/ledger/types";
+import { normalizeReceiptTxHash } from "@/lib/contracts/dry-run";
+import { toCanonicalAddress } from "@/lib/wallet/address";
 import {
   decodeContractCall,
   formatTimestampDisplay,
@@ -16,6 +28,67 @@ import {
 export type TxCardProps = {
   tx: ApiTx | Tx;
 };
+
+/**
+ * Build a canonical Explorer Receipt & Log Inspector deep-link URL:
+ * `/explorer?tab=contracts&tx=<normalizedHash>`
+ *
+ * Returns `null` if `txHash` is not a valid 32-byte hex transaction hash.
+ */
+export function buildTxReceiptInspectorUrl(
+  txHash: string | null | undefined,
+): string | null {
+  if (typeof txHash !== "string") return null;
+  const normalized = normalizeReceiptTxHash(txHash);
+  if (!normalized.ok) return null;
+
+  const params = new URLSearchParams();
+  params.set("tab", "contracts");
+  params.set("tx", normalized.txHash);
+  return `/explorer?${params.toString()}`;
+}
+
+/**
+ * Build a canonical Explorer Contract Inspector deep-link URL:
+ * `/explorer?tab=contracts&contract=<canonical>`
+ *
+ * Returns `null` if `contractAddr` is not a valid canonical `kvnc…dag` or 32-byte hex address.
+ */
+export function buildTxContractInspectorUrl(
+  contractAddr: string | null | undefined,
+): string | null {
+  if (typeof contractAddr !== "string") return null;
+  const trimmed = contractAddr.trim();
+  if (!trimmed) return null;
+  const canonical = toCanonicalAddress(trimmed);
+  if (!canonical) return null;
+
+  const params = new URLSearchParams();
+  params.set("tab", "contracts");
+  params.set("contract", canonical);
+  return `/explorer?${params.toString()}`;
+}
+
+function formatDecodedInlineSummary(decoded: DecodedContractCall | null): string | null {
+  if (!decoded || !decoded.recognized) return null;
+
+  switch (decoded.method) {
+    case "name_register":
+      return `name="${decoded.params.name}" · owner=${shortId(decoded.params.pubkeyAddress ?? decoded.params.pubkey, 8)}`;
+    case "htlc_create":
+      return `recipient=${shortId(decoded.params.recipientAddress ?? decoded.params.recipient, 8)} · expiry=${formatTimestampDisplay(decoded.params.timelock)}`;
+    case "nft_mint":
+      return `token #${decoded.params.tokenId.toString()} → ${shortId(decoded.params.toAddress ?? decoded.params.to, 8)}`;
+    case "escrow_create":
+      return `${decoded.params.threshold}-of-${decoded.params.parties.length} · ${formatAtomsDisplay(decoded.params.amount)} KVNC`;
+    case "token_transfer":
+      return `${decoded.params.amount.toString()} tokens → ${shortId(decoded.params.toAddress ?? decoded.params.to, 8)}`;
+    case "vault_create":
+      return `owner=${shortId(decoded.params.ownerAddress ?? decoded.params.owner, 8)} · lock=${formatTimestampDisplay(decoded.params.lockUntil)}`;
+    case "multisig_create":
+      return `${decoded.params.threshold}-of-${decoded.params.owners.length} owners`;
+  }
+}
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -68,6 +141,14 @@ export function ExplorerTxCard({ tx }: TxCardProps) {
     if (kind !== "Call" || (!rawArgs && !method)) return null;
     return decodeContractCall(method, rawArgs);
   }, [kind, method, rawArgs]);
+
+  const inlineSummary = useMemo(() => formatDecodedInlineSummary(decoded), [decoded]);
+
+  const receiptInspectorHref = useMemo(() => buildTxReceiptInspectorUrl(tx.id), [tx.id]);
+  const contractInspectorHref = useMemo(
+    () => buildTxContractInspectorUrl(contract),
+    [contract],
+  );
 
   // Formatted raw payload string
   const rawHexStr = useMemo(() => {
@@ -169,6 +250,50 @@ export function ExplorerTxCard({ tx }: TxCardProps) {
         <div className="border-t border-border/40 bg-surface/20 px-3 py-1.5 text-[11px] font-mono text-muted flex items-center gap-1.5">
           <FileCode className="size-3 text-purple-400" />
           <span>Contract Bytecode Deployment</span>
+        </div>
+      )}
+
+      {/* Summary & 1-click inspector bar for Contract Calls */}
+      {kind === "Call" && (inlineSummary || receiptInspectorHref || contractInspectorHref) && (
+        <div className="border-t border-border/40 bg-surface/25 px-3 py-2 text-[11px] font-mono flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 flex items-center gap-1.5 text-muted">
+            {inlineSummary ? (
+              <>
+                <ShieldCheck className="size-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                <span className="truncate text-fg/90">{inlineSummary}</span>
+              </>
+            ) : (
+              <span className="text-subtle">
+                {expanded ? "Bincode call arguments" : "Click header to inspect call arguments"}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {receiptInspectorHref && (
+              <a
+                href={receiptInspectorHref}
+                data-testid="tx-decode-receipt-link"
+                className="inline-flex items-center gap-1 rounded border border-gold/40 bg-gold/15 px-2 py-0.5 text-[10px] font-medium text-fg transition-colors hover:bg-gold/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              >
+                <ScrollText className="size-3 text-gold" aria-hidden="true" />
+                <span>Decode Receipt Logs</span>
+                <ArrowUpRight className="size-2.5 text-gold" aria-hidden="true" />
+              </a>
+            )}
+
+            {contractInspectorHref && (
+              <a
+                href={contractInspectorHref}
+                data-testid="tx-inspect-contract-link"
+                className="inline-flex items-center gap-1 rounded border border-border bg-bg/70 px-2 py-0.5 text-[10px] font-medium text-fg transition-colors hover:border-gold/40 hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+              >
+                <FileCode className="size-3 text-gold" aria-hidden="true" />
+                <span>Inspect Contract</span>
+                <ArrowUpRight className="size-2.5 text-muted" aria-hidden="true" />
+              </a>
+            )}
+          </div>
         </div>
       )}
 
