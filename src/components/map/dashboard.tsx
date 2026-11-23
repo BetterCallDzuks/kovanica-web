@@ -31,7 +31,7 @@ export function OriginsDashboard() {
 
   const loadOrigins = useCallback(async () => {
     try {
-      const d = await api<ApiOrigins>("/api/origins");
+      const d = await api<ApiOrigins>(`/api/origins?source=${source}`);
       setRemote(toPulseRows(d.pulses));
     } catch {
       setRemote(null);

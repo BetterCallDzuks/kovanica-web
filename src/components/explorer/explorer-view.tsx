@@ -6,7 +6,7 @@ import { SURFACE } from "@/lib/surfaces";
 import { Compass, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
 import { DagCanvas, DagLegend } from "@/components/explorer/dag-canvas";
 import { createDagBlocksCache } from "@/lib/api/map-blocks";
-import { useNode } from "@/lib/api/use-node";
+import { useLiveStream } from "@/lib/api/use-live-stream";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 import { healthLabel } from "@/lib/api/health";
@@ -14,17 +14,35 @@ import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
+import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
+import { ContractInspectorPanel } from "@/components/explorer/contract-inspector-panel";
+import { parseContractInspectorDeepLink } from "@/lib/contracts/dry-run";
 import { GlobalSearch } from "@/components/search/global-search";
 
-const TABS = ["Graph", "Blocks", "Mempool", "Order", "Console", "Analytics", "Docs"] as const;
+const TABS = [
+  "Graph",
+  "Blocks",
+  "Contracts",
+  "Mempool",
+  "Order",
+  "Console",
+  "Analytics",
+  "Docs",
+] as const;
 type Tab = (typeof TABS)[number];
 
 /** Explorer BlockDAG surface. Truthful hybrid consensus metrics and DAG inspection. */
 export function ExplorerView() {
-  const { state, error, errorStatus, refresh, source } = useNode(2000);
+  const { state, error, errorStatus, refresh, source, transport, paused, togglePause } =
+    useLiveStream({ pollMs: 2000 });
   const [tab, setTab] = useState<Tab>("Graph");
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [searchedId, setSearchedId] = useState<string | null>(null);
+  const [inspectContract, setInspectContract] = useState<string | null>(null);
+  const [inspectPreset, setInspectPreset] = useState<
+    ReturnType<typeof parseContractInspectorDeepLink>["presetId"]
+  >(null);
+  const [inspectFields, setInspectFields] = useState<Record<string, string> | null>(null);
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
@@ -38,8 +56,14 @@ export function ExplorerView() {
     const search = new URLSearchParams(window.location.search);
     const blockParam = search.get("block");
     const txParam = search.get("tx");
+    const deepLink = parseContractInspectorDeepLink(window.location.search);
 
-    if (blockParam) {
+    if (deepLink.isContractsTab) {
+      if (deepLink.contractAddress) setInspectContract(deepLink.contractAddress);
+      if (deepLink.presetId) setInspectPreset(deepLink.presetId);
+      if (Object.keys(deepLink.fields).length > 0) setInspectFields(deepLink.fields);
+      setTab("Contracts");
+    } else if (blockParam) {
       setSearchedId(blockParam);
       setSelectedBlock(blockParam);
       setTab("Graph");
@@ -126,7 +150,7 @@ export function ExplorerView() {
 
       {/* Explorer Global Search Toolbar */}
       <div className="border-b border-border bg-surface-2/40 px-4 py-2.5 md:px-6">
-        <GlobalSearch variant="explorer" />
+        <GlobalSearch variant="explorer" externalState={state} />
       </div>
 
       {/* Liveness: a stalled chain is not a down endpoint */}
@@ -217,6 +241,24 @@ export function ExplorerView() {
           <span>Max Supply: <strong>90.2M KVNC</strong></span>
         </div>
       </div>
+
+      {/* Live Mining & DAG Telemetry Dashboard */}
+      <MiningDagPanel
+        state={state}
+        blocks={blocks}
+        error={error}
+        errorStatus={errorStatus}
+        selectedBlockId={selectedBlock}
+        transport={transport}
+        paused={paused}
+        onTogglePause={togglePause}
+        onSelectTip={(tipHash) => {
+          setSearchedId(tipHash);
+          setSelectedBlock(tipHash);
+          setTab("Graph");
+        }}
+        onRefresh={() => void refresh()}
+      />
 
       {/* Main DAG Graph canvas section with distinct state handling */}
       <section className="border-b border-border bg-surface px-4 py-4 md:px-6">
@@ -315,6 +357,14 @@ export function ExplorerView() {
               setSelectedBlock(id);
               setTab("Graph");
             }}
+          />
+        ) : null}
+        {tab === "Contracts" ? (
+          <ContractInspectorPanel
+            source={source}
+            initialContract={inspectContract}
+            initialPreset={inspectPreset}
+            initialFields={inspectFields}
           />
         ) : null}
         {tab === "Mempool" ? <MempoolPanel node={n} /> : null}

@@ -123,7 +123,7 @@ export class TrezorHardwareProvider extends AbstractHardwareProvider {
     return TrezorConnect;
   }
 
-  async connect(options?: HardwareConnectOptions): Promise<HardwareDeviceInfo> {
+  async connect(_options?: HardwareConnectOptions): Promise<HardwareDeviceInfo> {
     try {
       const TrezorConnect = await this.ensureTrezorInitialized();
 

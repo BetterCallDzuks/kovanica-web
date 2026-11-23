@@ -23,12 +23,15 @@ import {
   type ResolutionResult,
 } from "@/lib/search/resolver";
 import { useNode } from "@/lib/api/use-node";
+import type { ApiState } from "@/lib/api/contract";
 
 export interface GlobalSearchProps {
   variant?: "navbar" | "explorer";
   className?: string;
   placeholder?: string;
   onResolved?: (target: RouteTarget) => void;
+  /** Optional parent-managed node state to avoid duplicate `/api/state` polling. */
+  externalState?: ApiState | null;
 }
 
 export function GlobalSearch({
@@ -36,9 +39,14 @@ export function GlobalSearch({
   className,
   placeholder,
   onResolved,
+  externalState,
 }: GlobalSearchProps) {
   const router = useRouter();
-  const { state, source } = useNode(variant === "explorer" ? 2000 : undefined);
+  const hasExternalState = externalState !== undefined;
+  const { state: polledState, source } = useNode(variant === "explorer" ? 2000 : undefined, {
+    paused: hasExternalState,
+  });
+  const state = hasExternalState ? externalState : polledState;
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isProbing, setIsProbing] = useState(false);

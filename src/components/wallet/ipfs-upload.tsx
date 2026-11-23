@@ -3,7 +3,6 @@ import { Upload, Loader2, CheckCircle, AlertCircle, Link2, Copy } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { useLedger } from "@/lib/ledger/store";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { uploadMetadataToIpfs, validateRwaMetadata, RwaMetadata } from "@/lib/rwa/metadata";
 
 interface IpfsUploadProps {
@@ -17,7 +16,7 @@ interface IpfsUploadProps {
   gatewayUrl?: string;
 }
 
-export function IpfsMetadataUpload({ metadata, onSuccess, onError, gatewayUrl }: IpfsUploadProps) {
+export function IpfsMetadataUpload({ metadata, onSuccess, onError, gatewayUrl: _gatewayUrl }: IpfsUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [cid, setCid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,13 +52,6 @@ export function IpfsMetadataUpload({ metadata, onSuccess, onError, gatewayUrl }:
       onError?.(err instanceof Error ? err : new Error(errorMsg));
     } finally {
       setUploading(false);
-    }
-  };
-
-  const copyCid = () => {
-    if (cid) {
-      navigator.clipboard.writeText(cid);
-      toast.success("CID copied to clipboard");
     }
   };
 

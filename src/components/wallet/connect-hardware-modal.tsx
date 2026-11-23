@@ -1,6 +1,6 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Cpu, HardDrive, ShieldCheck, X, Loader2, AlertTriangle, CheckCircle2, Usb } from "lucide-react";
+import { Cpu, HardDrive, ShieldCheck, X, Loader2, AlertTriangle, Usb } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {

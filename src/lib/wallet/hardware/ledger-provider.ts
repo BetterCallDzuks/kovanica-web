@@ -155,7 +155,7 @@ export class LedgerHardwareProvider extends AbstractHardwareProvider {
 
   private transport: LedgerTransportLike | null = null;
 
-  async connect(options?: HardwareConnectOptions): Promise<HardwareDeviceInfo> {
+  async connect(_options?: HardwareConnectOptions): Promise<HardwareDeviceInfo> {
     if (!isWebUsbSupported()) {
       throw new HardwareWalletError(
         "WebUSB is not supported in this browser. Please use Google Chrome, Brave, or Microsoft Edge on HTTPS / localhost.",

@@ -1,26 +1,15 @@
 import { useEffect, useState } from "react";
-import { Copy, Eye, EyeOff, ShieldCheck, Lock, Unlock, Users, ArrowLeftRight, Loader2, QrCode, Scan, X } from "lucide-react";
+import { Copy, ShieldCheck, Lock, Unlock, Users, Scan } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AddressQr } from "@/components/wallet/address-qr";
-import { api, apiPostJson, useApiSource, isPublic } from "@/lib/api/client";
-import { MIN_FEE, TOKEN, isNativeAsset, assetLabel } from "@/lib/api/contract";
-import type { ApiHistory, ApiUtxos } from "@/lib/api/contract";
-import {
-  prepareUrl,
-  submitUrl,
-  assetOptionsFromUtxos,
-  balanceForAsset,
-} from "@/lib/api/assets";
+import { api, apiPostJson } from "@/lib/api/client";
+import { TOKEN } from "@/lib/api/contract";
 import { ATOM } from "@/lib/ledger/types";
 import { useLedger } from "@/lib/ledger/store";
-import { addressFromMnemonic, createMnemonic, importMnemonic, signSighash } from "@/lib/wallet/keys";
+import { signSighash } from "@/lib/wallet/keys";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
-import { hexToKvnc, parseAddr } from "@/lib/wallet/address";
-import { encryptMnemonic, decryptMnemonic } from "@/lib/wallet/vault";
 import { useHydrated } from "@/lib/use-hydrated";
-import { cn } from "@/lib/utils";
 import { ConnectHardwareModal } from "@/components/wallet/connect-hardware-modal";
 
 type AtomicSwapRole = "maker" | "taker";
@@ -68,27 +57,25 @@ type SwapStatus = {
 
 export function AtomicSwapView() {
   const hydrated = useHydrated();
-  const source = useApiSource();
-  const live = isPublic(source);
   const walletStore = useLedger((s) => s.wallet);
   const wallet = hydrated ? walletStore : null;
   const setWallet = useLedger((s) => s.setWallet);
 
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<AtomicSwapState>("idle");
-const [role, setRole] = useState<AtomicSwapRole>("maker");
-const [showConnectModal, setShowConnectModal] = useState(false);
+  const [role, setRole] = useState<AtomicSwapRole>("maker");
+  const [showConnectModal, setShowConnectModal] = useState(false);
 
-// Maker inputs
+  // Maker inputs
   const [p1Amount, setP1Amount] = useState("");
   const [p1Recipient, setP1Recipient] = useState("");
-  const [p1AssetId, setP1AssetId] = useState<string | null>(null);
+  const [p1AssetId] = useState<string | null>(null);
 
   // Taker inputs
   const [p2Address, setP2Address] = useState("");
   const [p2Amount, setP2Amount] = useState("");
   const [p2Recipient, setP2Recipient] = useState("");
-  const [p2AssetId, setP2AssetId] = useState<string | null>(null);
+  const [p2AssetId] = useState<string | null>(null);
 
   // Offer state
   const [offer, setOffer] = useState<AtomicSwapOffer | null>(null);
@@ -97,11 +84,7 @@ const [showConnectModal, setShowConnectModal] = useState(false);
   // HTLC states
   const [htlcA, setHtlcA] = useState<HtlcInfo | null>(null);
   const [htlcB, setHtlcB] = useState<HtlcInfo | null>(null);
-  const [preimage, setPreimage] = useState<string>("");
   const [preimageHex, setPreimageHex] = useState<string>("");
-
-  // Signatures
-  const [signatures, setSignatures] = useState<string[]>([]);
 
   // HTLC on-chain status (M1.5)
   const [htlcStatus, setHtlcStatus] = useState<SwapStatus | null>(null);
@@ -122,13 +105,10 @@ const [showConnectModal, setShowConnectModal] = useState(false);
     void refreshTip();
   }, []);
 
-  const balance = 0;
-
   async function generatePreimage() {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
     const hex = bytesToHex(bytes);
-    setPreimage(hex);
     setPreimageHex(hex);
     return bytesToHex(blake3(bytes));
   }
@@ -282,7 +262,6 @@ async function fundHtlcA() {
         toast.error("Scraped preimage does not commit to the offer's payment hash");
         return;
       }
-      setPreimage(res.preimage);
       setPreimageHex(res.preimage);
       toast.success("Preimage scraped from chain — claims unlocked");
     } catch (err) {

@@ -15,23 +15,6 @@ import { HomeTestnet } from "./testnet-home";
 import { HomeMainnet } from "./mainnet-home";
 import { type HostRole } from "@/lib/host";
 
-/**
- * Minimal client-side role detection when SSR host helpers are not in scope.
- * Prefer the project’s `hostRoleFromHost(getRequestHost())` on the server.
- */
-export function hostRoleFromHostname(hostname: string): HostRole {
-  const h = hostname.toLowerCase().replace(/^www\./, "");
-  if (h === "kovanica.online" || h === "localhost" || h === "127.0.0.1") {
-    return "landing";
-  }
-  if (h.startsWith("testnet.")) return "testnet";
-  if (h.startsWith("mainnet.")) return "mainnet";
-  if (h.startsWith("docs.")) return "docs";
-  if (h.startsWith("api.")) return "api";
-  if (h.startsWith("dash.")) return "dash";
-  return "shared";
-}
-
 export function HomeByRole({ role }: { role: HostRole }) {
   switch (role) {
     case "landing":

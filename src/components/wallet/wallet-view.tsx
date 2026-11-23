@@ -9,7 +9,6 @@ import { ConnectHardwareModal } from "@/components/wallet/connect-hardware-modal
 import { HardwareSignModal } from "@/components/wallet/hardware-sign-modal";
 import { api, useApiSource, isPublic } from "@/lib/api/client";
 import { MIN_FEE, TOKEN, isNativeAsset, assetLabel } from "@/lib/api/contract";
-import type { ApiHistory, ApiUtxos } from "@/lib/api/contract";
 import type { ApiToken } from "@/lib/tokens/codec";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
 import { prepareUrl, submitUrl, assetOptionsFromUtxos, balanceForAsset } from "@/lib/api/assets";
@@ -19,7 +18,7 @@ import {
   tokenSubmitUrl,
 } from "@/lib/api/token-send";
 import { ATOM } from "@/lib/ledger/types";
-import type { HardwareWalletRec, SoftwareWalletRec, WalletRec } from "@/lib/ledger/types";
+import type { SoftwareWalletRec, WalletRec } from "@/lib/ledger/types";
 import { fmtKvnc, parseKvnc } from "@/lib/ledger/format";
 import { shortId } from "@/lib/ledger/hash";
 import { useLedger } from "@/lib/ledger/store";
@@ -31,7 +30,6 @@ import {
 } from "@/lib/wallet/keys";
 import { hexToKvnc, parseAddr, isAddr } from "@/lib/wallet/address";
 import { encryptMnemonic, decryptMnemonic } from "@/lib/wallet/vault";
-import { disconnectActiveHardwareProvider } from "@/lib/wallet/hardware";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useWalletSync } from "@/lib/wallet/use-wallet-sync";
 import { validatePoolHandoff } from "@/lib/wallet/handoff";
@@ -71,7 +69,6 @@ export function WalletView() {
     tokens,
     feeRates,
     isStale,
-    refresh: refreshChain,
     notifyConfirmedTransaction,
   } = useWalletSync(wallet?.address, source);
   const [feeTier, setFeeTier] = useState<"slow" | "normal" | "fast">("normal");
@@ -103,7 +100,7 @@ export function WalletView() {
         );
       }
     }
-  }, [source, locationSearch]);
+  }, [source, locationSearch, setWallet]);
 
   // M-05: recovery phrase generation is two-phase — show the words, then
   // require an explicit "I wrote it down" confirmation before wallet creation.
@@ -313,16 +310,6 @@ export function WalletView() {
     if (!wallet) return;
     await navigator.clipboard.writeText(hexToKvnc(wallet.address));
     toast.success("Address copied");
-  }
-
-  function onDownload() {
-    if (!wallet || wallet.type === "hardware") return;
-    const blob = new Blob([`${wallet.mnemonic}\n`], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "kovanica-seed.txt";
-    a.click();
-    toast.message("Seed file downloaded — keep it offline");
   }
 
   async function onFaucet() {

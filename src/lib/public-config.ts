@@ -40,6 +40,19 @@ export function parsePort(value: string | undefined, fallback: number): number {
   return port >= 1 && port <= 65535 ? port : fallback;
 }
 
+/** Validate a WebSocket endpoint URL (`ws://` or `wss://`); invalid or blank returns `null`. */
+export function parseWsUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 /** Bootstrap seeds clones should dial (`host:port`, DNS names only). */
 export const SEED_PEERS: string[] = parsePeerList(
   readEnv("KOVANICA_PUBLIC_SEED_PEERS"),
@@ -54,6 +67,9 @@ export const PRIMARY_SEED: string = SEED_PEERS[0] ?? "";
 
 /** TCP port of the P2P protocol. */
 export const P2P_PORT: number = parsePort(readEnv("KOVANICA_PUBLIC_P2P_PORT"), DEFAULT_P2P_PORT);
+
+/** Optional public WebSocket JSON-RPC URL (`ws://` or `wss://`) for Explorer live streaming. */
+export const PUBLIC_WS_URL: string | null = parseWsUrl(readEnv("KOVANICA_PUBLIC_WS_URL"));
 
 
 

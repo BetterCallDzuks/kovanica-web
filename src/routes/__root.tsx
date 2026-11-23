@@ -3,7 +3,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { getHost, hostRoleFromHost, networkFromHost } from "@/lib/host";
-import { dagFaviconHref } from "@/components/brand/dag-mark";
+import { dagFaviconHref } from "@/components/brand/dag-favicon";
 import { MainnetLaunching } from "@/components/landing/mainnet-launching";
 import "../styles.css";
 

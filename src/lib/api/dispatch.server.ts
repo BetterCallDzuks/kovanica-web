@@ -13,6 +13,7 @@ import {
 import {
   localBlocksDump,
   localBootstrap,
+  localContractCall,
   localFaucet,
   localHead,
   localHistory,
@@ -36,9 +37,15 @@ import { listPools, listTokens, getTokenState } from "./tokens.server";
 import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
+import { parseTargetBits } from "@/lib/explorer/mining-metrics";
 import { faucetEndpoint, probeHealth, rpcCall, RpcError, type HealthProbeResult } from "./rpc-url.server";
 import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.server";
 import { isAssetId } from "../asset-id";
+import {
+  buildContractCallRequest,
+  type ContractCallRequest,
+  type ContractCallResponse,
+} from "../contracts/dry-run";
 
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -291,6 +298,33 @@ async function fetchLiveState(): Promise<ApiState> {
   const dag: ApiState["node"]["dag"] = [];
   const health = summarise(probe);
 
+  const rawDifficulty =
+    typeof mining?.difficulty === "number"
+      ? mining.difficulty
+      : typeof mining?.difficulty === "string"
+        ? Number(mining.difficulty)
+        : null;
+  const difficulty =
+    typeof rawDifficulty === "number" && Number.isFinite(rawDifficulty) && rawDifficulty > 0
+      ? rawDifficulty
+      : null;
+  const miningInfo = mining
+    ? {
+        target_bits: parseTargetBits(mining.target_bits ?? mining.targetBits),
+        difficulty,
+        target_block_time_ms:
+          numberOrNull(mining.target_block_time_ms) ??
+          numberOrNull(mining.target_interval_ms) ??
+          numberOrNull(mining.targetBlockTimeMs),
+        ghostdag_k:
+          numberOrNull(mining.ghostdag_k) ?? numberOrNull(tips?.ghostdag_k),
+        mining_enabled:
+          typeof mining.mining_enabled === "boolean" ? mining.mining_enabled : null,
+        pow_algorithm:
+          typeof mining.pow_algorithm === "string" ? mining.pow_algorithm : null,
+      }
+    : null;
+
   return {
     selected: tipList[0] ?? null,
     mining: typeof mining?.mining_enabled === "boolean" ? mining.mining_enabled : null,
@@ -338,6 +372,7 @@ async function fetchLiveState(): Promise<ApiState> {
       chain_len: numberOrNull(sync?.localTipRound),
       mempool,
       tx_count: null,
+      mining_info: miningInfo,
       dag,
       order: dag.map((d) => d.id),
       pending: pendingIds,
@@ -474,6 +509,104 @@ async function handleLiveFaucet(to: string, reqHeaders: Headers): Promise<any> {
   return dispenseFromFaucet(canonical, reqHeaders);
 }
 
+function parseHexQuantity(val: unknown): number | null {
+  if (typeof val === "number" && Number.isFinite(val)) return val;
+  if (typeof val !== "string") return null;
+  const trimmed = val.trim();
+  if (!trimmed) return null;
+  const parsed = trimmed.startsWith("0x") || trimmed.startsWith("0X")
+    ? Number.parseInt(trimmed.slice(2), 16)
+    : Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function hexByteLength(hex: unknown): number | null {
+  if (typeof hex !== "string") return null;
+  const clean = hex.trim().replace(/^0x/i, "");
+  if (clean.length === 0) return 0;
+  if (clean.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(clean)) return null;
+  return clean.length / 2;
+}
+
+/**
+ * Execute a read-only contract dry-run against the live testnet node via
+ * `kovanica_call`, `kovanica_estimateGas`, and `kovanica_getCode`.
+ */
+async function executeLiveContractCall(req: Request): Promise<Response> {
+  let body: Partial<Record<keyof ContractCallRequest, unknown>>;
+  try {
+    body = (await req.json()) as Partial<Record<keyof ContractCallRequest, unknown>>;
+  } catch {
+    return text("invalid JSON body", 400);
+  }
+
+  const built = buildContractCallRequest(body);
+  if (!built.ok) {
+    return text(built.error, 400);
+  }
+
+  const { call } = built;
+  const rpcObj: Record<string, unknown> = {
+    to: call.to,
+    data: call.data,
+  };
+  if (call.from) rpcObj.from = call.from;
+  if (call.entry) rpcObj.entry = call.entry;
+  if (call.value) rpcObj.value = call.value;
+  if (call.gas) rpcObj.gas = call.gas;
+
+  const started = Date.now();
+  const codePromise = callRpc<string>("kovanica_getCode", [call.to]).catch(() => null);
+
+  try {
+    const [outputHex, gasHex, codeHex] = await Promise.all([
+      callRpc<string>("kovanica_call", [rpcObj]),
+      callRpc<string>("kovanica_estimateGas", [rpcObj]).catch(() => null),
+      codePromise,
+    ]);
+    const normalizedOut =
+      typeof outputHex === "string"
+        ? outputHex.startsWith("0x") || outputHex.startsWith("0X")
+          ? outputHex.toLowerCase()
+          : `0x${outputHex.toLowerCase()}`
+        : "0x";
+    const resp: ContractCallResponse = {
+      ok: true,
+      reverted: false,
+      outputHex: normalizedOut,
+      gasUsed: parseHexQuantity(gasHex),
+      codeBytes: hexByteLength(codeHex),
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "testnet",
+      rpcMethod: "kovanica_call",
+      call,
+    };
+    return json(resp);
+  } catch (e) {
+    const codeHex = await codePromise;
+    const codeBytes = hexByteLength(codeHex);
+    const latencyMs = Math.max(1, Date.now() - started);
+
+    // HTTP 200 from JSON-RPC means the node answered with a JSON-RPC error (e.g. execution revert)
+    if (e instanceof RpcError && e.status === 200) {
+      const resp: ContractCallResponse = {
+        ok: false,
+        reverted: true,
+        error: e.message,
+        codeBytes,
+        latencyMs,
+        source: "testnet",
+        rpcMethod: "kovanica_call",
+        call,
+      };
+      return json(resp);
+    }
+
+    const msg = e instanceof Error ? e.message : "contract dry-run failed";
+    return text(`testnet node error: ${msg}`, rpcFailureStatus(e));
+  }
+}
+
 export async function dispatchApi(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
@@ -549,6 +682,10 @@ export async function dispatchApi(req: Request): Promise<Response> {
     }
     if (name === "fee_estimate") {
       return json(await fetchLiveFeeEstimate());
+    }
+    if (name === "contract_call") {
+      if (method !== "POST") return text("method not allowed", 405);
+      return executeLiveContractCall(req);
     }
     if (name === "rwa") {
       return detailLookup("kovanica_getRwaAsset", url.pathname.replace(/^\/api\/rwa\/?/, ""));
@@ -836,6 +973,17 @@ export async function dispatchApi(req: Request): Promise<Response> {
         return json(localReset());
       case "origin":
         return json(localOrigin(q.get("iso3")));
+      case "contract_call": {
+        let body: Partial<Record<keyof ContractCallRequest, unknown>>;
+        try {
+          body = (await req.json()) as Partial<Record<keyof ContractCallRequest, unknown>>;
+        } catch {
+          return text("invalid JSON body", 400);
+        }
+        const res = localContractCall(body);
+        if (typeof res === "string") return text(res, 400);
+        return json(res);
+      }
       default:
         return text("unknown action " + name, 400);
     }

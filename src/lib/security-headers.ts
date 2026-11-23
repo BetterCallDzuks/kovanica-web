@@ -85,7 +85,14 @@ export function buildCsp(opts: { nonce: string; embeddable: boolean }): string {
     ["img-src", ["'self'", "data:", "blob:", "https:"]],
     [
       "connect-src",
-      ["'self'", "https://*.kovanica.online", ...IPFS_CONNECT, CF_INSIGHTS_REPORT, TREZOR_CONNECT],
+      [
+        "'self'",
+        "https://*.kovanica.online",
+        "wss://*.kovanica.online",
+        ...IPFS_CONNECT,
+        CF_INSIGHTS_REPORT,
+        TREZOR_CONNECT,
+      ],
     ],
     ["worker-src", ["'self'", "blob:"]],
     ["frame-src", [TREZOR_CONNECT]],

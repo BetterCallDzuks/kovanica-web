@@ -119,7 +119,7 @@ export class MockHardwareProvider extends AbstractHardwareProvider {
     }
   }
 
-  async connect(options?: HardwareConnectOptions): Promise<HardwareDeviceInfo> {
+  async connect(_options?: HardwareConnectOptions): Promise<HardwareDeviceInfo> {
     if (this.simulatedDelayMs > 0) {
       await this.sleep(this.simulatedDelayMs);
     }

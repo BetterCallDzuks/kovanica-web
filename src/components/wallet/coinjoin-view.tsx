@@ -1,35 +1,17 @@
-import { useEffect, useState } from "react";
-import { Copy, Download, Eye, EyeOff, ShieldCheck, Lock, Unlock, Users, ArrowLeftRight, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { AddressQr } from "@/components/wallet/address-qr";
-import { api, apiPostJson, useApiSource, isPublic } from "@/lib/api/client";
-import { MIN_FEE, TOKEN, isNativeAsset, assetLabel } from "@/lib/api/contract";
-import type { ApiHistory, ApiUtxos } from "@/lib/api/contract";
-import {
-  prepareUrl,
-  submitUrl,
-  assetOptionsFromUtxos,
-  balanceForAsset,
-} from "@/lib/api/assets";
+import { apiPostJson } from "@/lib/api/client";
+import { TOKEN } from "@/lib/api/contract";
 import { ATOM } from "@/lib/ledger/types";
 import { useLedger } from "@/lib/ledger/store";
-import { addressFromMnemonic, createMnemonic, importMnemonic, signSighash } from "@/lib/wallet/keys";
-import { hexToKvnc, parseAddr } from "@/lib/wallet/address";
-import { encryptMnemonic, decryptMnemonic } from "@/lib/wallet/vault";
 import { useHydrated } from "@/lib/use-hydrated";
-import { cn } from "@/lib/utils";
 
 type CoinJoinParticipant = {
   address: string;
   amount: string;
   recipient: string;
-  assetId: string | null;
-};
-
-type CoinJoinOutput = {
-  amount: string;
-  to: string;
   assetId: string | null;
 };
 
@@ -45,11 +27,8 @@ type CoinJoinState = "idle" | "preparing" | "prepared" | "submitting" | "submitt
 
 export function CoinJoinView() {
   const hydrated = useHydrated();
-  const source = useApiSource();
-  const live = isPublic(source);
   const walletStore = useLedger((s) => s.wallet);
   const wallet = hydrated ? walletStore : null;
-  const setWallet = useLedger((s) => s.setWallet);
 
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<CoinJoinState>("idle");
@@ -57,23 +36,19 @@ export function CoinJoinView() {
   // Participant 1 (You)
   const [p1Amount, setP1Amount] = useState("");
   const [p1Recipient, setP1Recipient] = useState("");
-  const [p1AssetId, setP1AssetId] = useState<string | null>(null);
+  const [p1AssetId] = useState<string | null>(null);
 
   // Participant 2
   const [p2Address, setP2Address] = useState("");
   const [p2Amount, setP2Amount] = useState("");
   const [p2Recipient, setP2Recipient] = useState("");
-  const [p2AssetId, setP2AssetId] = useState<string | null>(null);
+  const [p2AssetId] = useState<string | null>(null);
 
   // Prepared state
   const [prepared, setPrepared] = useState<CoinJoinPrepared | null>(null);
 
   // Signatures collection
   const [signatures, setSignatures] = useState<string[]>([]);
-  const [newSig, setNewSig] = useState("");
-
-  const balance = 0; // Would fetch from wallet
-  const spendable = balance;
 
   async function prepareCoinJoin() {
     if (!wallet) { toast.error("No wallet connected"); return; }
@@ -151,19 +126,6 @@ export function CoinJoinView() {
     } finally {
       setBusy(false);
     }
-  }
-
-  function addSignature() {
-    if (newSig.length !== 128) { // 64 bytes = 128 hex chars
-      toast.error("Signature must be 64 bytes (128 hex chars)");
-      return;
-    }
-    if (signatures.length >= (prepared?.outpointsHex.length ?? 0)) {
-      toast.error("Already have enough signatures");
-      return;
-    }
-    setSignatures([...signatures, newSig]);
-    setNewSig("");
   }
 
   if (!hydrated) return <div>Loading…</div>;
