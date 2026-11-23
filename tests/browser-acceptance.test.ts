@@ -398,9 +398,11 @@ async function setupIsolatedPage(
 
     // 2. Intercept potential mutation requests locally (never hit real backends or cause unintended writes)
     if (req.method() === "POST") {
-      // Read-only Wasmi dry-runs and storage slot reads against the local in-memory node never mutate state or hit external hosts
+      // Read-only Wasmi dry-runs, storage slot reads, and transaction receipt inspections against the local in-memory node never mutate state or hit external hosts
       if (
-        (url.pathname === "/api/contract_call" || url.pathname === "/api/contract_storage") &&
+        (url.pathname === "/api/contract_call" ||
+          url.pathname === "/api/contract_storage" ||
+          url.pathname === "/api/contract_receipt") &&
         url.searchParams.get("source") === "local"
       ) {
         await route.continue();
@@ -1494,7 +1496,53 @@ test("Section E: Explorer Contract Inspector (?tab=contracts & tab click) runs n
       "Copy Batch SDK Snippet button must confirm Batch SDK Copied",
     );
 
-    // 8. Verify zero uncaught page or console errors
+    // 8. Verify Transaction Receipt & Event Log Bincode Decoder section (`kovanica_getTransactionReceipt`)
+    const receiptSection = page.getByTestId("receipt-log-inspector-section");
+    await receiptSection.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const inspectReceiptBtn = page.getByTestId("inspect-receipt-btn");
+    await page.getByTestId("receipt-preset-demo-success").click();
+    await inspectReceiptBtn.click();
+
+    await waitForBodyText(page, "Success (0x1)");
+    assert.equal(
+      (await page.getByTestId("receipt-summary-status").innerText()).trim(),
+      "Success",
+      "Receipt summary strip must report Success status",
+    );
+    assert.equal(
+      (await page.getByTestId("receipt-summary-gas").innerText()).trim(),
+      "54,300",
+      "Receipt summary strip must report 54,300 gas used",
+    );
+    assert.equal(
+      (await page.getByTestId("receipt-summary-logs-count").innerText()).trim(),
+      "2",
+      "Receipt summary strip must report 2 emitted logs",
+    );
+
+    const decodedLogsText = await page.getByTestId("receipt-decoded-logs-list").innerText();
+    assert.ok(
+      decodedLogsText.includes("https://relay1.kovanica.online") &&
+        decodedLogsText.includes("Kovanica Test Token (KVNT)"),
+      "Decoded receipt log cards must display NameEntry relay endpoint and TokenMetadata name/symbol",
+    );
+
+    // Switch to Reverted Receipt demo preset and verify reverted status & reason
+    await page.getByTestId("receipt-preset-demo-reverted").click();
+    await inspectReceiptBtn.click();
+    await waitForBodyText(page, "Reverted (0x0)");
+    assert.equal(
+      (await page.getByTestId("receipt-summary-status").innerText()).trim(),
+      "Reverted",
+      "Reverted receipt summary strip must report Reverted status",
+    );
+    assert.ok(
+      (await page.getByTestId("receipt-revert-reason").innerText()).includes("NotFound (code -5)"),
+      "Reverted receipt must display NotFound revert reason",
+    );
+
+    // 9. Verify zero uncaught page or console errors
     assert.deepEqual(
       pageErrors,
       [],

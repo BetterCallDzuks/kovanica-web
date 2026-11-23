@@ -55,6 +55,12 @@ export const ENDPOINTS: EndpointRow[] = [
     note: "read-only contract storage slot & Bincode state reader (kovanica_getStorageAt)",
     read: true,
   },
+  {
+    method: "POST",
+    path: "/api/contract_receipt",
+    note: "read-only transaction receipt & emitted Bincode event log inspector (kovanica_getTransactionReceipt)",
+    read: true,
+  },
   { method: "POST", path: "/api/prepare", note: "sighash + fee + change" },
   { method: "POST", path: "/api/submit", note: "queue signed tx" },
   {

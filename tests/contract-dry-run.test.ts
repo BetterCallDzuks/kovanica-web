@@ -2,15 +2,21 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   CONTRACT_PRESETS,
+  LOCAL_DEMO_PENDING_RECEIPT_TX,
+  LOCAL_DEMO_REVERTED_RECEIPT_TX,
+  LOCAL_DEMO_SUCCESS_RECEIPT_TX,
+  RECEIPT_LOG_PRESETS,
   STORAGE_SLOT_PRESETS,
   buildContractBatchSdkSnippet,
   buildContractCallRequest,
   buildContractCurlSnippet,
   buildContractInspectorDeepLink,
+  buildContractReceiptRequest,
   buildContractSdkSnippet,
   buildContractStorageRequest,
   computeStorageSlotHex,
   decodeContractOutput,
+  decodeContractReceiptLog,
   decodeContractStorageValue,
   decodeNameEntry,
   derivePresetStorageSlot,
@@ -24,13 +30,16 @@ import {
   getContractPreset,
   isContractPresetId,
   normalizeHexData,
+  normalizeReceiptTxHash,
   parseAddressBytes32,
   parseContractError,
   parseContractInspectorDeepLink,
+  parseContractTransactionReceipt,
   parseUintQuantity,
   summarizeContractBatchDryRun,
   type ContractBatchQueueItem,
   type ContractCallResponse,
+  type ContractReceiptResponse,
   type ContractStorageResponse,
 } from "../src/lib/contracts/dry-run";
 import {
@@ -780,6 +789,200 @@ describe("Contract Storage Slot Derivation & Bincode State Reader", () => {
         body: JSON.stringify({
           contract: SAMPLE_HEX_A,
           key: "name:alice",
+        }),
+      }),
+    );
+    assert.equal(mainnetRes.status, 403);
+  });
+});
+
+describe("Transaction Receipt & Emitted Log Bincode Inspector", () => {
+  it("normalizes 32-byte transaction hashes and decodes emitted Bincode receipt logs across all ReceiptLogPresetId presets", () => {
+    const presetIds = RECEIPT_LOG_PRESETS.map((p) => p.id);
+    assert.deepEqual(presetIds, [
+      "auto",
+      "name",
+      "token_meta",
+      "escrow",
+      "htlc",
+      "vault",
+      "multisig",
+      "raw",
+    ]);
+
+    const normOk = normalizeReceiptTxHash(SAMPLE_HEX_A.toUpperCase());
+    assert.equal(normOk.ok, true);
+    if (normOk.ok) {
+      assert.equal(normOk.txHash, `0x${SAMPLE_HEX_A}`);
+    }
+    assert.equal(normalizeReceiptTxHash("0x1234").ok, false);
+
+    // NameEntry log decoding
+    const nameBytes = encodeNameEntry(
+      new Uint8Array(32).fill(0x11),
+      new Uint8Array(32).fill(0xaa),
+      ["https://relay1.kovanica.online", "https://relay2.kovanica.online"],
+    );
+    const decNameLog = decodeContractReceiptLog(`0x${bytesToHex(nameBytes)}`, "name");
+    assert.equal(decNameLog.record.kind, "name_entry");
+    assert.match(decNameLog.summary, /NameEntry/);
+
+    // TokenMetadata log decoding
+    const tokenBytes = encodeTokenMetadataStorage({
+      name: "Kovanica Test Token",
+      symbol: "KVNT",
+      decimals: 9,
+      totalSupply: 1_000_000_000_000_000n,
+      owner: new Uint8Array(32).fill(0x11),
+      paused: false,
+    });
+    const decTokenLog = decodeContractReceiptLog(`0x${bytesToHex(tokenBytes)}`, "token_meta");
+    assert.equal(decTokenLog.record.kind, "token_meta");
+    assert.match(decTokenLog.summary, /TokenMetadata · Kovanica Test Token \(KVNT\)/);
+
+    // Raw preset preserves raw view
+    const decRawLog = decodeContractReceiptLog(`0x${bytesToHex(tokenBytes)}`, "raw");
+    assert.equal(decRawLog.record.kind, "raw");
+  });
+
+  it("parses raw transaction receipts (status, gasUsed, blockHash, and decoded Bincode logs)", () => {
+    const nameBytes = encodeNameEntry(
+      new Uint8Array(32).fill(0x11),
+      new Uint8Array(32).fill(0xa1),
+      ["https://relay1.kovanica.online"],
+    );
+    const tokenBytes = encodeTokenMetadataStorage({
+      name: "Kovanica Test Token",
+      symbol: "KVNT",
+      decimals: 9,
+      totalSupply: 1_000_000_000_000_000n,
+      owner: new Uint8Array(32).fill(0x11),
+      paused: false,
+    });
+
+    const parsed = parseContractTransactionReceipt(
+      {
+        transactionHash: LOCAL_DEMO_SUCCESS_RECEIPT_TX,
+        status: "0x1",
+        gasUsed: "0xd41c",
+        blockHash: `0x${SAMPLE_HEX_B}`,
+        blockNumber: "0x30a2",
+        from: SAMPLE_HEX_A,
+        to: SAMPLE_HEX_B,
+        logs: [
+          {
+            logIndex: 0,
+            address: SAMPLE_HEX_B,
+            topics: ["event:NameRegistered", "name:alice"],
+            data: `0x${bytesToHex(nameBytes)}`,
+          },
+          {
+            logIndex: 1,
+            address: SAMPLE_HEX_B,
+            topics: ["event:TokenMetadataUpdated", "token:meta"],
+            data: `0x${bytesToHex(tokenBytes)}`,
+          },
+        ],
+      },
+      "auto",
+    );
+
+    assert.ok(parsed);
+    assert.equal(parsed.status, "success");
+    assert.equal(parsed.statusCode, 1);
+    assert.equal(parsed.gasUsed, 54_300);
+    assert.equal(parsed.blockHash, `0x${SAMPLE_HEX_B}`);
+    assert.equal(parsed.blockNumber, 12_450);
+    assert.equal(parsed.logsCount, 2);
+    assert.equal(parsed.logs[0]?.decoded.record.kind, "name_entry");
+    assert.equal(parsed.logs[1]?.decoded.record.kind, "token_meta");
+
+    const reverted = parseContractTransactionReceipt({
+      transactionHash: LOCAL_DEMO_REVERTED_RECEIPT_TX,
+      status: "0x0",
+      gasUsed: "0x5460",
+      blockHash: `0x${SAMPLE_HEX_B}`,
+      revertReason: "Execution reverted: NotFound (code -5)",
+      logs: [],
+    });
+    assert.ok(reverted);
+    assert.equal(reverted.status, "reverted");
+    assert.equal(reverted.statusCode, 0);
+    assert.equal(reverted.gasUsed, 21_600);
+    assert.equal(reverted.logsCount, 0);
+    assert.match(reverted.revertReason ?? "", /NotFound/);
+  });
+
+  it("serves POST /api/contract_receipt on source=local for success, reverted, and pending tx hashes, and 403 on source=mainnet", async () => {
+    const reqCheck = buildContractReceiptRequest({
+      txHash: LOCAL_DEMO_SUCCESS_RECEIPT_TX,
+      presetId: "auto",
+    });
+    assert.equal(reqCheck.ok, true);
+
+    // 1. Success receipt on local simulator (`0x11...11`)
+    const successRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_receipt?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          txHash: LOCAL_DEMO_SUCCESS_RECEIPT_TX,
+          presetId: "auto",
+        }),
+      }),
+    );
+    assert.equal(successRes.status, 200);
+    const successBody = (await successRes.json()) as ContractReceiptResponse;
+    assert.equal(successBody.ok, true);
+    assert.equal(successBody.found, true);
+    assert.equal(successBody.rpcMethod, "kovanica_getTransactionReceipt");
+    const parsedSuccess = parseContractTransactionReceipt(successBody.receipt, "auto");
+    assert.ok(parsedSuccess);
+    assert.equal(parsedSuccess.status, "success");
+    assert.equal(parsedSuccess.logsCount, 2);
+    assert.equal(parsedSuccess.logs[0]?.decoded.record.kind, "name_entry");
+    assert.equal(parsedSuccess.logs[1]?.decoded.record.kind, "token_meta");
+
+    // 2. Reverted receipt on local simulator (`0xdead...`)
+    const revertRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_receipt?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          txHash: LOCAL_DEMO_REVERTED_RECEIPT_TX,
+        }),
+      }),
+    );
+    assert.equal(revertRes.status, 200);
+    const revertBody = (await revertRes.json()) as ContractReceiptResponse;
+    assert.equal(revertBody.found, true);
+    const parsedRevert = parseContractTransactionReceipt(revertBody.receipt, "auto");
+    assert.ok(parsedRevert);
+    assert.equal(parsedRevert.status, "reverted");
+    assert.equal(parsedRevert.logsCount, 0);
+
+    // 3. Pending receipt on local simulator (`0x00...00`)
+    const pendingRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_receipt?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          txHash: LOCAL_DEMO_PENDING_RECEIPT_TX,
+        }),
+      }),
+    );
+    assert.equal(pendingRes.status, 200);
+    const pendingBody = (await pendingRes.json()) as ContractReceiptResponse;
+    assert.equal(pendingBody.found, false);
+    assert.equal(pendingBody.receipt, null);
+
+    // 4. Mainnet isolation returns 403
+    const mainnetRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_receipt?source=mainnet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          txHash: LOCAL_DEMO_SUCCESS_RECEIPT_TX,
         }),
       }),
     );

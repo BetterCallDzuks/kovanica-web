@@ -1,6 +1,7 @@
-import { parseAddr } from "@/lib/wallet/address";
+import { parseAddr, toCanonicalAddress } from "@/lib/wallet/address";
 import {
   buildContractCallRequest,
+  buildContractReceiptRequest,
   buildContractStorageRequest,
   computeStorageSlotHex,
   encodeEscrowStorage,
@@ -12,7 +13,9 @@ import {
   isStorageBytesEmpty,
   type ContractCallRequest,
   type ContractCallResponse,
+  type ContractReceiptResponse,
   type ContractStorageResponse,
+  type RawContractTransactionReceipt,
 } from "@/lib/contracts/dry-run";
 import {
   BincodeReader,
@@ -776,3 +779,122 @@ export function localContractStorage(
     query,
   };
 }
+
+/**
+ * Deterministic read-only transaction receipt simulator for `source=local`.
+ * Mirrors the `kovanica_getTransactionReceipt(txHash)` response contract:
+ * - `0x00...00` (all zeros) -> `null` (pending / not yet mined)
+ * - `0xdead...` -> reverted receipt (`status: "0x0"`)
+ * - `0x11...`, `0xaa...`, or any other 32-byte hash -> successful receipt (`status: "0x1"`)
+ *   with emitted Bincode `NameEntry` and `TokenMetadata` logs.
+ */
+export function localContractReceipt(
+  rawBody: Partial<Record<string, unknown>>,
+): ContractReceiptResponse | string {
+  const started = Date.now();
+  const built = buildContractReceiptRequest(rawBody);
+  if (!built.ok) return built.error;
+
+  const { query } = built;
+  const cleanHash = query.txHash.replace(/^0x/i, "").toLowerCase();
+
+  // All-zero hash or prefix `0000` represents a pending / unmined transaction
+  if (/^0+$/.test(cleanHash) || cleanHash.startsWith("0000")) {
+    return {
+      ok: true,
+      found: false,
+      receipt: null,
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "local",
+      rpcMethod: "kovanica_getTransactionReceipt",
+      query,
+    };
+  }
+
+  const demoContract =
+    toCanonicalAddress("0000000000000000000000000000000000000000000000000000000000000001") ??
+    "0000000000000000000000000000000000000000000000000000000000000001";
+  const demoSender =
+    toCanonicalAddress("11".repeat(32)) ?? `0x${"11".repeat(32)}`;
+  const demoBlockHash =
+    "0x3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
+
+  // `0xdead...` represents a reverted Wasmi contract transaction receipt
+  if (cleanHash.startsWith("dead")) {
+    const revertedReceipt: RawContractTransactionReceipt = {
+      transactionHash: query.txHash,
+      status: "0x0",
+      gasUsed: "0x5460", // 21,600
+      blockHash: demoBlockHash,
+      blockNumber: "0x30a2", // 12,450
+      from: demoSender,
+      to: demoContract,
+      contractAddress: demoContract,
+      revertReason: "Execution reverted: NotFound (code -5): target record does not exist",
+      logs: [],
+    };
+    return {
+      ok: true,
+      found: true,
+      receipt: revertedReceipt,
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "local",
+      rpcMethod: "kovanica_getTransactionReceipt",
+      query,
+    };
+  }
+
+  // Default / `0x11...` / `0xaa...`: successful receipt with Bincode NameEntry & TokenMetadata logs
+  const nameEntryBytes = encodeNameEntry(
+    new Uint8Array(32).fill(0x11),
+    new Uint8Array(32).fill(0xa1),
+    ["https://relay1.kovanica.online", "https://relay2.kovanica.online"],
+  );
+  const tokenMetaBytes = encodeTokenMetadataStorage({
+    name: "Kovanica Test Token",
+    symbol: "KVNT",
+    decimals: 9,
+    totalSupply: 1_000_000_000_000_000n,
+    owner: new Uint8Array(32).fill(0x11),
+    paused: false,
+  });
+
+  const nameTopic = computeStorageSlotHex("event:NameRegistered");
+  const tokenTopic = computeStorageSlotHex("event:TokenMetadataUpdated");
+
+  const successReceipt: RawContractTransactionReceipt = {
+    transactionHash: query.txHash,
+    status: "0x1",
+    gasUsed: "0xd41c", // 54,300
+    blockHash: demoBlockHash,
+    blockNumber: "0x30a2", // 12,450
+    from: demoSender,
+    to: demoContract,
+    contractAddress: demoContract,
+    logs: [
+      {
+        logIndex: 0,
+        address: demoContract,
+        topics: [nameTopic.ok ? nameTopic.slotHex : `0x${"a1".repeat(32)}`, "name:alice"],
+        data: `0x${bytesToHex(nameEntryBytes)}`,
+      },
+      {
+        logIndex: 1,
+        address: demoContract,
+        topics: [tokenTopic.ok ? tokenTopic.slotHex : `0x${"b2".repeat(32)}`, "token:meta"],
+        data: `0x${bytesToHex(tokenMetaBytes)}`,
+      },
+    ],
+  };
+
+  return {
+    ok: true,
+    found: true,
+    receipt: successReceipt,
+    latencyMs: Math.max(1, Date.now() - started),
+    source: "local",
+    rpcMethod: "kovanica_getTransactionReceipt",
+    query,
+  };
+}
+

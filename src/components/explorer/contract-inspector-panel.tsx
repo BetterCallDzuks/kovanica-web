@@ -27,6 +27,10 @@ import type { ApiSource } from "@/lib/api/contract";
 import { Button } from "@/components/ui/button";
 import {
   CONTRACT_PRESETS,
+  LOCAL_DEMO_PENDING_RECEIPT_TX,
+  LOCAL_DEMO_REVERTED_RECEIPT_TX,
+  LOCAL_DEMO_SUCCESS_RECEIPT_TX,
+  RECEIPT_LOG_PRESETS,
   STORAGE_SLOT_PRESETS,
   buildContractBatchSdkSnippet,
   buildContractCurlSnippet,
@@ -37,17 +41,23 @@ import {
   derivePresetStorageSlot,
   encodePresetArgs,
   getContractPreset,
+  getReceiptLogPreset,
   getStorageSlotPreset,
+  normalizeReceiptTxHash,
   parseContractError,
   parseContractInspectorDeepLink,
+  parseContractTransactionReceipt,
   summarizeContractBatchDryRun,
   type ContractBatchQueueItem,
   type ContractCallRequest,
   type ContractCallResponse,
   type ContractPresetId,
+  type ContractReceiptResponse,
   type ContractStorageResponse,
   type DecodedContractOutput,
   type DecodedStorageResult,
+  type ParsedContractTransactionReceipt,
+  type ReceiptLogPresetId,
   type StorageSlotPresetId,
 } from "@/lib/contracts/dry-run";
 import { formatAtomsDisplay } from "@/lib/contracts/decoders";
@@ -166,6 +176,13 @@ export function ContractInspectorPanel({
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageResponse, setStorageResponse] = useState<ContractStorageResponse | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
+
+  // Transaction Receipt & Emitted Log Bincode Inspector state
+  const [receiptTxHash, setReceiptTxHash] = useState<string>(LOCAL_DEMO_SUCCESS_RECEIPT_TX);
+  const [receiptLogPresetId, setReceiptLogPresetId] = useState<ReceiptLogPresetId>("auto");
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptResponse, setReceiptResponse] = useState<ContractReceiptResponse | null>(null);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialContract?.trim()) {
@@ -530,6 +547,57 @@ export function ContractInspectorPanel({
   }
 
   const canReadStorage = !storageLoading && contractValid && derivedStorageSlot.ok;
+
+  const receiptLogPreset = useMemo(
+    () => getReceiptLogPreset(receiptLogPresetId),
+    [receiptLogPresetId],
+  );
+  const normalizedReceiptHash = useMemo(
+    () => normalizeReceiptTxHash(receiptTxHash),
+    [receiptTxHash],
+  );
+  const parsedReceipt: ParsedContractTransactionReceipt | null = useMemo(() => {
+    if (!receiptResponse || !receiptResponse.found || !receiptResponse.receipt) return null;
+    return parseContractTransactionReceipt(receiptResponse.receipt, receiptLogPresetId);
+  }, [receiptResponse, receiptLogPresetId]);
+
+  const canInspectReceipt = !receiptLoading && normalizedReceiptHash.ok;
+
+  function selectDemoReceiptTx(txHash: string) {
+    setReceiptTxHash(txHash);
+    setReceiptResponse(null);
+    setReceiptError(null);
+  }
+
+  async function handleInspectReceipt(e: React.FormEvent) {
+    e.preventDefault();
+    if (!normalizedReceiptHash.ok) {
+      setReceiptError(normalizedReceiptHash.error);
+      return;
+    }
+
+    setReceiptLoading(true);
+    setReceiptError(null);
+    setReceiptResponse(null);
+
+    try {
+      const res = await apiPostJson<ContractReceiptResponse>("/api/contract_receipt", {
+        txHash: normalizedReceiptHash.txHash,
+        presetId: receiptLogPresetId,
+      });
+      setReceiptResponse(res);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Transaction receipt inspection failed";
+      setReceiptError(msg);
+    } finally {
+      setReceiptLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -1854,6 +1922,439 @@ export function ContractInspectorPanel({
                     {decodedStorage.rawHex}
                   </p>
                 </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      {/* Transaction Receipt & Event Log Bincode Decoder */}
+      <section
+        aria-label="Transaction Receipt and Event Log Bincode Decoder"
+        data-testid="receipt-log-inspector-section"
+        className="space-y-4 rounded-lg border border-border bg-surface p-4"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <FileCode className="size-4 text-gold" />
+              <h3 className="font-display text-base text-fg">
+                Transaction Receipt &amp; Event Log Bincode Decoder
+              </h3>
+              <span className="inline-flex items-center rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-medium text-gold">
+                kovanica_getTransactionReceipt · Bincode logs
+              </span>
+            </div>
+            <p className="max-w-3xl text-xs text-muted">
+              Query any 32-byte transaction hash via{" "}
+              <code className="font-mono text-fg">kovanica_getTransactionReceipt</code> to inspect
+              execution status (<code className="font-mono text-fg">success</code> /{" "}
+              <code className="font-mono text-fg">reverted</code>), gas used, block hash, and decode
+              emitted Wasmi Bincode event logs (<code className="font-mono text-fg">NameEntry</code>
+              , <code className="font-mono text-fg">TokenMetadata</code>,{" "}
+              <code className="font-mono text-fg">Escrow</code>,{" "}
+              <code className="font-mono text-fg">HTLC</code>,{" "}
+              <code className="font-mono text-fg">Vault</code>,{" "}
+              <code className="font-mono text-fg">Multisig</code>).
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          {/* Left: Receipt Query & Log Decoder Preset Form */}
+          <form onSubmit={(e) => void handleInspectReceipt(e)} className="space-y-3.5">
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label
+                  htmlFor="inspector-receipt-tx-hash"
+                  className="font-mono text-[10px] font-semibold tracking-wider text-subtle uppercase"
+                >
+                  1. Transaction Hash (32-Byte Hex)
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="receipt-preset-demo-success"
+                    onClick={() => selectDemoReceiptTx(LOCAL_DEMO_SUCCESS_RECEIPT_TX)}
+                    className="font-mono text-[10px] text-gold hover:underline"
+                  >
+                    Local Demo Success Receipt
+                  </button>
+                  <span className="text-subtle">·</span>
+                  <button
+                    type="button"
+                    data-testid="receipt-preset-demo-reverted"
+                    onClick={() => selectDemoReceiptTx(LOCAL_DEMO_REVERTED_RECEIPT_TX)}
+                    className="font-mono text-[10px] text-amber-300 hover:underline"
+                  >
+                    Reverted Receipt
+                  </button>
+                  <span className="text-subtle">·</span>
+                  <button
+                    type="button"
+                    data-testid="receipt-preset-demo-pending"
+                    onClick={() => selectDemoReceiptTx(LOCAL_DEMO_PENDING_RECEIPT_TX)}
+                    className="font-mono text-[10px] text-muted hover:underline"
+                  >
+                    Pending Receipt
+                  </button>
+                </div>
+              </div>
+
+              <input
+                id="inspector-receipt-tx-hash"
+                data-testid="receipt-tx-hash-input"
+                type="text"
+                value={receiptTxHash}
+                onChange={(e) => setReceiptTxHash(e.target.value)}
+                placeholder="0x… (64 hex characters)"
+                spellCheck={false}
+                autoComplete="off"
+                className={cn(
+                  "w-full rounded-md border bg-bg px-3 py-2 font-mono text-xs text-fg placeholder:text-subtle focus:outline-none focus:ring-1",
+                  receiptTxHash.trim() && !normalizedReceiptHash.ok
+                    ? "border-danger/60 focus:ring-danger"
+                    : "border-border focus:border-gold/60 focus:ring-gold/40",
+                )}
+              />
+              {receiptTxHash.trim() && !normalizedReceiptHash.ok ? (
+                <p className="font-mono text-[11px] text-danger">{normalizedReceiptHash.error}</p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <span className="font-mono text-[10px] font-semibold tracking-wider text-subtle uppercase">
+                2. Emitted Log Bincode Decoder Preset
+              </span>
+              <div
+                className="flex flex-wrap gap-1.5"
+                role="group"
+                aria-label="Receipt log decoder presets"
+              >
+                {RECEIPT_LOG_PRESETS.map((lp) => {
+                  const active = lp.id === receiptLogPresetId;
+                  return (
+                    <button
+                      key={lp.id}
+                      type="button"
+                      data-testid={`receipt-log-preset-${lp.id}`}
+                      onClick={() => setReceiptLogPresetId(lp.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                        active
+                          ? "border-gold/60 bg-gold/15 font-semibold text-gold"
+                          : "border-border bg-bg/60 text-muted hover:border-border/80 hover:text-fg",
+                      )}
+                    >
+                      {lp.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted">{receiptLogPreset.description}</p>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <Button
+                type="submit"
+                variant="gold"
+                size="sm"
+                data-testid="inspect-receipt-btn"
+                disabled={!canInspectReceipt}
+                className="h-9 gap-1.5 px-4 text-xs"
+              >
+                {receiptLoading ? (
+                  <>
+                    <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    <span>Inspecting Receipt…</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="size-3.5" />
+                    <span>Inspect Receipt &amp; Decode Logs</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+
+          {/* Right: Receipt Summary Strip & Decoded Bincode Log Cards */}
+          <div
+            aria-live="polite"
+            data-testid="receipt-inspector-result"
+            className="flex flex-col gap-3 rounded-md border border-border bg-bg/50 p-3.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] font-semibold tracking-wider text-subtle uppercase">
+                Receipt &amp; Decoded Event Logs
+              </span>
+              {parsedReceipt ? (
+                <span
+                  data-testid="receipt-status-badge"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold",
+                    parsedReceipt.status === "success"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-300",
+                  )}
+                >
+                  {parsedReceipt.status === "success" ? (
+                    <>
+                      <CheckCircle2 className="size-3" />
+                      Success (0x1)
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="size-3" />
+                      Reverted (0x0)
+                    </>
+                  )}
+                </span>
+              ) : receiptResponse && !receiptResponse.found ? (
+                <span
+                  data-testid="receipt-status-badge"
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 font-mono text-[10px] font-semibold text-muted"
+                >
+                  Pending / Not Found
+                </span>
+              ) : receiptError ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-danger">
+                  Error
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] text-subtle">Idle</span>
+              )}
+            </div>
+
+            {!receiptResponse && !receiptError && !receiptLoading ? (
+              <div className="flex flex-1 flex-col items-center justify-center rounded border border-dashed border-border/70 bg-bg/40 p-6 text-center">
+                <FileCode className="size-7 text-subtle" />
+                <p className="mt-2 text-xs font-medium text-fg">
+                  Ready to inspect transaction receipt
+                </p>
+                <p className="mt-1 max-w-xs text-[11px] text-muted">
+                  Enter a 32-byte transaction hash or choose a demo preset and click Inspect Receipt
+                  &amp; Decode Logs to decode emitted Wasmi Bincode logs.
+                </p>
+              </div>
+            ) : null}
+
+            {receiptError ? (
+              <div className="rounded border border-danger/30 bg-danger/10 p-3 font-mono text-xs text-danger">
+                {receiptError}
+              </div>
+            ) : null}
+
+            {receiptResponse && !receiptResponse.found ? (
+              <div className="rounded border border-border bg-bg/80 p-3.5 font-mono text-xs text-muted">
+                No receipt found for{" "}
+                <span className="text-fg">{shortId(receiptResponse.query.txHash, 10)}</span> (
+                <code className="text-fg">null</code> — transaction is pending in mempool or unknown).
+              </div>
+            ) : null}
+
+            {parsedReceipt ? (
+              <div className="space-y-3 font-mono text-xs">
+                {/* Receipt Summary Strip: Status, Gas Used, Block Hash, Logs Count */}
+                <dl
+                  data-testid="receipt-summary-strip"
+                  className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-4"
+                >
+                  <div className="bg-bg px-3 py-2">
+                    <dt className="font-mono text-[9px] tracking-wider text-subtle uppercase">
+                      Status
+                    </dt>
+                    <dd
+                      data-testid="receipt-summary-status"
+                      className={cn(
+                        "mt-1 font-mono text-xs font-semibold",
+                        parsedReceipt.status === "success"
+                          ? "text-emerald-400"
+                          : "text-amber-300",
+                      )}
+                    >
+                      {parsedReceipt.status === "success" ? "Success" : "Reverted"}
+                    </dd>
+                  </div>
+                  <div className="bg-bg px-3 py-2">
+                    <dt className="flex items-center gap-1 font-mono text-[9px] tracking-wider text-subtle uppercase">
+                      <Fuel className="size-3" />
+                      Gas Used
+                    </dt>
+                    <dd
+                      data-testid="receipt-summary-gas"
+                      className="mt-1 font-mono text-xs font-semibold tabular-nums text-fg"
+                    >
+                      {parsedReceipt.gasUsed !== null
+                        ? parsedReceipt.gasUsed.toLocaleString()
+                        : "n/a"}
+                    </dd>
+                  </div>
+                  <div className="bg-bg px-3 py-2">
+                    <dt className="font-mono text-[9px] tracking-wider text-subtle uppercase">
+                      Block Hash
+                    </dt>
+                    <dd
+                      data-testid="receipt-summary-block"
+                      className="mt-1 truncate font-mono text-xs font-semibold text-fg"
+                      title={parsedReceipt.blockHash ?? undefined}
+                    >
+                      {parsedReceipt.blockHash ? shortId(parsedReceipt.blockHash, 8) : "n/a"}
+                    </dd>
+                  </div>
+                  <div className="bg-bg px-3 py-2">
+                    <dt className="font-mono text-[9px] tracking-wider text-subtle uppercase">
+                      Logs Count
+                    </dt>
+                    <dd
+                      data-testid="receipt-summary-logs-count"
+                      className="mt-1 font-mono text-xs font-semibold tabular-nums text-gold"
+                    >
+                      {parsedReceipt.logsCount}
+                    </dd>
+                  </div>
+                </dl>
+
+                {parsedReceipt.revertReason ? (
+                  <div
+                    data-testid="receipt-revert-reason"
+                    className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200"
+                  >
+                    <div className="flex items-center gap-1.5 font-semibold text-amber-300">
+                      <AlertTriangle className="size-3.5" />
+                      <span>Revert Reason</span>
+                    </div>
+                    <p className="mt-1 break-words text-[11px]">{parsedReceipt.revertReason}</p>
+                  </div>
+                ) : null}
+
+                {/* Emitted Bincode Log Cards */}
+                {parsedReceipt.logs.length === 0 ? (
+                  <div className="rounded border border-border/70 bg-bg/70 p-3 text-center text-xs text-muted">
+                    No event logs emitted in this transaction receipt.
+                  </div>
+                ) : (
+                  <div data-testid="receipt-decoded-logs-list" className="space-y-2.5">
+                    {parsedReceipt.logs.map((log) => (
+                      <div
+                        key={log.index}
+                        data-testid={`receipt-log-card-${log.index}`}
+                        className="space-y-2 rounded-md border border-border bg-bg/90 p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded border border-gold/30 bg-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-gold">
+                              Log #{log.index}
+                            </span>
+                            <span className="text-[10px] font-semibold text-fg uppercase">
+                              {log.decoded.record.kind}
+                            </span>
+                            <span className="text-[10px] text-subtle">{log.byteLength} B</span>
+                          </div>
+                          {log.address ? (
+                            <span className="text-[10px] text-muted" title={log.address}>
+                              {shortId(log.address, 8)}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        {log.topics.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-subtle">
+                            <span>Topics:</span>
+                            {log.topics.map((topic, tIdx) => (
+                              <span
+                                key={tIdx}
+                                className="rounded bg-surface px-1.5 py-0.5 text-muted"
+                              >
+                                {topic.length > 24 ? shortId(topic, 8) : topic}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {/* Decoded Bincode Log Record */}
+                        {log.decoded.record.kind === "name_entry" ? (
+                          <div className="space-y-1.5 text-xs">
+                            <div>
+                              <span className="text-[10px] text-subtle uppercase">Owner</span>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="break-all text-gold">
+                                  {log.decoded.record.value.ownerAddress}
+                                </span>
+                                <CopyInline
+                                  text={log.decoded.record.value.ownerAddress}
+                                  label="Owner Address"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-subtle uppercase">
+                                Relay Endpoints ({log.decoded.record.value.relayEndpoints.length})
+                              </span>
+                              <ul className="mt-1 space-y-1">
+                                {log.decoded.record.value.relayEndpoints.map((ep, epIdx) => (
+                                  <li
+                                    key={epIdx}
+                                    className="rounded bg-surface px-2 py-1 text-[11px] text-fg"
+                                  >
+                                    {ep}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {log.decoded.record.kind === "token_meta" ? (
+                          <dl className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <dt className="text-[10px] text-subtle uppercase">Name / Symbol</dt>
+                              <dd className="font-semibold text-fg">
+                                {log.decoded.record.value.name} ({log.decoded.record.value.symbol})
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-[10px] text-subtle uppercase">
+                                Decimals / Status
+                              </dt>
+                              <dd className="text-fg">
+                                {log.decoded.record.value.decimals} dec ·{" "}
+                                {log.decoded.record.value.paused ? "Paused" : "Active"}
+                              </dd>
+                            </div>
+                            <div className="col-span-2">
+                              <dt className="text-[10px] text-subtle uppercase">
+                                Total Supply (base units)
+                              </dt>
+                              <dd className="text-gold">{log.decoded.record.value.totalSupply}</dd>
+                            </div>
+                          </dl>
+                        ) : null}
+
+                        {log.decoded.record.kind === "escrow" ||
+                        log.decoded.record.kind === "htlc" ||
+                        log.decoded.record.kind === "vault" ||
+                        log.decoded.record.kind === "multisig" ||
+                        log.decoded.record.kind === "address" ||
+                        log.decoded.record.kind === "u64" ||
+                        log.decoded.record.kind === "u128" ||
+                        log.decoded.record.kind === "utf8" ||
+                        log.decoded.record.kind === "raw" ||
+                        log.decoded.record.kind === "empty" ? (
+                          <p className="break-words text-xs text-fg">{log.decoded.summary}</p>
+                        ) : null}
+
+                        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-1.5">
+                          <span className="truncate text-[10px] text-subtle">
+                            Data: {log.dataHex}
+                          </span>
+                          <CopyInline text={log.dataHex} label={`Log #${log.index} Hex`} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
