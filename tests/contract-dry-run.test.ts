@@ -2,14 +2,24 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   CONTRACT_PRESETS,
+  STORAGE_SLOT_PRESETS,
   buildContractCallRequest,
   buildContractCurlSnippet,
   buildContractInspectorDeepLink,
   buildContractSdkSnippet,
+  buildContractStorageRequest,
+  computeStorageSlotHex,
   decodeContractOutput,
+  decodeContractStorageValue,
   decodeNameEntry,
+  derivePresetStorageSlot,
+  encodeEscrowStorage,
+  encodeHtlcStorage,
+  encodeMultisigStorage,
   encodeNameEntry,
   encodePresetArgs,
+  encodeTokenMetadataStorage,
+  encodeVaultStorage,
   getContractPreset,
   isContractPresetId,
   normalizeHexData,
@@ -18,6 +28,7 @@ import {
   parseContractInspectorDeepLink,
   parseUintQuantity,
   type ContractCallResponse,
+  type ContractStorageResponse,
 } from "../src/lib/contracts/dry-run";
 import {
   bytesToHex,
@@ -459,5 +470,210 @@ describe("Contract Inspector Shareable Deep-Links & Developer Snippets", () => {
     assert.ok(sdk.includes(`entry: "token_transfer"`));
     assert.ok(sdk.includes(`await client.call(callRequest)`));
     assert.ok(sdk.includes(`await estimateAndBuildCall(client, callRequest)`));
+  });
+});
+
+describe("Contract Storage Slot Derivation & Bincode State Reader", () => {
+  it("computes deterministic BLAKE3 storage slots for Kovanica key conventions and accepts raw 32-byte hex slots", () => {
+    assert.ok(STORAGE_SLOT_PRESETS.length >= 7);
+
+    const nameSlot = derivePresetStorageSlot("name", "alice");
+    assert.equal(nameSlot.ok, true);
+    if (nameSlot.ok) {
+      assert.equal(nameSlot.rawKey, "name:alice");
+      assert.equal(nameSlot.derivation, "blake3");
+      assert.match(nameSlot.slotHex, /^0x[0-9a-f]{64}$/);
+    }
+
+    const tokenSlot = derivePresetStorageSlot("token_meta", "");
+    assert.equal(tokenSlot.ok, true);
+    if (tokenSlot.ok) {
+      assert.equal(tokenSlot.rawKey, "token:meta");
+      assert.equal(tokenSlot.derivation, "blake3");
+    }
+
+    const rawHexSlot = computeStorageSlotHex(`0x${SAMPLE_HEX_A}`);
+    assert.equal(rawHexSlot.ok, true);
+    if (rawHexSlot.ok) {
+      assert.equal(rawHexSlot.slotHex, `0x${SAMPLE_HEX_A}`);
+      assert.equal(rawHexSlot.derivation, "raw32");
+      assert.equal(rawHexSlot.rawKey, null);
+    }
+
+    // Invalid odd/short 0x hex slot is rejected
+    const badHexSlot = computeStorageSlotHex("0x1234");
+    assert.equal(badHexSlot.ok, false);
+  });
+
+  it("decodes empty storage slots (0x and 32 zero bytes) and Bincode NameEntry, TokenMetadata, Escrow, HTLC, Vault, and Multisig records", () => {
+    const empty0x = decodeContractStorageValue("0x");
+    assert.equal(empty0x.isEmpty, true);
+    assert.equal(empty0x.record.kind, "empty");
+
+    const zero32 = decodeContractStorageValue(`0x${"00".repeat(32)}`);
+    assert.equal(zero32.isEmpty, true);
+    assert.equal(zero32.isZeroBytes32, true);
+    assert.equal(zero32.record.kind, "empty");
+
+    // NameEntry
+    const nameBytes = encodeNameEntry(
+      new Uint8Array(32).fill(0x11),
+      new Uint8Array(32).fill(0xaa),
+      ["https://relay1.kovanica.online"],
+    );
+    const decName = decodeContractStorageValue(`0x${bytesToHex(nameBytes)}`, "name_entry");
+    assert.equal(decName.record.kind, "name_entry");
+    if (decName.record.kind === "name_entry") {
+      assert.equal(decName.record.value.ownerAddress, SAMPLE_ADDR_A);
+      assert.deepEqual(decName.record.value.relayEndpoints, ["https://relay1.kovanica.online"]);
+    }
+
+    // TokenMetadata
+    const tokenBytes = encodeTokenMetadataStorage({
+      name: "Kovanica Gold",
+      symbol: "KGLD",
+      decimals: 9,
+      totalSupply: 500_000_000_000n,
+      owner: new Uint8Array(32).fill(0x11),
+      paused: false,
+    });
+    const decToken = decodeContractStorageValue(`0x${bytesToHex(tokenBytes)}`, "token_meta");
+    assert.equal(decToken.record.kind, "token_meta");
+    if (decToken.record.kind === "token_meta") {
+      assert.equal(decToken.record.value.name, "Kovanica Gold");
+      assert.equal(decToken.record.value.symbol, "KGLD");
+      assert.equal(decToken.record.value.decimals, 9);
+      assert.equal(decToken.record.value.totalSupply, "500000000000");
+      assert.equal(decToken.record.value.paused, false);
+    }
+
+    // Escrow
+    const escrowBytes = encodeEscrowStorage(
+      [new Uint8Array(32).fill(0x11), new Uint8Array(32).fill(0x22)],
+      2,
+      5_000_000_000n,
+      1_800_000_000n,
+    );
+    const decEscrow = decodeContractStorageValue(`0x${bytesToHex(escrowBytes)}`, "escrow");
+    assert.equal(decEscrow.record.kind, "escrow");
+    if (decEscrow.record.kind === "escrow") {
+      assert.equal(decEscrow.record.value.threshold, 2);
+      assert.equal(decEscrow.record.value.amount, "5000000000");
+    }
+
+    // HTLC
+    const htlcBytes = encodeHtlcStorage(
+      new Uint8Array(32).fill(0x33),
+      1_800_000_000n,
+      new Uint8Array(32).fill(0x11),
+    );
+    const decHtlc = decodeContractStorageValue(`0x${bytesToHex(htlcBytes)}`, "htlc");
+    assert.equal(decHtlc.record.kind, "htlc");
+    if (decHtlc.record.kind === "htlc") {
+      assert.equal(decHtlc.record.value.hashlockHex, SAMPLE_HEX_C);
+      assert.equal(decHtlc.record.value.recipientAddress, SAMPLE_ADDR_A);
+    }
+
+    // Vault
+    const vaultBytes = encodeVaultStorage(new Uint8Array(32).fill(0x22), 1_900_000_000n);
+    const decVault = decodeContractStorageValue(`0x${bytesToHex(vaultBytes)}`, "vault");
+    assert.equal(decVault.record.kind, "vault");
+    if (decVault.record.kind === "vault") {
+      assert.equal(decVault.record.value.ownerAddress, SAMPLE_ADDR_B);
+      assert.equal(decVault.record.value.lockUntil, "1900000000");
+    }
+
+    // Multisig
+    const msBytes = encodeMultisigStorage(
+      [new Uint8Array(32).fill(0x11), new Uint8Array(32).fill(0x22)],
+      2,
+    );
+    const decMs = decodeContractStorageValue(`0x${bytesToHex(msBytes)}`, "multisig");
+    assert.equal(decMs.record.kind, "multisig");
+    if (decMs.record.kind === "multisig") {
+      assert.equal(decMs.record.value.threshold, 2);
+      assert.equal(decMs.record.value.ownersAddresses.length, 2);
+    }
+  });
+
+  it("serves POST /api/contract_storage on source=local for known keys, empty 0x for unknown keys, and 403 on source=mainnet", async () => {
+    const validReq = buildContractStorageRequest({
+      contract: SAMPLE_HEX_A,
+      key: "name:alice",
+      schemaHint: "name_entry",
+    });
+    assert.equal(validReq.ok, true);
+
+    // 1. Known key `name:alice` on local simulator
+    const localRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_storage?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contract: SAMPLE_HEX_A,
+          key: "name:alice",
+          schemaHint: "name_entry",
+        }),
+      }),
+    );
+    assert.equal(localRes.status, 200);
+    const localBody = (await localRes.json()) as ContractStorageResponse;
+    assert.equal(localBody.ok, true);
+    assert.equal(localBody.isEmpty, false);
+    assert.equal(localBody.rpcMethod, "kovanica_getStorageAt");
+    const decodedAlice = decodeContractStorageValue(
+      localBody.storageHex,
+      localBody.query.schemaHint,
+    );
+    assert.equal(decodedAlice.record.kind, "name_entry");
+
+    // 2. Known key `token:meta` on local simulator
+    const tokenRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_storage?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contract: SAMPLE_HEX_A,
+          key: "token:meta",
+          schemaHint: "token_meta",
+        }),
+      }),
+    );
+    assert.equal(tokenRes.status, 200);
+    const tokenBody = (await tokenRes.json()) as ContractStorageResponse;
+    const decodedToken = decodeContractStorageValue(
+      tokenBody.storageHex,
+      tokenBody.query.schemaHint,
+    );
+    assert.equal(decodedToken.record.kind, "token_meta");
+
+    // 3. Unknown key returns empty `0x` storage slot
+    const unknownRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_storage?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contract: SAMPLE_HEX_A,
+          key: "name:unregistered-slot-key",
+        }),
+      }),
+    );
+    assert.equal(unknownRes.status, 200);
+    const unknownBody = (await unknownRes.json()) as ContractStorageResponse;
+    assert.equal(unknownBody.isEmpty, true);
+    assert.equal(unknownBody.storageHex, "0x");
+
+    // 4. Mainnet isolation returns 403
+    const mainnetRes = await dispatchApi(
+      new Request("http://localhost:8080/api/contract_storage?source=mainnet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contract: SAMPLE_HEX_A,
+          key: "name:alice",
+        }),
+      }),
+    );
+    assert.equal(mainnetRes.status, 403);
   });
 });

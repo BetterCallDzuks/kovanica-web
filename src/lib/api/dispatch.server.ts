@@ -14,6 +14,7 @@ import {
   localBlocksDump,
   localBootstrap,
   localContractCall,
+  localContractStorage,
   localFaucet,
   localHead,
   localHistory,
@@ -43,8 +44,11 @@ import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.serv
 import { isAssetId } from "../asset-id";
 import {
   buildContractCallRequest,
+  buildContractStorageRequest,
+  isStorageBytesEmpty,
   type ContractCallRequest,
   type ContractCallResponse,
+  type ContractStorageResponse,
 } from "../contracts/dry-run";
 
 const CORS: Record<string, string> = {
@@ -607,6 +611,61 @@ async function executeLiveContractCall(req: Request): Promise<Response> {
   }
 }
 
+/**
+ * Read a contract storage slot from the live testnet node via
+ * `kovanica_getStorageAt(contract, slotHex)` and `kovanica_getCode(contract)`.
+ */
+async function executeLiveContractStorage(req: Request): Promise<Response> {
+  let body: Partial<Record<string, unknown>>;
+  try {
+    body = (await req.json()) as Partial<Record<string, unknown>>;
+  } catch {
+    return text("invalid JSON body", 400);
+  }
+
+  const built = buildContractStorageRequest(body);
+  if (!built.ok) {
+    return text(built.error, 400);
+  }
+
+  const { query } = built;
+  const started = Date.now();
+
+  try {
+    const [rawStorageHex, codeHex] = await Promise.all([
+      callRpc<string>("kovanica_getStorageAt", [query.contract, query.slotHex]),
+      callRpc<string>("kovanica_getCode", [query.contract]).catch(() => null),
+    ]);
+
+    const normalizedHex =
+      typeof rawStorageHex === "string" && rawStorageHex.trim().length > 0
+        ? rawStorageHex.trim().startsWith("0x") || rawStorageHex.trim().startsWith("0X")
+          ? rawStorageHex.trim().toLowerCase()
+          : `0x${rawStorageHex.trim().toLowerCase()}`
+        : "0x";
+
+    const byteLen = hexByteLength(normalizedHex) ?? 0;
+    const rawBytes = byteLen > 0 ? hexToBytes(normalizedHex) : new Uint8Array(0);
+    const emptyCheck = isStorageBytesEmpty(rawBytes);
+
+    const resp: ContractStorageResponse = {
+      ok: true,
+      storageHex: normalizedHex,
+      isEmpty: emptyCheck.isEmpty,
+      byteLength: byteLen,
+      codeBytes: hexByteLength(codeHex),
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "testnet",
+      rpcMethod: "kovanica_getStorageAt",
+      query,
+    };
+    return json(resp);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "contract storage read failed";
+    return text(`testnet node error: ${msg}`, rpcFailureStatus(e));
+  }
+}
+
 export async function dispatchApi(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
@@ -686,6 +745,10 @@ export async function dispatchApi(req: Request): Promise<Response> {
     if (name === "contract_call") {
       if (method !== "POST") return text("method not allowed", 405);
       return executeLiveContractCall(req);
+    }
+    if (name === "contract_storage") {
+      if (method !== "POST") return text("method not allowed", 405);
+      return executeLiveContractStorage(req);
     }
     if (name === "rwa") {
       return detailLookup("kovanica_getRwaAsset", url.pathname.replace(/^\/api\/rwa\/?/, ""));
@@ -981,6 +1044,17 @@ export async function dispatchApi(req: Request): Promise<Response> {
           return text("invalid JSON body", 400);
         }
         const res = localContractCall(body);
+        if (typeof res === "string") return text(res, 400);
+        return json(res);
+      }
+      case "contract_storage": {
+        let body: Partial<Record<string, unknown>>;
+        try {
+          body = (await req.json()) as Partial<Record<string, unknown>>;
+        } catch {
+          return text("invalid JSON body", 400);
+        }
+        const res = localContractStorage(body);
         if (typeof res === "string") return text(res, 400);
         return json(res);
       }

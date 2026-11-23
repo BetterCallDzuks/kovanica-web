@@ -7,6 +7,8 @@
  * structured revert/error classification.
  */
 
+import { blake3 } from "@noble/hashes/blake3.js";
+import { decodeToken } from "../tokens/codec";
 import { encodeAddress, parseAddr, toCanonicalAddress } from "../wallet/address";
 import {
   BincodeReader,
@@ -18,11 +20,19 @@ import {
   buildVaultCreateCall,
   bytesToHex,
   concatBytes,
+  decodeEscrowCreateArgs,
+  decodeHtlcCreateArgs,
+  decodeMultisigCreateArgs,
+  decodeVaultCreateArgs,
+  encodeBincodeBytes32Vec,
   encodeBincodeString,
   encodeBincodeStringVec,
   hexToBytes,
   readBincodeString,
   readBincodeStringVec,
+  u32le,
+  u64le,
+  u128le,
 } from "./decoders";
 
 export type ContractPresetId =
@@ -1264,5 +1274,780 @@ export function buildContractSdkSnippet(options: ContractSnippetOptions): string
     `const prepared = await estimateAndBuildCall(client, callRequest);`,
     `console.log("Estimated gas:", prepared.gasLimit);`,
   ].join("\n");
+}
+
+// --- Contract Storage Slot & Bincode State Reader (`kovanica_getStorageAt`) ---
+
+export type StorageSlotPresetId =
+  | "name"
+  | "token_meta"
+  | "nft_meta"
+  | "escrow"
+  | "htlc"
+  | "vault"
+  | "multisig_state"
+  | "raw_slot";
+
+export type StorageRecordSchema =
+  | "auto"
+  | "name_entry"
+  | "token_meta"
+  | "escrow"
+  | "htlc"
+  | "vault"
+  | "multisig";
+
+export type StorageSlotPreset = {
+  id: StorageSlotPresetId;
+  label: string;
+  prefix: string | null;
+  fixedKey: string | null;
+  placeholder: string;
+  defaultInput: string;
+  description: string;
+  schemaHint: StorageRecordSchema;
+};
+
+export const STORAGE_SLOT_PRESETS: readonly StorageSlotPreset[] = [
+  {
+    id: "name",
+    label: "name:<name>",
+    prefix: "name:",
+    fixedKey: null,
+    placeholder: "alice",
+    defaultInput: "alice",
+    description: "Comms Name Registry record (`blake3('name:' + name)`) decoded as Bincode NameEntry.",
+    schemaHint: "name_entry",
+  },
+  {
+    id: "token_meta",
+    label: "token:meta",
+    prefix: null,
+    fixedKey: "token:meta",
+    placeholder: "token:meta",
+    defaultInput: "",
+    description: "KVP-102 token metadata & supply record (`blake3('token:meta')`).",
+    schemaHint: "token_meta",
+  },
+  {
+    id: "nft_meta",
+    label: "nft:meta",
+    prefix: null,
+    fixedKey: "nft:meta",
+    placeholder: "nft:meta",
+    defaultInput: "",
+    description: "KVP-106 NFT collection metadata record (`blake3('nft:meta')`).",
+    schemaHint: "token_meta",
+  },
+  {
+    id: "escrow",
+    label: "escrow:<id>",
+    prefix: "escrow:",
+    fixedKey: null,
+    placeholder: "1",
+    defaultInput: "1",
+    description: "Multi-party M-of-N escrow state (`blake3('escrow:' + id)`).",
+    schemaHint: "escrow",
+  },
+  {
+    id: "htlc",
+    label: "htlc:<id>",
+    prefix: "htlc:",
+    fixedKey: null,
+    placeholder: "1",
+    defaultInput: "1",
+    description: "Hash Time-Locked Contract state (`blake3('htlc:' + id)`).",
+    schemaHint: "htlc",
+  },
+  {
+    id: "vault",
+    label: "vault:<id>",
+    prefix: "vault:",
+    fixedKey: null,
+    placeholder: "1",
+    defaultInput: "1",
+    description: "Time-locked KVNC vault state (`blake3('vault:' + id)`).",
+    schemaHint: "vault",
+  },
+  {
+    id: "multisig_state",
+    label: "multisig:state",
+    prefix: null,
+    fixedKey: "multisig:state",
+    placeholder: "multisig:state",
+    defaultInput: "",
+    description: "On-chain multisig owners & threshold state (`blake3('multisig:state')`).",
+    schemaHint: "multisig",
+  },
+  {
+    id: "raw_slot",
+    label: "Raw Key / 32-Byte Hex",
+    prefix: null,
+    fixedKey: null,
+    placeholder: "0x… (64 hex chars) or UTF-8 key e.g. kvnc/v1/state",
+    defaultInput: "name:alice",
+    description: "Query any 32-byte hex storage slot directly or hash an arbitrary UTF-8 storage key with BLAKE3.",
+    schemaHint: "auto",
+  },
+];
+
+export function getStorageSlotPreset(id: StorageSlotPresetId): StorageSlotPreset {
+  return STORAGE_SLOT_PRESETS.find((p) => p.id === id) ?? STORAGE_SLOT_PRESETS[0]!;
+}
+
+export type DerivedStorageSlot =
+  | {
+      ok: true;
+      slotHex: string;
+      rawKey: string | null;
+      derivation: "blake3" | "raw32";
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+/**
+ * Compute a canonical 32-byte storage slot hex (`0x` + 64 lowercase hex chars).
+ *
+ * - If `keyOrSlot` is a 32-byte hex string (64 hex chars, optional `0x` prefix),
+ *   returns it normalized as `derivation: "raw32"`.
+ * - If `keyOrSlot` starts with `0x`/`0X` but is not 64 hex chars, rejects it.
+ * - Otherwise hashes the UTF-8 string bytes with BLAKE3 (`blake3(utf8_bytes)`),
+ *   matching Kovanica's host storage key derivation.
+ */
+export function computeStorageSlotHex(keyOrSlot: string): DerivedStorageSlot {
+  const trimmed = keyOrSlot.trim();
+  if (!trimmed) {
+    return { ok: false, error: "Storage key or 32-byte hex slot is required" };
+  }
+
+  if (/^(?:0[xX])?[0-9a-fA-F]{64}$/.test(trimmed)) {
+    const clean = trimmed.replace(/^0[xX]/, "").toLowerCase();
+    return {
+      ok: true,
+      slotHex: `0x${clean}`,
+      rawKey: null,
+      derivation: "raw32",
+    };
+  }
+
+  if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) {
+    return {
+      ok: false,
+      error: "Raw hex storage slot must be exactly 32 bytes (64 hex characters)",
+    };
+  }
+
+  const keyBytes = new TextEncoder().encode(trimmed);
+  const digest = blake3(keyBytes);
+  return {
+    ok: true,
+    slotHex: `0x${bytesToHex(digest)}`,
+    rawKey: trimmed,
+    derivation: "blake3",
+  };
+}
+
+/** Derive the canonical storage slot for a storage preset and user input value. */
+export function derivePresetStorageSlot(
+  presetId: StorageSlotPresetId,
+  inputValue: string,
+): DerivedStorageSlot {
+  const preset = getStorageSlotPreset(presetId);
+  if (preset.fixedKey) {
+    return computeStorageSlotHex(preset.fixedKey);
+  }
+  const trimmed = inputValue.trim();
+  if (preset.prefix) {
+    if (!trimmed) {
+      return { ok: false, error: `Identifier after '${preset.prefix}' is required` };
+    }
+    const normalizedKey = trimmed.startsWith(preset.prefix)
+      ? trimmed
+      : `${preset.prefix}${trimmed}`;
+    return computeStorageSlotHex(normalizedKey);
+  }
+  return computeStorageSlotHex(trimmed);
+}
+
+// --- Storage RPC Request / Response Types ---
+
+export type ContractStorageRequest = {
+  contract: string;
+  slot?: string;
+  key?: string;
+  schemaHint?: StorageRecordSchema;
+};
+
+export type ContractStorageQuery = {
+  contract: string;
+  slotHex: string;
+  rawKey: string | null;
+  derivation: "blake3" | "raw32";
+  schemaHint: StorageRecordSchema;
+};
+
+export type ContractStorageResponse = {
+  ok: true;
+  storageHex: string;
+  isEmpty: boolean;
+  byteLength: number;
+  codeBytes: number | null;
+  latencyMs: number;
+  source: "testnet" | "local";
+  rpcMethod: "kovanica_getStorageAt";
+  query: ContractStorageQuery;
+};
+
+/** Validate and canonicalize a `POST /api/contract_storage` request payload. */
+export function buildContractStorageRequest(
+  raw: Partial<Record<string, unknown>>,
+): { ok: true; query: ContractStorageQuery } | { ok: false; error: string } {
+  const contractRaw =
+    typeof raw.contract === "string"
+      ? raw.contract.trim()
+      : typeof raw.to === "string"
+        ? raw.to.trim()
+        : "";
+  if (!contractRaw) {
+    return { ok: false, error: "Contract address (`contract`) is required" };
+  }
+  const contractCanonical = toCanonicalAddress(contractRaw);
+  if (!contractCanonical) {
+    return {
+      ok: false,
+      error: "Contract address must be a valid kvnc…dag address or 32-byte hex",
+    };
+  }
+
+  const keyRaw = typeof raw.key === "string" ? raw.key.trim() : "";
+  const slotRaw = typeof raw.slot === "string" ? raw.slot.trim() : "";
+  const targetInput = slotRaw || keyRaw;
+  if (!targetInput) {
+    return { ok: false, error: "Storage `key` or 32-byte `slot` is required" };
+  }
+
+  let derived: DerivedStorageSlot;
+  if (slotRaw && keyRaw) {
+    // If both are passed, validate `slotRaw` as a 32-byte slot or derive from `keyRaw`
+    const slotCheck = computeStorageSlotHex(slotRaw);
+    if (!slotCheck.ok) return slotCheck;
+    derived = {
+      ok: true,
+      slotHex: slotCheck.slotHex,
+      rawKey: keyRaw,
+      derivation: "blake3",
+    };
+  } else {
+    derived = computeStorageSlotHex(targetInput);
+  }
+
+  if (!derived.ok) return derived;
+
+  const hintRaw = typeof raw.schemaHint === "string" ? raw.schemaHint.trim() : "auto";
+  const validHints: StorageRecordSchema[] = [
+    "auto",
+    "name_entry",
+    "token_meta",
+    "escrow",
+    "htlc",
+    "vault",
+    "multisig",
+  ];
+  const schemaHint: StorageRecordSchema = validHints.includes(hintRaw as StorageRecordSchema)
+    ? (hintRaw as StorageRecordSchema)
+    : "auto";
+
+  return {
+    ok: true,
+    query: {
+      contract: contractCanonical,
+      slotHex: derived.slotHex,
+      rawKey: derived.rawKey,
+      derivation: derived.derivation,
+      schemaHint,
+    },
+  };
+}
+
+// --- Storage Bincode Encoders & Decoders ---
+
+export type DecodedTokenMetaRecord = {
+  name: string;
+  symbol: string;
+  decimals: number;
+  totalSupply: string;
+  ownerHex: string;
+  ownerAddress: string;
+  paused: boolean;
+  holdersCount?: number;
+};
+
+export type DecodedEscrowRecord = {
+  partiesHex: string[];
+  partiesAddresses: string[];
+  threshold: number;
+  amount: string;
+  deadline: string;
+};
+
+export type DecodedHtlcRecord = {
+  hashlockHex: string;
+  timelock: string;
+  recipientHex: string;
+  recipientAddress: string;
+  amount?: string;
+};
+
+export type DecodedVaultRecord = {
+  ownerHex: string;
+  ownerAddress: string;
+  lockUntil: string;
+  amount?: string;
+};
+
+export type DecodedMultisigRecord = {
+  ownersHex: string[];
+  ownersAddresses: string[];
+  threshold: number;
+};
+
+/** Encode a compact Bincode `TokenMetadata` record for storage inspection and testing. */
+export function encodeTokenMetadataStorage(params: {
+  name: string;
+  symbol: string;
+  decimals: number;
+  totalSupply: bigint | number;
+  owner: Uint8Array;
+  paused?: boolean;
+}): Uint8Array {
+  if (params.owner.length !== 32) throw new Error("owner must be 32 bytes");
+  return concatBytes([
+    encodeBincodeString(params.name),
+    encodeBincodeString(params.symbol),
+    Uint8Array.of(params.decimals & 0xff),
+    u128le(params.totalSupply),
+    params.owner,
+    Uint8Array.of(params.paused ? 1 : 0),
+  ]);
+}
+
+/** Decode either a full KVP-102 `TokenState` or a compact Bincode `TokenMetadata` storage record. */
+export function decodeTokenMetadataStorage(bytes: Uint8Array): DecodedTokenMetaRecord | null {
+  // 1. Try full KVP-102 token state layout (with minter, balances map, allowances map, paused, icon)
+  const fullToken = decodeToken(bytes);
+  if (fullToken) {
+    const ownerBytes = hexToBytes(fullToken.owner);
+    return {
+      name: fullToken.name,
+      symbol: fullToken.symbol,
+      decimals: fullToken.decimals,
+      totalSupply: fullToken.totalSupply.toString(),
+      ownerHex: fullToken.owner,
+      ownerAddress: ownerBytes ? encodeAddress(ownerBytes) : fullToken.owner,
+      paused: fullToken.paused,
+      holdersCount: fullToken.balances.size,
+    };
+  }
+
+  // 2. Try compact Bincode TokenMetadata: (name: String, symbol: String, decimals: u8, total_supply: u128, owner: [u8;32], paused?: bool)
+  const r = new BincodeReader(bytes);
+  const name = readBincodeString(r, 256);
+  if (!name) return null;
+  const symbol = readBincodeString(r, 64);
+  if (!symbol) return null;
+  const decimals = r.u8();
+  if (decimals === null || decimals > 36) return null;
+  const totalSupply = r.u128();
+  if (totalSupply === null) return null;
+  const owner = r.bytes32();
+  if (!owner) return null;
+
+  let paused = false;
+  if (r.remaining() === 1) {
+    const p = r.u8();
+    if (p === null || (p !== 0 && p !== 1)) return null;
+    paused = p === 1;
+  }
+  if (!r.isEof()) return null;
+
+  return {
+    name,
+    symbol,
+    decimals,
+    totalSupply: totalSupply.toString(),
+    ownerHex: bytesToHex(owner),
+    ownerAddress: encodeAddress(owner),
+    paused,
+  };
+}
+
+/** Encode a Bincode `Escrow` storage record. */
+export function encodeEscrowStorage(
+  parties: Uint8Array[],
+  threshold: number,
+  amount: bigint | number,
+  deadline: bigint | number,
+): Uint8Array {
+  return buildEscrowCreateCall(parties, threshold, amount, deadline);
+}
+
+/** Decode a Bincode `Escrow` storage record. */
+export function decodeEscrowStorage(bytes: Uint8Array): DecodedEscrowRecord | null {
+  const dec = decodeEscrowCreateArgs(bytes);
+  if (!dec) return null;
+  return {
+    partiesHex: dec.parties,
+    partiesAddresses: dec.partiesAddresses ?? dec.parties,
+    threshold: dec.threshold,
+    amount: dec.amount.toString(),
+    deadline: dec.deadline.toString(),
+  };
+}
+
+/** Encode a Bincode `HTLC` storage record. */
+export function encodeHtlcStorage(
+  hashlock: Uint8Array,
+  timelock: bigint | number,
+  recipient: Uint8Array,
+  amount?: bigint | number,
+): Uint8Array {
+  if (amount !== undefined) {
+    if (hashlock.length !== 32 || recipient.length !== 32) {
+      throw new Error("hashlock and recipient must be 32 bytes");
+    }
+    return concatBytes([recipient, u128le(amount), hashlock, u64le(timelock)]);
+  }
+  return buildHtlcCreateCall(hashlock, timelock, recipient);
+}
+
+/** Decode a Bincode `HTLC` storage record. */
+export function decodeHtlcStorage(bytes: Uint8Array): DecodedHtlcRecord | null {
+  const dec = decodeHtlcCreateArgs(bytes);
+  if (!dec) return null;
+  return {
+    hashlockHex: dec.hashlock,
+    timelock: dec.timelock.toString(),
+    recipientHex: dec.recipient,
+    recipientAddress: dec.recipientAddress ?? dec.recipient,
+    amount: dec.amount !== undefined ? dec.amount.toString() : undefined,
+  };
+}
+
+/** Encode a Bincode `Vault` storage record. */
+export function encodeVaultStorage(
+  owner: Uint8Array,
+  lockUntil: bigint | number,
+  amount?: bigint | number,
+): Uint8Array {
+  return buildVaultCreateCall(owner, lockUntil, amount);
+}
+
+/** Decode a Bincode `Vault` storage record. */
+export function decodeVaultStorage(bytes: Uint8Array): DecodedVaultRecord | null {
+  const dec = decodeVaultCreateArgs(bytes);
+  if (!dec) return null;
+  return {
+    ownerHex: dec.owner,
+    ownerAddress: dec.ownerAddress ?? dec.owner,
+    lockUntil: dec.lockUntil.toString(),
+    amount: dec.amount !== undefined ? dec.amount.toString() : undefined,
+  };
+}
+
+/** Encode a Bincode `Multisig` storage record (`owners: Vec<[u8;32]>, threshold: u32`). */
+export function encodeMultisigStorage(owners: Uint8Array[], threshold: number): Uint8Array {
+  return concatBytes([encodeBincodeBytes32Vec(owners), u32le(threshold)]);
+}
+
+/** Decode a Bincode `Multisig` storage record. */
+export function decodeMultisigStorage(bytes: Uint8Array): DecodedMultisigRecord | null {
+  const dec = decodeMultisigCreateArgs(bytes);
+  if (!dec) return null;
+  return {
+    ownersHex: dec.owners,
+    ownersAddresses: dec.ownersAddresses ?? dec.owners,
+    threshold: dec.threshold,
+  };
+}
+
+export type DecodedStorageRecord =
+  | { kind: "empty"; isZeroBytes32: boolean; summary: string }
+  | { kind: "name_entry"; value: DecodedNameEntry }
+  | { kind: "token_meta"; value: DecodedTokenMetaRecord }
+  | { kind: "escrow"; value: DecodedEscrowRecord }
+  | { kind: "htlc"; value: DecodedHtlcRecord }
+  | { kind: "vault"; value: DecodedVaultRecord }
+  | { kind: "multisig"; value: DecodedMultisigRecord }
+  | { kind: "address"; hex: string; canonical: string }
+  | { kind: "u64"; value: string }
+  | { kind: "u128"; value: string }
+  | { kind: "utf8"; value: string }
+  | { kind: "raw"; byteLength: number };
+
+export type DecodedStorageResult = {
+  rawHex: string;
+  byteLength: number;
+  isEmpty: boolean;
+  isZeroBytes32: boolean;
+  record: DecodedStorageRecord;
+};
+
+/** Check whether a byte buffer is empty (0 bytes) or 32 zero bytes (`0x00..00`). */
+export function isStorageBytesEmpty(bytes: Uint8Array): {
+  isEmpty: boolean;
+  isZeroBytes32: boolean;
+} {
+  if (bytes.length === 0) {
+    return { isEmpty: true, isZeroBytes32: false };
+  }
+  if (bytes.length === 32 && bytes.every((b) => b === 0)) {
+    return { isEmpty: true, isZeroBytes32: true };
+  }
+  return { isEmpty: false, isZeroBytes32: false };
+}
+
+/**
+ * Decode raw storage hex returned by `kovanica_getStorageAt` into a typed
+ * Kovanica Bincode record (`NameEntry`, `TokenMetadata`, `Escrow`, `HTLC`,
+ * `Vault`, `Multisig`, primitive values, or empty slot).
+ */
+export function decodeContractStorageValue(
+  storageHex: string,
+  schemaHint: StorageRecordSchema = "auto",
+): DecodedStorageResult {
+  const norm = normalizeHexData(storageHex);
+  if (!norm.ok) {
+    return {
+      rawHex: storageHex,
+      byteLength: 0,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "raw", byteLength: 0 },
+    };
+  }
+
+  const bytes = hexToBytes(norm.hex) ?? new Uint8Array(0);
+  const emptyCheck = isStorageBytesEmpty(bytes);
+  if (emptyCheck.isEmpty) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: true,
+      isZeroBytes32: emptyCheck.isZeroBytes32,
+      record: {
+        kind: "empty",
+        isZeroBytes32: emptyCheck.isZeroBytes32,
+        summary: emptyCheck.isZeroBytes32
+          ? "Unset storage slot (32 zero bytes)"
+          : "Empty storage slot (0x — no value stored at this key)",
+      },
+    };
+  }
+
+  // 1. Honor explicit schema hint first when valid
+  if (schemaHint === "name_entry") {
+    const entry = decodeNameEntry(bytes);
+    if (entry) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "name_entry", value: entry },
+      };
+    }
+  } else if (schemaHint === "token_meta") {
+    const meta = decodeTokenMetadataStorage(bytes);
+    if (meta) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "token_meta", value: meta },
+      };
+    }
+  } else if (schemaHint === "escrow") {
+    const escrow = decodeEscrowStorage(bytes);
+    if (escrow) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "escrow", value: escrow },
+      };
+    }
+  } else if (schemaHint === "htlc") {
+    const htlc = decodeHtlcStorage(bytes);
+    if (htlc) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "htlc", value: htlc },
+      };
+    }
+  } else if (schemaHint === "vault") {
+    const vault = decodeVaultStorage(bytes);
+    if (vault) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "vault", value: vault },
+      };
+    }
+  } else if (schemaHint === "multisig") {
+    const ms = decodeMultisigStorage(bytes);
+    if (ms) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "multisig", value: ms },
+      };
+    }
+  }
+
+  // 2. Auto-detect Bincode record layout
+  const tokenMeta = decodeTokenMetadataStorage(bytes);
+  if (tokenMeta) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "token_meta", value: tokenMeta },
+    };
+  }
+
+  const nameEntry = decodeNameEntry(bytes);
+  if (nameEntry) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "name_entry", value: nameEntry },
+    };
+  }
+
+  const escrow = decodeEscrowStorage(bytes);
+  if (escrow) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "escrow", value: escrow },
+    };
+  }
+
+  const htlc = decodeHtlcStorage(bytes);
+  if (htlc) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "htlc", value: htlc },
+    };
+  }
+
+  const vault = decodeVaultStorage(bytes);
+  if (vault) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "vault", value: vault },
+    };
+  }
+
+  const multisig = decodeMultisigStorage(bytes);
+  if (multisig) {
+    return {
+      rawHex: norm.hex,
+      byteLength: bytes.length,
+      isEmpty: false,
+      isZeroBytes32: false,
+      record: { kind: "multisig", value: multisig },
+    };
+  }
+
+  // 3. Fallback primitives (32-byte address, u64, u128, UTF-8, raw hex)
+  if (bytes.length === 32) {
+    try {
+      return {
+        rawHex: norm.hex,
+        byteLength: 32,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: {
+          kind: "address",
+          hex: bytesToHex(bytes),
+          canonical: encodeAddress(bytes),
+        },
+      };
+    } catch {
+      // ignore
+    }
+  }
+
+  if (bytes.length === 8) {
+    const val = new BincodeReader(bytes).u64();
+    if (val !== null) {
+      return {
+        rawHex: norm.hex,
+        byteLength: 8,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "u64", value: val.toString() },
+      };
+    }
+  }
+
+  if (bytes.length === 16) {
+    const val = new BincodeReader(bytes).u128();
+    if (val !== null) {
+      return {
+        rawHex: norm.hex,
+        byteLength: 16,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "u128", value: val.toString() },
+      };
+    }
+  }
+
+  try {
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    if (isPrintableUtf8(decoded)) {
+      return {
+        rawHex: norm.hex,
+        byteLength: bytes.length,
+        isEmpty: false,
+        isZeroBytes32: false,
+        record: { kind: "utf8", value: decoded },
+      };
+    }
+  } catch {
+    // non-UTF-8 binary
+  }
+
+  return {
+    rawHex: norm.hex,
+    byteLength: bytes.length,
+    isEmpty: false,
+    isZeroBytes32: false,
+    record: { kind: "raw", byteLength: bytes.length },
+  };
 }
 
