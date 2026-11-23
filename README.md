@@ -26,3 +26,17 @@ npm run build:vps   # Nitro node-server preset, output in .output/
 
 Runtime configuration comes from environment variables (`KOVANICA_*`, `GROK_AUTH_*`,
 `GROK_PREVIEW_CLIENT_SECRET`); never commit hosts, IPs, ports, keys or secrets.
+
+## Recent Explorer & Ecosystem Surface Additions
+
+- **Inline TxCard Bincode Decoder**: Decodes raw Bincode transaction payloads directly inside explorer transaction cards.
+- **KovanicaHash Miner Command Builder**: Generates copy-ready `kovanica-miner` CLI commands for solo and Stratum mining.
+- **Contract Event Log Timeline**: Renders decoded contract event logs in a chronological timeline view.
+- **Diagnostics RPC Latency Sparkline**: Tracks rolling RPC round-trip latency in the diagnostics drawer.
+- **Offline Universal Transfer+Call Raw Tx Decoder**: Decodes signed/unsigned Transfer and ContractCall raw transactions completely offline.
+- **LiveDagDrawer Fee Pressure Pill**: Displays real-time mempool fee pressure tiers inside the Live DAG drawer.
+- **PRO-21 Address Checksum Inspector**: Validates and inspects PRO-21 Bech32m address prefixes, payloads, and checksums.
+- **Faucet Pre-Flight Guard**: Checks address validity, network alignment, and cooldown state before submitting testnet faucet requests.
+- **Network Canonical Readiness Strip**: Surfaces canonical Mainnet (`1-f35df34c92001436`) and Testnet (`2-24cdb5fadd98b207`) identities alongside live ecosystem service readiness on `/network`.
+- **Pool Stratum TLS Spec Strip**: Displays frozen KovanicaHash / GHOSTDAG K=5 emission parameters, canonical network tags, and TLS-required Stratum v1 details on `/pool`.
+- **API Reference Identity Headers & `kovanica_mempoolStats`**: Documents canonical network identity headers and the `kovanica_mempoolStats` RPC method on `/api-reference`.
