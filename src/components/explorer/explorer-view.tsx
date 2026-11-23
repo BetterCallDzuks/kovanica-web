@@ -16,6 +16,7 @@ import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
 import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
 import { LiveDagDrawer } from "@/components/explorer/live-dag-drawer";
+import { ExplorerDiagnosticsDrawer } from "@/components/explorer/diagnostics-drawer";
 import { ContractInspectorPanel } from "@/components/explorer/contract-inspector-panel";
 import {
   AddressContractBanner,
@@ -378,6 +379,16 @@ export function ExplorerView() {
           setSelectedBlock(blockHash);
           setTab("Graph");
         }}
+      />
+
+      {/* Collapsible Node & Network Diagnostics Drawer */}
+      <ExplorerDiagnosticsDrawer
+        source={source}
+        transport={transport}
+        paused={paused}
+        state={state}
+        error={error}
+        errorStatus={errorStatus}
       />
 
       {/* Main DAG Graph canvas section with distinct state handling */}

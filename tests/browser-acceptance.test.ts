@@ -1996,6 +1996,108 @@ test("Section E: Explorer auto-detects deployed WASM contract address and deep-l
   }
 });
 
+test("Section E: Explorer Node & Network Diagnostics drawer opens and copies sanitized JSON with zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+    customRouteHandler: async (route, url) => {
+      if (url.pathname === "/api/state") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...FIXTURES.state,
+            network: "kovanica-testnet",
+            chain_id: 2,
+            peers: ["seed1.kovanica.online:8000"],
+          }),
+        });
+        return true;
+      }
+      return false;
+    },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Node & Network Diagnostics");
+
+    const drawer = page.getByTestId("explorer-diagnostics-drawer");
+    await drawer.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const toggle = page.getByTestId("explorer-diagnostics-toggle");
+    assert.equal(
+      await toggle.getAttribute("aria-expanded"),
+      "false",
+      "Diagnostics drawer must start collapsed",
+    );
+
+    const tagBadge = page.getByTestId("explorer-diagnostics-tag-badge");
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="explorer-diagnostics-tag-badge"]')
+          ?.getAttribute("data-verified") === "true",
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
+    assert.ok(
+      (await tagBadge.innerText()).includes("2-24cdb5fadd98b207"),
+      "Diagnostics drawer must verify canonical testnet network tag",
+    );
+
+    // Open the drawer
+    await toggle.click();
+    assert.equal(
+      await toggle.getAttribute("aria-expanded"),
+      "true",
+      "Clicking diagnostics toggle must expand drawer",
+    );
+
+    const jsonPre = page.getByTestId("explorer-diagnostics-json");
+    await jsonPre.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    const jsonText = await jsonPre.innerText();
+    const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+    assert.equal(parsed.schemaVersion, 1);
+    assert.equal(parsed.networkTag, "2-24cdb5fadd98b207");
+    assert.equal(parsed.networkTagVerified, true);
+    assert.equal(parsed.committedHeight, 12450);
+
+    // Click Copy Diagnostics JSON and assert visual confirmation
+    const copyBtn = page.getByTestId("copy-explorer-diagnostics-btn");
+    await copyBtn.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    await copyBtn.click();
+    await waitForBodyText(page, "Diagnostics Copied");
+    assert.ok(
+      (await copyBtn.innerText()).includes("Diagnostics Copied"),
+      "Copy button must display 'Diagnostics Copied' confirmation",
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Diagnostics drawer flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Diagnostics drawer flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-diagnostics-drawer", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------
