@@ -2461,6 +2461,77 @@ test("Section E: Network page renders network-canonical-readiness-strip with can
   }
 });
 
+test("Section E: API reference renders api-ref-identity-headers-card with identity headers and kovanica_mempoolStats with zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+    customRouteHandler: async (route, url) => {
+      if (url.pathname === "/api/health") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true, status: 200, health: "ok" }),
+        });
+        return true;
+      }
+      return false;
+    },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/api-reference`, "kovanica_mempoolStats");
+
+    const card = page.getByTestId("api-ref-identity-headers-card");
+    await card.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const cardText = await card.innerText();
+    assert.ok(
+      cardText.includes("X-Kovanica-Chain-Id"),
+      `Identity headers card must display X-Kovanica-Chain-Id, got: ${cardText}`,
+    );
+    assert.ok(
+      cardText.includes("X-Kovanica-Network-Tag"),
+      `Identity headers card must display X-Kovanica-Network-Tag, got: ${cardText}`,
+    );
+    assert.ok(
+      cardText.includes("X-Kovanica-Rpc-Version"),
+      `Identity headers card must display X-Kovanica-Rpc-Version, got: ${cardText}`,
+    );
+    assert.ok(
+      cardText.includes("kovanica_mempoolStats"),
+      `Identity headers card must display kovanica_mempoolStats, got: ${cardText}`,
+    );
+    assert.ok(
+      cardText.includes("curl -i"),
+      `Identity headers card must display copyable curl -i batch example, got: ${cardText}`,
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `API reference identity headers flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `API reference identity headers flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-api-ref-identity-headers", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------
