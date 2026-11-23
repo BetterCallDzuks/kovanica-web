@@ -2281,6 +2281,68 @@ test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expan
   }
 });
 
+test("Section E: LiveDagDrawer renders Fee Pressure & 1.2x Buffered Fee pill with zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Live DAG & Mempool Stream");
+
+    const drawer = page.getByTestId("live-dag-drawer");
+    await drawer.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const pill = drawer.getByTestId("live-dag-fee-pressure-pill");
+    await pill.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    // FIXTURES.state.node.min_fee is 10000 with mempool 0 -> tier "normal", 1.2x = 12,000 atoms/B
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('[data-testid="live-dag-fee-pressure-pill"]');
+        return Boolean(el && el.getAttribute("data-fee-tier") === "normal");
+      },
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
+
+    const pillText = await pill.innerText();
+    assert.ok(pillText.includes("Normal"), `Fee pressure pill must display Normal tier, got: ${pillText}`);
+    assert.ok(
+      pillText.includes("10,000 atoms/B"),
+      `Fee pressure pill must display base fee rate, got: ${pillText}`,
+    );
+    assert.ok(
+      pillText.includes("1.2x 12,000 atoms/B"),
+      `Fee pressure pill must display 1.2x buffered fee rate, got: ${pillText}`,
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `LiveDagDrawer fee pressure pill flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `LiveDagDrawer fee pressure pill flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-live-dag-fee-pressure-pill", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
+  Gauge,
   GitBranch,
   Layers,
   Pause,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import type { ApiState } from "@/lib/api/contract";
 import type { LiveStreamTransport } from "@/lib/api/ws-stream";
+import { classifyFeePressure } from "@/lib/explorer/fee-pressure";
 import {
   MAX_LIVE_FEED_ENTRIES,
   extractLiveDagFeed,
@@ -28,6 +30,7 @@ export type LiveDagDrawerProps = {
   onTogglePause?: () => void;
   defaultOpen?: boolean;
   onSelectBlock?: (hash: string) => void;
+  feeRateAtomsPerByte?: bigint | number | string | null;
 };
 
 function formatBlockTime(timestampMs: number): string {
@@ -55,6 +58,7 @@ export function LiveDagDrawer({
   onTogglePause,
   defaultOpen = true,
   onSelectBlock,
+  feeRateAtomsPerByte,
 }: LiveDagDrawerProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [entries, setEntries] = useState<LiveDagFeedEntry[]>(() =>
@@ -71,6 +75,16 @@ export function LiveDagDrawer({
   const summary = useMemo(
     () => summarizeMempoolStream(state, effectiveTransport),
     [state, effectiveTransport],
+  );
+
+  const rawFeeRate =
+    feeRateAtomsPerByte !== undefined
+      ? feeRateAtomsPerByte
+      : (state?.node?.min_fee ?? null);
+
+  const feePressure = useMemo(
+    () => classifyFeePressure(rawFeeRate, state ? summary.pendingTxCount : null),
+    [rawFeeRate, state, summary.pendingTxCount],
   );
 
   const transportLabel =
@@ -141,8 +155,45 @@ export function LiveDagDrawer({
           </span>
         </div>
 
-        {/* Mempool & Tip Counters + Pause Control */}
+        {/* Mempool & Tip Counters + Fee Pressure Pill + Pause Control */}
         <div className="flex flex-wrap items-center gap-2">
+          <span
+            data-testid="live-dag-fee-pressure-pill"
+            data-fee-tier={feePressure.tier}
+            title={`Fee pressure: ${feePressure.label} · Base ${feePressure.formattedBaseFee} · 1.2x buffered ${feePressure.formattedBufferedFee}`}
+            className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded-md border border-border bg-bg px-2 py-1 font-mono text-[11px] tabular-nums text-fg"
+          >
+            <Gauge className="size-3 shrink-0 text-gold" />
+            <span className="text-subtle">Fee</span>
+            <span
+              data-testid="live-dag-fee-pressure-tier"
+              className={cn(
+                "rounded-full border px-1.5 py-0 text-[10px] font-medium",
+                feePressure.tier === "low"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : feePressure.tier === "normal"
+                    ? "border-sky-500/30 bg-sky-500/10 text-sky-300"
+                    : feePressure.tier === "elevated"
+                      ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                      : feePressure.tier === "congested"
+                        ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                        : "border-border bg-surface text-muted",
+              )}
+            >
+              {feePressure.label}
+            </span>
+            <span data-testid="live-dag-fee-base" className="text-muted">
+              {feePressure.formattedBaseFee}
+            </span>
+            <span className="text-subtle">·</span>
+            <span
+              data-testid="live-dag-fee-buffered"
+              className="font-semibold text-gold"
+            >
+              1.2x {feePressure.formattedBufferedFee}
+            </span>
+          </span>
+
           <span
             data-testid="live-dag-drawer-mempool"
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg px-2 py-1 font-mono text-[11px] tabular-nums text-fg"
