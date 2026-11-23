@@ -11,13 +11,16 @@ import {
   FileCode,
   Fuel,
   History,
+  Layers,
   Link2,
   Play,
+  Plus,
   RotateCcw,
   Search,
   ShieldAlert,
   SlidersHorizontal,
   Terminal,
+  Trash2,
 } from "lucide-react";
 import { ApiError, apiPostJson } from "@/lib/api/client";
 import type { ApiSource } from "@/lib/api/contract";
@@ -25,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import {
   CONTRACT_PRESETS,
   STORAGE_SLOT_PRESETS,
+  buildContractBatchSdkSnippet,
   buildContractCurlSnippet,
   buildContractInspectorDeepLink,
   buildContractSdkSnippet,
@@ -36,6 +40,8 @@ import {
   getStorageSlotPreset,
   parseContractError,
   parseContractInspectorDeepLink,
+  summarizeContractBatchDryRun,
+  type ContractBatchQueueItem,
   type ContractCallRequest,
   type ContractCallResponse,
   type ContractPresetId,
@@ -144,7 +150,13 @@ export function ContractInspectorPanel({
   const [transportError, setTransportError] = useState<string | null>(null);
   const [showRpcPayload, setShowRpcPayload] = useState(false);
   const [history, setHistory] = useState<DryRunHistoryItem[]>([]);
-  const [copiedAction, setCopiedAction] = useState<"link" | "curl" | "sdk" | null>(null);
+  const [copiedAction, setCopiedAction] = useState<"link" | "curl" | "sdk" | "batch_sdk" | null>(
+    null,
+  );
+
+  // Multi-Call Batch Dry-Run Queue state
+  const [batchQueue, setBatchQueue] = useState<ContractBatchQueueItem[]>([]);
+  const [batchRunning, setBatchRunning] = useState(false);
 
   // Storage Slot & Bincode State Reader state
   const [storagePresetId, setStoragePresetId] = useState<StorageSlotPresetId>("name");
@@ -219,7 +231,23 @@ export function ContractInspectorPanel({
     [rpcUrlForSnippets, contractAddress, presetId, fields, caller, callValue, gasLimit],
   );
 
-  function copyDeveloperArtifact(kind: "link" | "curl" | "sdk", text: string) {
+  const batchSummary = useMemo(
+    () => summarizeContractBatchDryRun(batchQueue),
+    [batchQueue],
+  );
+
+  const batchSdkSnippet = useMemo(
+    () =>
+      buildContractBatchSdkSnippet({
+        rpcUrl: rpcUrlForSnippets,
+        items: batchQueue,
+        sender: caller.trim() || undefined,
+        chainId: 2,
+      }),
+    [rpcUrlForSnippets, batchQueue, caller],
+  );
+
+  function copyDeveloperArtifact(kind: "link" | "curl" | "sdk" | "batch_sdk", text: string) {
     setCopiedAction(kind);
     if (typeof window !== "undefined") {
       window.setTimeout(() => {
@@ -359,6 +387,87 @@ export function ContractInspectorPanel({
   }
 
   const canExecute = !running && contractValid && callerValid && encodedPreview.ok;
+  const canQueueBatchCall = !batchRunning && contractValid && callerValid && encodedPreview.ok;
+
+  function handleQueueCallToBatch() {
+    if (!contractValid) {
+      setTransportError("Enter a valid contract address (kvnc…dag or 32-byte hex).");
+      return;
+    }
+    if (!callerValid) {
+      setTransportError("Optional caller (`from`) must be a valid kvnc…dag address or 32-byte hex.");
+      return;
+    }
+    if (!encodedPreview.ok) {
+      setTransportError(encodedPreview.error);
+      return;
+    }
+
+    const newItem: ContractBatchQueueItem = {
+      id: `batch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      presetId,
+      contractAddress: contractAddress.trim(),
+      entry: encodedPreview.entry || preset.entry || "call",
+      fields: { ...fields },
+      dataHex: encodedPreview.dataHex,
+      byteLength: encodedPreview.byteLength,
+      from: caller.trim() || undefined,
+      value: callValue.trim() || undefined,
+      gas: gasLimit.trim() || undefined,
+      response: null,
+      transportError: null,
+    };
+
+    setBatchQueue((prev) => [...prev, newItem]);
+  }
+
+  function handleRemoveBatchItem(id: string) {
+    setBatchQueue((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function handleClearBatch() {
+    setBatchQueue([]);
+  }
+
+  async function handleRunBatchDryRun() {
+    if (batchQueue.length === 0 || batchRunning) return;
+    setBatchRunning(true);
+
+    const snapshot = [...batchQueue];
+    for (const item of snapshot) {
+      const payload: ContractCallRequest = {
+        to: item.contractAddress,
+        data: item.dataHex,
+      };
+      if (item.entry) payload.entry = item.entry;
+      if (item.from) payload.from = item.from;
+      if (item.value) payload.value = item.value;
+      if (item.gas) payload.gas = item.gas;
+
+      try {
+        const res = await apiPostJson<ContractCallResponse>("/api/contract_call", payload);
+        setBatchQueue((prev) =>
+          prev.map((curr) =>
+            curr.id === item.id ? { ...curr, response: res, transportError: null } : curr,
+          ),
+        );
+      } catch (err) {
+        const msg =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Batch dry-run call failed";
+        setBatchQueue((prev) =>
+          prev.map((curr) =>
+            curr.id === item.id ? { ...curr, response: null, transportError: msg } : curr,
+          ),
+        );
+      }
+    }
+
+    setBatchRunning(false);
+  }
 
   const storagePreset = useMemo(
     () => getStorageSlotPreset(storagePresetId),
@@ -745,25 +854,40 @@ export function ContractInspectorPanel({
               <span>Reset</span>
             </Button>
 
-            <Button
-              type="submit"
-              variant="gold"
-              size="sm"
-              disabled={!canExecute}
-              className="h-9 gap-1.5 px-4 text-xs"
-            >
-              {running ? (
-                <>
-                  <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  <span>Simulating…</span>
-                </>
-              ) : (
-                <>
-                  <Play className="size-3.5" />
-                  <span>Execute Dry-Run</span>
-                </>
-              )}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="queue-batch-call-btn"
+                disabled={!canQueueBatchCall}
+                onClick={handleQueueCallToBatch}
+                className="h-9 gap-1.5 text-xs"
+              >
+                <Plus className="size-3.5 text-gold" />
+                <span>Queue Call to Batch ({batchQueue.length})</span>
+              </Button>
+
+              <Button
+                type="submit"
+                variant="gold"
+                size="sm"
+                disabled={!canExecute}
+                className="h-9 gap-1.5 px-4 text-xs"
+              >
+                {running ? (
+                  <>
+                    <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    <span>Simulating…</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-3.5" />
+                    <span>Execute Dry-Run</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
 
@@ -1068,6 +1192,222 @@ export function ContractInspectorPanel({
           ) : null}
         </div>
       </div>
+
+      {/* Multi-Call Batch Dry-Run Queue & Batch SDK Exporter */}
+      <section
+        aria-label="Multi-Call Batch Dry-Run Simulator"
+        data-testid="batch-dry-run-section"
+        className="space-y-4 rounded-lg border border-border bg-surface p-4"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Layers className="size-4 text-gold" />
+              <h3 className="font-display text-base text-fg">
+                Multi-Call Batch Dry-Run Queue &amp; Batch SDK Exporter
+              </h3>
+              <span className="inline-flex items-center rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-medium text-gold">
+                estimateBatchCalls · {batchSummary.totalCalls}{" "}
+                {batchSummary.totalCalls === 1 ? "call" : "calls"}
+              </span>
+            </div>
+            <p className="max-w-3xl text-xs text-muted">
+              Queue multiple contract calls, simulate the entire batch sequentially via{" "}
+              <code className="font-mono text-fg">POST /api/contract_call</code>, inspect aggregate
+              pass/revert/gas metrics, and export a ready-to-run TypeScript{" "}
+              <code className="font-mono text-fg">estimateBatchCalls</code> SDK snippet.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="gold"
+              size="sm"
+              data-testid="run-batch-dry-run-btn"
+              disabled={batchQueue.length === 0 || batchRunning}
+              onClick={() => void handleRunBatchDryRun()}
+              className="h-8 gap-1.5 px-3 text-xs"
+            >
+              {batchRunning ? (
+                <>
+                  <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <span>Running Batch…</span>
+                </>
+              ) : (
+                <>
+                  <Play className="size-3.5" />
+                  <span>Run Batch Dry-Run</span>
+                </>
+              )}
+            </Button>
+
+            <button
+              type="button"
+              data-testid="copy-batch-sdk-btn"
+              disabled={batchQueue.length === 0}
+              onClick={() => copyDeveloperArtifact("batch_sdk", batchSdkSnippet)}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-bg/70 px-2.5 font-mono text-[11px] text-fg transition-colors hover:border-gold/50 hover:text-gold disabled:pointer-events-none disabled:opacity-45"
+              title="Copy ready-to-run TypeScript kovanica-sdk estimateBatchCalls snippet"
+            >
+              {copiedAction === "batch_sdk" ? (
+                <>
+                  <Check className="size-3.5 text-ok" />
+                  <span>Batch SDK Copied</span>
+                </>
+              ) : (
+                <>
+                  <Code2 className="size-3.5 text-gold" />
+                  <span>Copy Batch SDK Snippet</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              data-testid="clear-batch-btn"
+              disabled={batchQueue.length === 0 || batchRunning}
+              onClick={handleClearBatch}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-bg/70 px-2.5 font-mono text-[11px] text-subtle transition-colors hover:border-danger/50 hover:text-danger disabled:pointer-events-none disabled:opacity-45"
+            >
+              <Trash2 className="size-3.5" />
+              <span>Clear Batch</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Aggregate Batch Telemetry Strip */}
+        <dl
+          data-testid="batch-dry-run-summary"
+          className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-5"
+        >
+          <div className="bg-bg px-3 py-2">
+            <dt className="font-mono text-[9px] tracking-wider text-subtle uppercase">
+              Total Calls
+            </dt>
+            <dd
+              data-testid="batch-total-calls"
+              className="mt-1 font-mono text-xs font-semibold tabular-nums text-fg"
+            >
+              {batchSummary.totalCalls}
+            </dd>
+          </div>
+          <div className="bg-bg px-3 py-2">
+            <dt className="font-mono text-[9px] tracking-wider text-subtle uppercase">Passed</dt>
+            <dd
+              data-testid="batch-passed-calls"
+              className="mt-1 font-mono text-xs font-semibold tabular-nums text-emerald-400"
+            >
+              {batchSummary.passedCalls}
+            </dd>
+          </div>
+          <div className="bg-bg px-3 py-2">
+            <dt className="font-mono text-[9px] tracking-wider text-subtle uppercase">Reverted</dt>
+            <dd
+              data-testid="batch-reverted-calls"
+              className="mt-1 font-mono text-xs font-semibold tabular-nums text-amber-300"
+            >
+              {batchSummary.revertedCalls + batchSummary.errorCalls}
+            </dd>
+          </div>
+          <div className="bg-bg px-3 py-2">
+            <dt className="flex items-center gap-1 font-mono text-[9px] tracking-wider text-subtle uppercase">
+              <Fuel className="size-3" />
+              Total Gas Used
+            </dt>
+            <dd
+              data-testid="batch-total-gas"
+              className="mt-1 font-mono text-xs font-semibold tabular-nums text-fg"
+            >
+              {batchSummary.totalGasUsed.toLocaleString()}
+            </dd>
+          </div>
+          <div className="bg-bg px-3 py-2">
+            <dt className="flex items-center gap-1 font-mono text-[9px] tracking-wider text-subtle uppercase">
+              <Clock className="size-3" />
+              Total Latency
+            </dt>
+            <dd
+              data-testid="batch-total-latency"
+              className="mt-1 font-mono text-xs font-semibold tabular-nums text-fg"
+            >
+              {batchSummary.totalLatencyMs} ms
+            </dd>
+          </div>
+        </dl>
+
+        {batchSummary.items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border/70 bg-bg/40 p-6 text-center">
+            <Layers className="size-6 text-subtle" />
+            <p className="mt-2 text-xs font-medium text-fg">Batch queue is empty</p>
+            <p className="mt-1 max-w-md text-[11px] text-muted">
+              Configure a contract call above and click{" "}
+              <span className="font-mono text-fg">Queue Call to Batch</span> to build a multi-call
+              simulation sequence.
+            </p>
+          </div>
+        ) : (
+          <ul data-testid="batch-queue-list" className="divide-y divide-border/60 rounded-md border border-border bg-bg/60">
+            {batchSummary.items.map((item) => (
+              <li
+                key={item.id}
+                data-testid={`batch-queue-item-${item.index}`}
+                className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 text-xs"
+              >
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 font-mono">
+                    <span className="text-[10px] text-subtle">#{item.index}</span>
+                    <span className="rounded border border-gold/30 bg-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-gold">
+                      {item.entry}
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {shortId(item.contractAddress, 8)}
+                    </span>
+                    <span className="text-[10px] text-subtle">{item.byteLength} B</span>
+                  </div>
+                  <p className="truncate font-mono text-[11px] text-fg">{item.outputSummary}</p>
+                </div>
+
+                <div className="flex items-center gap-2.5 font-mono text-[10px]">
+                  {item.gasUsed !== null ? (
+                    <span className="text-subtle">{item.gasUsed.toLocaleString()} gas</span>
+                  ) : null}
+                  {item.latencyMs !== null ? (
+                    <span className="text-subtle">{item.latencyMs} ms</span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-semibold",
+                      item.status === "passed"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : item.status === "reverted" || item.status === "error"
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                          : "border-border bg-surface text-muted",
+                    )}
+                  >
+                    {item.status === "passed"
+                      ? "Passed"
+                      : item.status === "reverted"
+                        ? "Reverted"
+                        : item.status === "error"
+                          ? "Error"
+                          : "Queued"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={batchRunning}
+                    onClick={() => handleRemoveBatchItem(item.id)}
+                    className="rounded p-1 text-subtle transition-colors hover:bg-surface hover:text-danger disabled:opacity-40"
+                    title={`Remove call #${item.index} from batch`}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Session Dry-Run History */}
       {history.length > 0 ? (

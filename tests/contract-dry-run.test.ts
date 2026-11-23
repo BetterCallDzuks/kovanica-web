@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CONTRACT_PRESETS,
   STORAGE_SLOT_PRESETS,
+  buildContractBatchSdkSnippet,
   buildContractCallRequest,
   buildContractCurlSnippet,
   buildContractInspectorDeepLink,
@@ -27,6 +28,8 @@ import {
   parseContractError,
   parseContractInspectorDeepLink,
   parseUintQuantity,
+  summarizeContractBatchDryRun,
+  type ContractBatchQueueItem,
   type ContractCallResponse,
   type ContractStorageResponse,
 } from "../src/lib/contracts/dry-run";
@@ -470,6 +473,112 @@ describe("Contract Inspector Shareable Deep-Links & Developer Snippets", () => {
     assert.ok(sdk.includes(`entry: "token_transfer"`));
     assert.ok(sdk.includes(`await client.call(callRequest)`));
     assert.ok(sdk.includes(`await estimateAndBuildCall(client, callRequest)`));
+  });
+
+  it("summarizes multi-call batch dry-run queues and generates estimateBatchCalls SDK snippets", () => {
+    const owner = new Uint8Array(32).fill(0x11);
+    const pubkey = new Uint8Array(32).fill(0xaa);
+    const encodedEntry = encodeNameEntry(owner, pubkey, ["https://relay1.kovanica.online"]);
+    const aliceArgs = encodePresetArgs("name_resolve", { name: "alice" });
+    const unknownArgs = encodePresetArgs("name_resolve", { name: "unknown-batch" });
+    assert.equal(aliceArgs.ok && unknownArgs.ok, true);
+    if (!aliceArgs.ok || !unknownArgs.ok) return;
+
+    const items: ContractBatchQueueItem[] = [
+      {
+        id: "batch-1",
+        presetId: "name_resolve",
+        contractAddress: SAMPLE_HEX_A,
+        entry: "name_resolve",
+        fields: { name: "alice" },
+        dataHex: aliceArgs.dataHex,
+        byteLength: aliceArgs.byteLength,
+        response: {
+          ok: true,
+          reverted: false,
+          outputHex: `0x${bytesToHex(encodedEntry)}`,
+          gasUsed: 24_850,
+          codeBytes: 4096,
+          latencyMs: 3,
+          source: "local",
+          rpcMethod: "kovanica_call",
+          call: {
+            to: SAMPLE_ADDR_A,
+            entry: "name_resolve",
+            data: aliceArgs.dataHex,
+          },
+        },
+      },
+      {
+        id: "batch-2",
+        presetId: "name_resolve",
+        contractAddress: SAMPLE_HEX_A,
+        entry: "name_resolve",
+        fields: { name: "unknown-batch" },
+        dataHex: unknownArgs.dataHex,
+        byteLength: unknownArgs.byteLength,
+        response: {
+          ok: false,
+          reverted: true,
+          error: "Execution reverted or failed: code -5 (NotFound: unknown-batch)",
+          codeBytes: 4096,
+          latencyMs: 2,
+          source: "local",
+          rpcMethod: "kovanica_call",
+          call: {
+            to: SAMPLE_ADDR_A,
+            entry: "name_resolve",
+            data: unknownArgs.dataHex,
+          },
+        },
+      },
+      {
+        id: "batch-3",
+        presetId: "token_transfer",
+        contractAddress: SAMPLE_HEX_A,
+        entry: "token_transfer",
+        fields: { to: SAMPLE_ADDR_B, amount: "1000" },
+        dataHex: "0x1234",
+        byteLength: 2,
+        value: "500",
+        gas: "50000",
+      },
+    ];
+
+    const summary = summarizeContractBatchDryRun(items);
+    assert.equal(summary.totalCalls, 3);
+    assert.equal(summary.executedCalls, 2);
+    assert.equal(summary.passedCalls, 1);
+    assert.equal(summary.revertedCalls, 1);
+    assert.equal(summary.errorCalls, 0);
+    assert.equal(summary.pendingCalls, 1);
+    assert.equal(summary.totalGasUsed, 24_850);
+    assert.equal(summary.totalLatencyMs, 5);
+    assert.equal(summary.items[0]?.status, "passed");
+    assert.match(summary.items[0]?.outputSummary ?? "", /NameEntry/);
+    assert.equal(summary.items[1]?.status, "reverted");
+    assert.match(summary.items[1]?.outputSummary ?? "", /NotFound/);
+    assert.equal(summary.items[2]?.status, "pending");
+
+    const batchSnippet = buildContractBatchSdkSnippet({
+      rpcUrl: "https://testnet.kovanica.online/rpc",
+      items,
+      sender: SAMPLE_HEX_B,
+      chainId: 2,
+    });
+    assert.ok(
+      batchSnippet.includes(`import { KovanicaClient, estimateBatchCalls } from "kovanica-sdk";`),
+    );
+    assert.ok(batchSnippet.includes(`contract: "${SAMPLE_ADDR_A}"`));
+    assert.ok(batchSnippet.includes(`entry: "name_resolve"`));
+    assert.ok(batchSnippet.includes(`gasLimit: 24850n`));
+    assert.ok(batchSnippet.includes(`callValue: 500n`));
+    assert.ok(batchSnippet.includes(`gasLimit: 50000n`));
+    assert.ok(
+      batchSnippet.includes(
+        `await estimateBatchCalls(client, batchCalls, { sender: "${SAMPLE_ADDR_B}", chainId: 2 })`,
+      ),
+    );
   });
 });
 

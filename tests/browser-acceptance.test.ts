@@ -1445,7 +1445,56 @@ test("Section E: Explorer Contract Inspector (?tab=contracts & tab click) runs n
       "Storage slot reader must decode token:meta Bincode record",
     );
 
-    // 7. Verify zero uncaught page or console errors
+    // 7. Queue 2 calls (`name_resolve` for `alice` and `unknown-batch`), run batch dry-run,
+    // verify aggregate pass/revert summary & Copy Batch SDK Snippet
+    const queueBatchBtn = page.getByTestId("queue-batch-call-btn");
+    const runBatchBtn = page.getByTestId("run-batch-dry-run-btn");
+    const copyBatchSdkBtn = page.getByTestId("copy-batch-sdk-btn");
+
+    await hydratedNameInput.fill("alice");
+    await queueBatchBtn.click();
+    await hydratedNameInput.fill("unknown-batch");
+    await queueBatchBtn.click();
+
+    assert.equal(
+      (await page.getByTestId("batch-total-calls").innerText()).trim(),
+      "2",
+      "Batch queue must report 2 queued calls",
+    );
+
+    await runBatchBtn.click();
+    await waitForBodyText(page, "NameEntry ·");
+    assert.equal(
+      (await page.getByTestId("batch-passed-calls").innerText()).trim(),
+      "1",
+      "Batch simulation summary must report 1 passed call",
+    );
+    assert.equal(
+      (await page.getByTestId("batch-reverted-calls").innerText()).trim(),
+      "1",
+      "Batch simulation summary must report 1 reverted call",
+    );
+    assert.equal(
+      (await page.getByTestId("batch-total-gas").innerText()).trim(),
+      "24,850",
+      "Batch simulation summary must report 24,850 total gas used",
+    );
+
+    const batchListText = await page.getByTestId("batch-queue-list").innerText();
+    assert.ok(
+      batchListText.includes("https://relay1.kovanica.online") &&
+        batchListText.includes("NotFound"),
+      "Batch queue items must display per-item decoded NameEntry output and NotFound revert diagnostic",
+    );
+
+    await copyBatchSdkBtn.click();
+    await waitForBodyText(page, "Batch SDK Copied");
+    assert.ok(
+      (await copyBatchSdkBtn.innerText()).includes("Batch SDK Copied"),
+      "Copy Batch SDK Snippet button must confirm Batch SDK Copied",
+    );
+
+    // 8. Verify zero uncaught page or console errors
     assert.deepEqual(
       pageErrors,
       [],
