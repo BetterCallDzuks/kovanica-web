@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import {
   Search,
@@ -22,6 +22,7 @@ import {
   type RouteTarget,
   type ResolutionResult,
 } from "@/lib/search/resolver";
+import { resolveSearchShortcuts, type SearchShortcutAction } from "@/lib/search/shortcuts";
 import { useNode } from "@/lib/api/use-node";
 import type { ApiState } from "@/lib/api/contract";
 
@@ -53,6 +54,7 @@ export function GlobalSearch({
   const [resolution, setResolution] = useState<ResolutionResult | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const shortcuts = useMemo(() => resolveSearchShortcuts(query), [query]);
 
   // Sync resolution whenever query changes
   useEffect(() => {
@@ -124,20 +126,27 @@ export function GlobalSearch({
     if (onResolved) {
       onResolved(target);
     }
-    void (router.navigate as any)({
-      to: target.path,
-      search: target.search,
-      params: target.params,
+    void router.navigate({
+      to: target.path as never,
+      search: target.search as never,
+      params: target.params as never,
     });
+  }
+
+  function handleShortcutNavigate(shortcut: SearchShortcutAction) {
+    setIsOpen(false);
+    void router.navigate({ href: shortcut.href });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (!resolution) return;
-
-      if (resolution.ok && resolution.target) {
+      if (resolution?.ok && resolution.target) {
         handleNavigate(resolution.target);
+        return;
+      }
+      if (shortcuts.length > 0) {
+        handleShortcutNavigate(shortcuts[0]!);
       }
     } else if (e.key === "Escape") {
       setIsOpen(false);
@@ -227,8 +236,34 @@ export function GlobalSearch({
         )}
       </div>
 
+      {/* Quick-Jump Shortcut Pills */}
+      {shortcuts.length > 0 && (
+        <div
+          className="mt-1.5 flex flex-wrap items-center gap-1.5"
+          role="group"
+          aria-label="Quick-jump search shortcuts"
+        >
+          {shortcuts.map((shortcut) => (
+            <button
+              key={shortcut.id}
+              type="button"
+              data-testid={`search-shortcut-${shortcut.id}`}
+              onClick={() => handleShortcutNavigate(shortcut)}
+              title={shortcut.description}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-surface-2/80 px-2.5 py-1 text-[11px] font-medium text-fg transition-colors hover:border-gold/70 hover:bg-gold/10 hover:text-gold"
+            >
+              <span className="rounded bg-gold/15 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-gold">
+                {shortcut.badge}
+              </span>
+              <span>{shortcut.label}</span>
+              <ArrowRight className="size-3 shrink-0 text-muted" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Live Suggestions & Error Popover */}
-      {isOpen && query.trim() !== "" && (
+      {isOpen && query.trim() !== "" && (resolution?.ok || shortcuts.length === 0) && (
         <div className="absolute top-full left-0 z-50 mt-1.5 w-full rounded-xl border border-border bg-surface p-2 shadow-2xl backdrop-blur-md">
           {/* Case A: Malformed or Unrecognized */}
           {resolution && !resolution.ok && (
@@ -262,7 +297,7 @@ export function GlobalSearch({
                   </li>
                   <li className="flex items-center gap-1.5">
                     <span className="text-fg font-semibold">• Prefixes:</span>
-                    <span className="text-subtle">block:, tx:, addr:, nft:, rwa:, col:</span>
+                    <span className="text-subtle">name:, block:, tx:, addr:, nft:, rwa:, col:</span>
                   </li>
                   <li className="flex items-center gap-1.5">
                     <span className="text-fg font-semibold">• Tokens:</span>
