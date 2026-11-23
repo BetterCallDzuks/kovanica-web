@@ -61,6 +61,10 @@ import {
   type StorageSlotPresetId,
 } from "@/lib/contracts/dry-run";
 import { formatAtomsDisplay } from "@/lib/contracts/decoders";
+import {
+  decodeWireCallTxHex,
+  type DecodeWireCallTxResult,
+} from "@/lib/explorer/raw-tx-decode";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 import { parseAddr, toCanonicalAddress } from "@/lib/wallet/address";
@@ -183,6 +187,20 @@ export function ContractInspectorPanel({
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptResponse, setReceiptResponse] = useState<ContractReceiptResponse | null>(null);
   const [receiptError, setReceiptError] = useState<string | null>(null);
+
+  // Offline Raw Wire Tx Decoder state (collapsed by default)
+  const [rawTxOpen, setRawTxOpen] = useState(false);
+  const [rawTxHexInput, setRawTxHexInput] = useState("");
+  const [rawTxResult, setRawTxResult] = useState<DecodeWireCallTxResult | null>(null);
+
+  function handleDecodeRawTx() {
+    setRawTxResult(decodeWireCallTxHex(rawTxHexInput));
+  }
+
+  function handleClearRawTx() {
+    setRawTxHexInput("");
+    setRawTxResult(null);
+  }
 
   useEffect(() => {
     if (initialContract?.trim()) {
@@ -2359,6 +2377,206 @@ export function ContractInspectorPanel({
             ) : null}
           </div>
         </div>
+      </section>
+
+      {/* Collapsible Offline Raw Wire Tx Decoder */}
+      <section
+        aria-label="Decode Raw Wire Tx"
+        data-testid="raw-tx-decoder-panel"
+        className="rounded-lg border border-border bg-surface"
+      >
+        <button
+          type="button"
+          onClick={() => setRawTxOpen((prev) => !prev)}
+          aria-expanded={rawTxOpen}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2/40"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Code2 className="size-4 text-gold" />
+            <h3 className="font-display text-base text-fg">Decode Raw Wire Tx</h3>
+            <span className="inline-flex items-center rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-medium text-gold">
+              offline · Bincode 1.x Call
+            </span>
+          </div>
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted transition-transform",
+              rawTxOpen && "rotate-180",
+            )}
+          />
+        </button>
+
+        {rawTxOpen ? (
+          <div className="space-y-4 border-t border-border/60 p-4">
+            <p className="max-w-3xl text-xs text-muted">
+              Paste a hex-encoded signed Bincode 1.x{" "}
+              <code className="font-mono text-fg">Call</code> transaction (bare or{" "}
+              <code className="font-mono text-fg">0x</code>-prefixed, up to 256 KiB) to inspect
+              sender, nonce, fee, contract, gas limit, and call arguments completely offline without
+              sending any network request.
+            </p>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="inspector-raw-tx-hex"
+                className="block font-mono text-[10px] font-semibold tracking-wider text-subtle uppercase"
+              >
+                Raw Bincode Wire Transaction Hex
+              </label>
+              <textarea
+                id="inspector-raw-tx-hex"
+                data-testid="raw-tx-hex-input"
+                rows={3}
+                value={rawTxHexInput}
+                onChange={(e) => setRawTxHexInput(e.target.value)}
+                placeholder="0x… or bare hex Bincode wire Call transaction"
+                spellCheck={false}
+                className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg placeholder:text-subtle focus:border-gold/60 focus:outline-none focus:ring-1 focus:ring-gold/40"
+              />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {rawTxHexInput || rawTxResult ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearRawTx}
+                    className="h-8 gap-1.5 px-3 text-xs"
+                  >
+                    <RotateCcw className="size-3" />
+                    <span>Clear</span>
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="gold"
+                  size="sm"
+                  data-testid="raw-tx-decode-btn"
+                  onClick={handleDecodeRawTx}
+                  className="h-8 gap-1.5 px-4 text-xs"
+                >
+                  <Terminal className="size-3.5" />
+                  <span>Decode Offline</span>
+                </Button>
+              </div>
+            </div>
+
+            <div aria-live="polite">
+              {rawTxResult && !rawTxResult.ok ? (
+                <div
+                  role="alert"
+                  data-testid="raw-tx-decode-error"
+                  className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 font-mono text-xs text-danger"
+                >
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{rawTxResult.error}</span>
+                </div>
+              ) : null}
+
+              {rawTxResult && rawTxResult.ok ? (
+                <div
+                  data-testid="raw-tx-decode-result"
+                  className="space-y-3 rounded-md border border-border bg-bg/60 p-3.5 font-mono text-xs"
+                >
+                  <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-4">
+                    <div className="bg-bg px-3 py-2">
+                      <dt className="text-[9px] tracking-wider text-subtle uppercase">Nonce</dt>
+                      <dd className="mt-1 font-semibold tabular-nums text-fg">
+                        {rawTxResult.tx.nonce.toString()}
+                      </dd>
+                    </div>
+                    <div className="bg-bg px-3 py-2">
+                      <dt className="text-[9px] tracking-wider text-subtle uppercase">Fee</dt>
+                      <dd
+                        className="mt-1 font-semibold tabular-nums text-gold"
+                        title={`${rawTxResult.tx.fee.toString()} atoms`}
+                      >
+                        {formatAtomsDisplay(rawTxResult.tx.fee)} KVNC
+                      </dd>
+                    </div>
+                    <div className="bg-bg px-3 py-2">
+                      <dt className="flex items-center gap-1 text-[9px] tracking-wider text-subtle uppercase">
+                        <Fuel className="size-3" />
+                        Gas Limit
+                      </dt>
+                      <dd className="mt-1 font-semibold tabular-nums text-fg">
+                        {rawTxResult.tx.gasLimit.toLocaleString()}
+                      </dd>
+                    </div>
+                    <div className="bg-bg px-3 py-2">
+                      <dt className="text-[9px] tracking-wider text-subtle uppercase">Wire Size</dt>
+                      <dd className="mt-1 font-semibold tabular-nums text-fg">
+                        {rawTxResult.tx.wireSizeBytes.toLocaleString()} B
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="space-y-2 rounded border border-border/70 bg-bg/80 p-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-subtle uppercase">Sender</span>
+                        <CopyInline text={rawTxResult.tx.senderAddress} label="Sender Address" />
+                      </div>
+                      <p className="break-all text-gold">{rawTxResult.tx.senderAddress}</p>
+                      <p className="break-all text-[10px] text-subtle">
+                        0x{rawTxResult.tx.senderHex}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-border/50 pt-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-subtle uppercase">Contract</span>
+                        <CopyInline
+                          text={rawTxResult.tx.contractAddress}
+                          label="Contract Address"
+                        />
+                      </div>
+                      <p className="break-all text-fg">{rawTxResult.tx.contractAddress}</p>
+                      <p className="break-all text-[10px] text-subtle">
+                        0x{rawTxResult.tx.contractHex}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-border/50 pt-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] text-subtle uppercase">
+                            Call Args ({rawTxResult.tx.argsLength} B)
+                          </span>
+                          {rawTxResult.tx.decodedCallArgs ? (
+                            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                              {rawTxResult.tx.decodedCallArgs.method}
+                            </span>
+                          ) : null}
+                        </div>
+                        {rawTxResult.tx.argsHex ? (
+                          <CopyInline text={`0x${rawTxResult.tx.argsHex}`} label="Call Args Hex" />
+                        ) : null}
+                      </div>
+                      <p className="mt-1 max-h-24 overflow-auto break-all text-[11px] text-muted select-all">
+                        {rawTxResult.tx.argsHex ? `0x${rawTxResult.tx.argsHex}` : "(empty)"}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-border/50 pt-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-subtle uppercase">
+                          Ed25519 Signature (64 B)
+                        </span>
+                        <CopyInline
+                          text={`0x${rawTxResult.tx.signatureHex}`}
+                          label="Signature Hex"
+                        />
+                      </div>
+                      <p className="mt-1 break-all text-[10px] text-subtle">
+                        0x{rawTxResult.tx.signatureHex}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
