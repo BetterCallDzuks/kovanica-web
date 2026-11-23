@@ -1276,6 +1276,269 @@ export function buildContractSdkSnippet(options: ContractSnippetOptions): string
   ].join("\n");
 }
 
+// --- Multi-Call Batch Dry-Run Simulation & Batch SDK Exporter (`estimateBatchCalls`) ---
+
+export type ContractBatchQueueItem = {
+  id: string;
+  presetId: ContractPresetId;
+  contractAddress: string;
+  entry: string;
+  fields: Record<string, string>;
+  dataHex: string;
+  byteLength: number;
+  from?: string;
+  value?: string;
+  gas?: string;
+  response?: ContractCallResponse | null;
+  transportError?: string | null;
+};
+
+export type ContractBatchItemSummary = {
+  id: string;
+  index: number;
+  presetId: ContractPresetId;
+  entry: string;
+  contractAddress: string;
+  dataHex: string;
+  byteLength: number;
+  status: "pending" | "passed" | "reverted" | "error";
+  gasUsed: number | null;
+  latencyMs: number | null;
+  outputSummary: string;
+};
+
+export type ContractBatchSimulationSummary = {
+  totalCalls: number;
+  executedCalls: number;
+  passedCalls: number;
+  revertedCalls: number;
+  errorCalls: number;
+  pendingCalls: number;
+  totalGasUsed: number;
+  totalLatencyMs: number;
+  items: ContractBatchItemSummary[];
+};
+
+function summarizeDecodedPrimary(decoded: DecodedContractOutput): string {
+  switch (decoded.primary.kind) {
+    case "empty":
+      return decoded.primary.summary;
+    case "name_entry": {
+      const endpoints = decoded.primary.value.relayEndpoints;
+      const epPreview = endpoints.length > 0 ? endpoints.join(", ") : "no relays";
+      return `NameEntry · ${decoded.primary.value.ownerAddress} (${epPreview})`;
+    }
+    case "json":
+      return `JSON (${decoded.byteLength} B)`;
+    case "bincode_string":
+    case "utf8":
+      return decoded.primary.value;
+    case "address":
+      return decoded.primary.canonical;
+    case "u64":
+    case "u128":
+      return decoded.primary.value;
+    case "raw":
+      return `Raw payload (${decoded.primary.byteLength} B)`;
+  }
+}
+
+/**
+ * Summarize a queue of batch dry-run items into aggregate execution metrics
+ * (Total Calls, Passed, Reverted, Total Gas Used, Total Latency) and per-item
+ * status + decoded output summaries.
+ */
+export function summarizeContractBatchDryRun(
+  items: readonly ContractBatchQueueItem[],
+): ContractBatchSimulationSummary {
+  let executedCalls = 0;
+  let passedCalls = 0;
+  let revertedCalls = 0;
+  let errorCalls = 0;
+  let pendingCalls = 0;
+  let totalGasUsed = 0;
+  let totalLatencyMs = 0;
+
+  const summarizedItems: ContractBatchItemSummary[] = items.map((item, idx) => {
+    const entryLabel = item.entry || getContractPreset(item.presetId).entry || "call";
+
+    if (item.transportError) {
+      executedCalls += 1;
+      errorCalls += 1;
+      const parsed = parseContractError(item.transportError, false);
+      return {
+        id: item.id,
+        index: idx + 1,
+        presetId: item.presetId,
+        entry: entryLabel,
+        contractAddress: item.contractAddress,
+        dataHex: item.dataHex,
+        byteLength: item.byteLength,
+        status: "error",
+        gasUsed: null,
+        latencyMs: null,
+        outputSummary: `${parsed.title}: ${parsed.detail}`,
+      };
+    }
+
+    if (!item.response) {
+      pendingCalls += 1;
+      return {
+        id: item.id,
+        index: idx + 1,
+        presetId: item.presetId,
+        entry: entryLabel,
+        contractAddress: item.contractAddress,
+        dataHex: item.dataHex,
+        byteLength: item.byteLength,
+        status: "pending",
+        gasUsed: null,
+        latencyMs: null,
+        outputSummary: `Queued (${item.byteLength} B payload)`,
+      };
+    }
+
+    executedCalls += 1;
+    totalLatencyMs += item.response.latencyMs;
+
+    if (item.response.ok) {
+      passedCalls += 1;
+      if (item.response.gasUsed !== null) {
+        totalGasUsed += item.response.gasUsed;
+      }
+      const decoded = decodeContractOutput(
+        item.response.outputHex,
+        item.response.call.entry ?? entryLabel,
+      );
+      return {
+        id: item.id,
+        index: idx + 1,
+        presetId: item.presetId,
+        entry: entryLabel,
+        contractAddress: item.contractAddress,
+        dataHex: item.dataHex,
+        byteLength: item.byteLength,
+        status: "passed",
+        gasUsed: item.response.gasUsed,
+        latencyMs: item.response.latencyMs,
+        outputSummary: summarizeDecodedPrimary(decoded),
+      };
+    }
+
+    revertedCalls += 1;
+    const parsed = parseContractError(item.response.error, item.response.reverted);
+    return {
+      id: item.id,
+      index: idx + 1,
+      presetId: item.presetId,
+      entry: entryLabel,
+      contractAddress: item.contractAddress,
+      dataHex: item.dataHex,
+      byteLength: item.byteLength,
+      status: "reverted",
+      gasUsed: null,
+      latencyMs: item.response.latencyMs,
+      outputSummary: `${parsed.title} — ${parsed.detail}`,
+    };
+  });
+
+  return {
+    totalCalls: items.length,
+    executedCalls,
+    passedCalls,
+    revertedCalls,
+    errorCalls,
+    pendingCalls,
+    totalGasUsed,
+    totalLatencyMs,
+    items: summarizedItems,
+  };
+}
+
+export type BuildContractBatchSdkSnippetOptions = {
+  rpcUrl?: string;
+  items: readonly ContractBatchQueueItem[];
+  sender?: string;
+  chainId?: number;
+};
+
+/**
+ * Generate a ready-to-run TypeScript `kovanica-sdk` snippet that estimates and
+ * prepares a multi-call batch via `estimateBatchCalls(client, [...], { sender, chainId })`.
+ */
+export function buildContractBatchSdkSnippet(
+  options: BuildContractBatchSdkSnippetOptions,
+): string {
+  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://testnet.kovanica.online/rpc";
+  const chainId = options.chainId ?? 2;
+  const senderRaw =
+    (options.sender ?? "").trim() ||
+    options.items.find((it) => (it.from ?? "").trim().length > 0)?.from?.trim() ||
+    "";
+  const resolvedSender = senderRaw
+    ? (toCanonicalAddress(senderRaw) ?? senderRaw)
+    : undefined;
+
+  const callBlocks = options.items.map((item, idx) => {
+    const toAddr =
+      toCanonicalAddress(item.contractAddress.trim()) ||
+      item.contractAddress.trim() ||
+      "0000000000000000000000000000000000000000000000000000000000000001";
+    const entry = item.entry || getContractPreset(item.presetId).entry || "call";
+    const dataHex = item.dataHex || "0x";
+    const lines: string[] = [
+      `  // Call #${idx + 1}: ${entry}`,
+      `  {`,
+      `    contract: ${JSON.stringify(toAddr)},`,
+      `    entry: ${JSON.stringify(entry)},`,
+      `    input: ${JSON.stringify(dataHex)},`,
+    ];
+
+    const valueRes = parseUintQuantity(item.value ?? "", "value", MAX_U64);
+    if (valueRes.ok && valueRes.value !== null) {
+      lines.push(`    callValue: ${valueRes.value.toString()}n,`);
+    }
+    const gasRes = parseUintQuantity(item.gas ?? "", "gas", MAX_U64);
+    if (gasRes.ok && gasRes.value !== null) {
+      lines.push(`    gasLimit: ${gasRes.value.toString()}n,`);
+    } else if (item.response && item.response.ok && item.response.gasUsed !== null) {
+      lines.push(`    gasLimit: ${item.response.gasUsed}n,`);
+    }
+
+    lines.push(`  },`);
+    return lines.join("\n");
+  });
+
+  const batchOptionsParts: string[] = [];
+  if (resolvedSender) {
+    batchOptionsParts.push(`sender: ${JSON.stringify(resolvedSender)}`);
+  }
+  batchOptionsParts.push(`chainId: ${chainId}`);
+  const batchOptionsLiteral = `{ ${batchOptionsParts.join(", ")} }`;
+
+  return [
+    `import { KovanicaClient, estimateBatchCalls } from "kovanica-sdk";`,
+    ``,
+    `const client = new KovanicaClient({ rpcUrl: ${JSON.stringify(rpcUrl)} });`,
+    `const batchCalls = [`,
+    ...(callBlocks.length > 0
+      ? callBlocks
+      : [
+          `  {`,
+          `    contract: "0000000000000000000000000000000000000000000000000000000000000001",`,
+          `    entry: "call",`,
+          `    input: "0x",`,
+          `  },`,
+        ]),
+    `];`,
+    ``,
+    `// Estimate fee, gas limits, and sequential nonces for the batch`,
+    `const batchPrepared = await estimateBatchCalls(client, batchCalls, ${batchOptionsLiteral});`,
+    `console.log("Batch total gas limit:", batchPrepared.totalGasLimit);`,
+    `console.log("Batch total fee (atoms):", batchPrepared.totalFee);`,
+  ].join("\n");
+}
+
 // --- Contract Storage Slot & Bincode State Reader (`kovanica_getStorageAt`) ---
 
 export type StorageSlotPresetId =
