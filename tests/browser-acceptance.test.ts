@@ -2409,6 +2409,58 @@ test("Section E: Faucet pre-flight guard renders faucet-preflight-status and 2-2
   }
 });
 
+test("Section E: Network page renders network-canonical-readiness-strip with canonical tags and zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/network`, "1-f35df34c92001436");
+
+    const strip = page.getByTestId("network-canonical-readiness-strip");
+    await strip.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const stripText = await strip.innerText();
+    assert.ok(
+      stripText.includes("1-f35df34c92001436"),
+      `Network readiness strip must display Mainnet canonical tag 1-f35df34c92001436, got: ${stripText}`,
+    );
+    assert.ok(
+      stripText.includes("2-24cdb5fadd98b207"),
+      `Network readiness strip must display Testnet canonical tag 2-24cdb5fadd98b207, got: ${stripText}`,
+    );
+    assert.ok(
+      stripText.includes("KovanicaHash") && stripText.includes("GHOSTDAG K=5") && stripText.includes("4s"),
+      `Network readiness strip must display frozen consensus constants, got: ${stripText}`,
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Network readiness strip flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Network readiness strip flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-network-readiness-strip", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------

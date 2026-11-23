@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import {
   CALL_TX_VARIANT,
   MAX_WIRE_TX_BYTES,
+  TRANSFER_TX_VARIANT,
+  TRANSFER_TX_WIRE_SIZE,
   decodeWireCallTxHex,
+  decodeWireTransferTxHex,
+  decodeWireTxAutoHex,
 } from "../src/lib/explorer/raw-tx-decode";
 import {
   buildHtlcCreateCall,
@@ -253,6 +257,228 @@ describe("decodeWireCallTxHex — rejection & error handling", () => {
     assert.equal(res.ok, false);
     if (!res.ok) {
       assert.match(res.error, /exceeds maximum allowed size/i);
+    }
+  });
+});
+
+function buildWireTransferTxBytes(opts: {
+  sender?: Uint8Array;
+  nonce?: bigint | number;
+  variant?: number;
+  recipient?: Uint8Array;
+  amountAtoms?: bigint | number;
+  feeAtoms?: bigint | number;
+  sigLen?: bigint | number;
+  signature?: Uint8Array;
+  wireHash?: Uint8Array;
+  trailing?: Uint8Array;
+}): Uint8Array {
+  const sender = opts.sender ?? new Uint8Array(32).fill(0x11);
+  const nonce = opts.nonce ?? 3n;
+  const variant = opts.variant ?? TRANSFER_TX_VARIANT;
+  const recipient = opts.recipient ?? new Uint8Array(32).fill(0x22);
+  const amountAtoms = opts.amountAtoms ?? 10_000_000_000n;
+  const feeAtoms = opts.feeAtoms ?? 100_000n;
+  const signature = opts.signature ?? new Uint8Array(64).fill(0xde);
+  const sigLen = opts.sigLen ?? BigInt(signature.length);
+  const wireHash = opts.wireHash ?? new Uint8Array(32).fill(0xfe);
+
+  const parts: Uint8Array[] = [
+    sender,
+    u64le(nonce),
+    u32le(variant),
+    recipient,
+    u64le(amountAtoms),
+    u64le(feeAtoms),
+    u64le(sigLen),
+    signature,
+    wireHash,
+  ];
+  if (opts.trailing) {
+    parts.push(opts.trailing);
+  }
+  return concatBytes(parts);
+}
+
+describe("decodeWireTransferTxHex — valid Transfer wire transactions", () => {
+  it("decodes bare hex and 0x-prefixed Transfer wire hex identically", () => {
+    const sender = new Uint8Array(32).fill(0x12);
+    const recipient = new Uint8Array(32).fill(0x34);
+    const signature = new Uint8Array(64).fill(0x56);
+    const wireHash = new Uint8Array(32).fill(0x78);
+
+    const raw = buildWireTransferTxBytes({
+      sender,
+      nonce: 99n,
+      recipient,
+      amountAtoms: 25_000_000_000n,
+      feeAtoms: 500_000n,
+      signature,
+      wireHash,
+    });
+    assert.equal(raw.length, TRANSFER_TX_WIRE_SIZE);
+
+    const bareHex = bytesToHex(raw);
+    const resBare = decodeWireTransferTxHex(bareHex);
+    const resPrefixed = decodeWireTransferTxHex(`  0x${bareHex.toUpperCase()}  `);
+
+    assert.equal(resBare.ok, true);
+    assert.equal(resPrefixed.ok, true);
+    if (!resBare.ok || !resPrefixed.ok) return;
+
+    assert.deepEqual(resBare.tx, resPrefixed.tx);
+    assert.equal(resBare.tx.senderHex, "12".repeat(32));
+    assert.equal(resBare.tx.senderAddress, encodeAddress(sender));
+    assert.equal(resBare.tx.nonce, 99n);
+    assert.equal(resBare.tx.recipientHex, "34".repeat(32));
+    assert.equal(resBare.tx.recipientAddress, encodeAddress(recipient));
+    assert.equal(resBare.tx.amountAtoms, 25_000_000_000n);
+    assert.equal(resBare.tx.feeAtoms, 500_000n);
+    assert.equal(resBare.tx.signatureHex, "56".repeat(64));
+    assert.equal(resBare.tx.wireHashHex, "78".repeat(32));
+    assert.equal(resBare.tx.wireSizeBytes, TRANSFER_TX_WIRE_SIZE);
+  });
+
+  it("rejects non-Transfer variant discriminants", () => {
+    for (const variant of [1, 2, 6, 42]) {
+      const raw = buildWireTransferTxBytes({ variant });
+      const res = decodeWireTransferTxHex(bytesToHex(raw));
+      assert.equal(res.ok, false);
+      if (!res.ok) {
+        assert.match(res.error, /variant discriminant/i);
+        assert.match(res.error, new RegExp(String(variant)));
+      }
+    }
+  });
+
+  it("rejects truncated Transfer buffers at every structural boundary", () => {
+    const valid = buildWireTransferTxBytes({});
+    const cutPoints = [1, 31, 39, 43, 75, 83, 91, 99, 163, TRANSFER_TX_WIRE_SIZE - 1];
+
+    for (const len of cutPoints) {
+      const truncated = valid.subarray(0, len);
+      const res = decodeWireTransferTxHex(bytesToHex(truncated));
+      assert.equal(res.ok, false, `Expected Transfer truncation at length ${len} to fail`);
+      if (!res.ok) {
+        assert.match(res.error, /truncated/i);
+      }
+    }
+  });
+
+  it("rejects trailing bytes after the 32-byte wire hash", () => {
+    const withTrailing = buildWireTransferTxBytes({ trailing: Uint8Array.of(0x01, 0x02) });
+    const res = decodeWireTransferTxHex(bytesToHex(withTrailing));
+    assert.equal(res.ok, false);
+    if (!res.ok) {
+      assert.match(res.error, /2 unexpected trailing byte/i);
+    }
+  });
+});
+
+describe("decodeWireTxAutoHex — universal Transfer + Call auto-dispatch", () => {
+  it("auto-dispatches valid Transfer transactions to kind='transfer'", () => {
+    const raw = buildWireTransferTxBytes({
+      nonce: 11n,
+      amountAtoms: 42_000_000_000n,
+      feeAtoms: 250_000n,
+    });
+    const res = decodeWireTxAutoHex(`0x${bytesToHex(raw)}`);
+    assert.equal(res.ok, true);
+    if (!res.ok) return;
+    assert.equal(res.kind, "transfer");
+    if (res.kind !== "transfer") return;
+    assert.equal(res.tx.nonce, 11n);
+    assert.equal(res.tx.amountAtoms, 42_000_000_000n);
+    assert.equal(res.tx.feeAtoms, 250_000n);
+    assert.equal(res.tx.wireSizeBytes, TRANSFER_TX_WIRE_SIZE);
+  });
+
+  it("auto-dispatches valid Call transactions (including fee=0) to kind='call'", () => {
+    const standardCall = buildWireCallTxBytes({
+      nonce: 5n,
+      fee: 250_000n,
+      args: Uint8Array.of(0xca, 0xfe),
+    });
+    const resStd = decodeWireTxAutoHex(bytesToHex(standardCall));
+    assert.equal(resStd.ok, true);
+    if (resStd.ok) {
+      assert.equal(resStd.kind, "call");
+      if (resStd.kind === "call") {
+        assert.equal(resStd.tx.nonce, 5n);
+        assert.equal(resStd.tx.argsHex, "cafe");
+      }
+    }
+
+    // Edge case: Call tx with fee === 0n (offset 40..44 is 0, same bytes as TRANSFER_TX_VARIANT)
+    // and 16-byte args (total length == 196 == TRANSFER_TX_WIRE_SIZE)
+    const zeroFee196Call = buildWireCallTxBytes({
+      nonce: 8n,
+      fee: 0n,
+      args: new Uint8Array(16).fill(0x99),
+    });
+    assert.equal(zeroFee196Call.length, TRANSFER_TX_WIRE_SIZE);
+    const resZeroFee = decodeWireTxAutoHex(bytesToHex(zeroFee196Call));
+    assert.equal(resZeroFee.ok, true);
+    if (resZeroFee.ok) {
+      assert.equal(resZeroFee.kind, "call");
+      if (resZeroFee.kind === "call") {
+        assert.equal(resZeroFee.tx.nonce, 8n);
+        assert.equal(resZeroFee.tx.fee, 0n);
+        assert.equal(resZeroFee.tx.argsLength, 16);
+      }
+    }
+  });
+
+  it("rejects unsupported variants in auto-dispatch", () => {
+    const badTransferVariant = buildWireTransferTxBytes({ variant: 3 });
+    const res1 = decodeWireTxAutoHex(bytesToHex(badTransferVariant));
+    assert.equal(res1.ok, false);
+    if (!res1.ok) {
+      assert.match(res1.error, /unsupported transaction variant discriminant/i);
+    }
+
+    const badCallVariant = buildWireCallTxBytes({ variant: 9 });
+    const res2 = decodeWireTxAutoHex(bytesToHex(badCallVariant));
+    assert.equal(res2.ok, false);
+    if (!res2.ok) {
+      assert.match(res2.error, /unsupported transaction variant discriminant/i);
+    }
+  });
+
+  it("rejects truncated and trailing-byte payloads in auto-dispatch", () => {
+    const truncatedTransfer = buildWireTransferTxBytes({}).subarray(0, 120);
+    const resTruncTransfer = decodeWireTxAutoHex(bytesToHex(truncatedTransfer));
+    assert.equal(resTruncTransfer.ok, false);
+    if (!resTruncTransfer.ok) {
+      assert.match(resTruncTransfer.error, /truncated/i);
+    }
+
+    const trailingTransfer = buildWireTransferTxBytes({ trailing: Uint8Array.of(0xff) });
+    const resTrailTransfer = decodeWireTxAutoHex(bytesToHex(trailingTransfer));
+    assert.equal(resTrailTransfer.ok, false);
+    if (!resTrailTransfer.ok) {
+      assert.match(resTrailTransfer.error, /trailing byte/i);
+    }
+
+    const truncatedCall = buildWireCallTxBytes({ args: Uint8Array.of(1, 2, 3) }).subarray(0, 110);
+    const resTruncCall = decodeWireTxAutoHex(bytesToHex(truncatedCall));
+    assert.equal(resTruncCall.ok, false);
+    if (!resTruncCall.ok) {
+      assert.match(resTruncCall.error, /truncated/i);
+    }
+
+    const trailingCall = buildWireCallTxBytes({ trailing: Uint8Array.of(0xaa) });
+    const resTrailCall = decodeWireTxAutoHex(bytesToHex(trailingCall));
+    assert.equal(resTrailCall.ok, false);
+    if (!resTrailCall.ok) {
+      assert.match(resTrailCall.error, /trailing byte/i);
+    }
+
+    const tiny = new Uint8Array(20).fill(0x01);
+    const resTiny = decodeWireTxAutoHex(bytesToHex(tiny));
+    assert.equal(resTiny.ok, false);
+    if (!resTiny.ok) {
+      assert.match(resTiny.error, /truncated/i);
     }
   });
 });
