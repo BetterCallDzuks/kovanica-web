@@ -2098,6 +2098,88 @@ test("Section E: Explorer Node & Network Diagnostics drawer opens and copies san
   }
 });
 
+test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expands and copies valid command with zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+
+    const builder = page.getByTestId("miner-command-builder");
+    await builder.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const toggle = page.getByTestId("miner-command-builder-toggle");
+    assert.equal(
+      await toggle.getAttribute("aria-expanded"),
+      "false",
+      "Miner Command Builder must start collapsed by default",
+    );
+
+    // Expand the builder
+    await toggle.click();
+    assert.equal(
+      await toggle.getAttribute("aria-expanded"),
+      "true",
+      "Clicking builder toggle must expand the Miner Command Builder",
+    );
+
+    const preview = page.getByTestId("miner-command-preview");
+    await preview.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    const stratumCmd = (await preview.innerText()).trim();
+    assert.ok(
+      stratumCmd.startsWith("kovanica mine "),
+      `Preview must start with 'kovanica mine ', got: ${stratumCmd}`,
+    );
+    assert.ok(stratumCmd.includes("--chain-id 2"), "Default network must be Testnet (Chain 2)");
+    assert.ok(stratumCmd.includes("--stratum "), "Stratum mode must include --stratum");
+    assert.ok(stratumCmd.includes("--tls"), "Stratum TLS mode must include --tls");
+    assert.ok(stratumCmd.includes("--address kvnc"), "Preview must include canonical PRO-21 --address");
+
+    // Copy CLI command and verify confirmation state
+    const copyBtn = page.getByTestId("copy-miner-command-btn");
+    await copyBtn.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    await copyBtn.click();
+    await waitForBodyText(page, "Command Copied");
+    assert.ok(
+      (await copyBtn.innerText()).includes("Command Copied"),
+      "Copy button must display 'Command Copied' confirmation",
+    );
+
+    // Switch to Solo RPC mode and verify preview updates cleanly
+    await page.getByTestId("miner-mode-solo").click();
+    const soloCmd = (await preview.innerText()).trim();
+    assert.ok(soloCmd.startsWith("kovanica mine "), "Solo preview must start with 'kovanica mine '");
+    assert.ok(soloCmd.includes("--rpc-url "), "Solo mode must include --rpc-url");
+    assert.ok(!soloCmd.includes("--stratum"), "Solo mode must not include --stratum");
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Miner Command Builder flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Miner Command Builder flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-miner-command-builder", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------
