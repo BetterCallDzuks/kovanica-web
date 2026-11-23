@@ -2098,6 +2098,107 @@ test("Section E: Explorer Node & Network Diagnostics drawer opens and copies san
   }
 });
 
+test("Section E: Explorer Diagnostics Drawer renders RPC latency sparkline and sync-lag badge with zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+    customRouteHandler: async (route, url) => {
+      if (url.pathname === "/api/state") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...FIXTURES.state,
+            network: "kovanica-testnet",
+            chain_id: 2,
+            peers: ["seed1.kovanica.online:8000"],
+          }),
+        });
+        return true;
+      }
+      return false;
+    },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Node & Network Diagnostics");
+
+    const toggle = page.getByTestId("explorer-diagnostics-toggle");
+    await toggle.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    await toggle.click();
+
+    const sparkline = page.getByTestId("diagnostics-latency-sparkline");
+    await sparkline.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    // Wait for at least one probe sample to populate p50/p95/max
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('[data-testid="diagnostics-latency-p50"]');
+        return Boolean(el && el.textContent && el.textContent.includes("ms"));
+      },
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
+
+    const sparklineText = await sparkline.innerText();
+    assert.ok(sparklineText.includes("p50"), "Sparkline card must display p50 metric");
+    assert.ok(sparklineText.includes("p95"), "Sparkline card must display p95 metric");
+    assert.ok(sparklineText.includes("max"), "Sparkline card must display max metric");
+
+    // Manual probe refresh appends a sample without errors
+    const probeBtn = page.getByTestId("diagnostics-probe-refresh-btn");
+    await probeBtn.click();
+    await page.waitForFunction(
+      () => {
+        const polyline = document.querySelector(
+          '[data-testid="diagnostics-latency-sparkline"] polyline',
+        );
+        return Boolean(polyline && polyline.getAttribute("points"));
+      },
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
+
+    const syncLagBadge = page.getByTestId("diagnostics-sync-lag-badge");
+    await syncLagBadge.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    assert.equal(
+      await syncLagBadge.getAttribute("data-sync-status"),
+      "synced",
+      "Sync-lag badge must classify matching fixture heights as synced",
+    );
+
+    const tagBadge = page.getByTestId("explorer-diagnostics-tag-badge");
+    assert.ok(
+      (await tagBadge.innerText()).includes("2-24cdb5fadd98b207"),
+      "Canonical testnet network tag must be displayed alongside sync-lag badge",
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Diagnostics sparkline flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Diagnostics sparkline flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-diagnostics-sparkline", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expands and copies valid command with zero errors", async () => {
   const { context, page } = await setupIsolatedPage({
     viewport: { width: 1280, height: 800 },
