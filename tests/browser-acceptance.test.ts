@@ -2343,6 +2343,72 @@ test("Section E: LiveDagDrawer renders Fee Pressure & 1.2x Buffered Fee pill wit
   }
 });
 
+test("Section E: Faucet pre-flight guard renders faucet-preflight-status and 2-24cdb5fadd98b207 with zero errors", async () => {
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(page, `${baseUrl}/faucet`, "Testnet faucet");
+
+    const preflightStatus = page.getByTestId("faucet-preflight-status");
+    await preflightStatus.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    assert.equal(
+      await preflightStatus.getAttribute("data-preflight-state"),
+      "idle",
+      "Faucet pre-flight status must start in idle state",
+    );
+
+    const bodyText = await page.locator("body").innerText();
+    assert.ok(
+      bodyText.includes("2-24cdb5fadd98b207"),
+      `Faucet route must display canonical Testnet tag 2-24cdb5fadd98b207, got: ${bodyText.slice(0, 300)}`,
+    );
+
+    // Live check: legacy raw 64-hex is rejected by the pre-flight guard on Chain 2
+    const addressInput = page.locator("#faucet-address");
+    await addressInput.fill("a".repeat(64));
+    assert.equal(
+      await preflightStatus.getAttribute("data-preflight-state"),
+      "invalid",
+      "Legacy 64-hex address must be flagged invalid by pre-flight guard",
+    );
+
+    // Live check: canonical PRO-21 kvnc...dag passes checksum verification
+    await addressInput.fill(FIXTURES.utxos.address);
+    assert.equal(
+      await preflightStatus.getAttribute("data-preflight-state"),
+      "valid",
+      "Canonical PRO-21 address must pass live pre-flight checksum verification",
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Faucet pre-flight flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Faucet pre-flight flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-faucet-preflight", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------

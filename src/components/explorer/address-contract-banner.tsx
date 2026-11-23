@@ -1,8 +1,21 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
-import { ArrowUpRight, ChevronDown, ChevronRight, FileCode, RefreshCw, ScrollText, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  FileCode,
+  RefreshCw,
+  ScrollText,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import { getApiSource } from "@/lib/api/client";
 import { CONTRACT_PRESETS, type ContractPresetId } from "@/lib/contracts/dry-run";
+import { inspectExplorerAddress } from "@/lib/explorer/address-inspect";
 import {
   filterTimelineEntries,
   normalizeTimelineLogs,
@@ -237,20 +250,50 @@ export function AddressContractBanner({
   const canonicalAddress = trimmed ? (toCanonicalAddress(trimmed) ?? trimmed) : "";
 
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [checksumOpen, setChecksumOpen] = useState(false);
+  const [copiedField, setCopiedField] = useState<"mainnet" | "testnet" | "payload" | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [filterQuery, setFilterQuery] = useState("");
   const [entries, setEntries] = useState<ContractTimelineEntry[]>([]);
   const [hasLoadedLogs, setHasLoadedLogs] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [logsError, setLogsError] = useState<string | null>(null);
 
+  const inspection = useMemo(() => inspectExplorerAddress(trimmed), [trimmed]);
+
   useEffect(() => {
     setTimelineOpen(false);
+    setChecksumOpen(false);
+    setCopiedField(null);
     setFilterQuery("");
     setEntries([]);
     setHasLoadedLogs(false);
     setLoadingLogs(false);
     setLogsError(null);
   }, [canonicalAddress]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
+  function handleCopyField(field: "mainnet" | "testnet" | "payload", value: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(value).catch(() => {
+        // Ignore clipboard write rejection in non-secure/headless environments
+      });
+    }
+    setCopiedField(field);
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = setTimeout(() => {
+      setCopiedField((current) => (current === field ? null : current));
+    }, 1500);
+  }
 
   const filteredEntries = useMemo(
     () => filterTimelineEntries(entries, filterQuery),
@@ -356,6 +399,190 @@ export function AddressContractBanner({
           <span>Open in Contract Inspector</span>
           <ArrowUpRight className="size-3.5 text-gold" aria-hidden="true" />
         </a>
+      </div>
+
+      {/* Collapsible PRO-21 Checksum & Raw Payload Inspector (collapsed by default) */}
+      <div
+        data-testid="address-checksum-inspector"
+        className="mt-2.5 border-t border-gold/25 pt-2"
+      >
+        <button
+          type="button"
+          onClick={() => setChecksumOpen((open) => !open)}
+          aria-expanded={checksumOpen}
+          data-testid="address-checksum-inspector-toggle"
+          className="inline-flex flex-wrap items-center gap-1.5 rounded px-1 py-0.5 text-[11px] font-medium text-fg/90 transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+        >
+          {checksumOpen ? (
+            <ChevronDown className="size-3.5 text-gold" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="size-3.5 text-gold" aria-hidden="true" />
+          )}
+          {inspection.checksumValid ? (
+            <ShieldCheck className="size-3.5 text-emerald-400" aria-hidden="true" />
+          ) : (
+            <ShieldAlert className="size-3.5 text-amber-400" aria-hidden="true" />
+          )}
+          <span>PRO-21 Checksum &amp; Raw Payload</span>
+          <span
+            data-testid="address-checksum-status"
+            className={cn(
+              "rounded-full border px-1.5 py-0.2 font-mono text-[10px]",
+              inspection.checksumValid
+                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-300"
+                : inspection.valid
+                  ? "border-amber-500/35 bg-amber-500/10 text-amber-300"
+                  : "border-danger/35 bg-danger/10 text-danger",
+            )}
+          >
+            {inspection.checksumValid
+              ? "Checksum Verified"
+              : inspection.valid
+                ? "Legacy Hex (Unchecked)"
+                : "Invalid Checksum"}
+          </span>
+        </button>
+
+        {checksumOpen ? (
+          <div
+            data-testid="address-checksum-inspector-body"
+            className="mt-2 space-y-2 rounded-lg border border-border/80 bg-bg/80 p-2.5"
+          >
+            {inspection.valid ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                  <span className="rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-fg">
+                    {inspection.format}
+                  </span>
+                  <span>
+                    {inspection.checksumValid
+                      ? "29-bit BLAKE3 checksum verified against 32-byte payload."
+                      : "Decoded from raw 32-byte hex (no embedded PRO-21 checksum)."}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  {inspection.canonicalMainnet ? (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-surface/70 px-2.5 py-1.5">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-medium text-muted">
+                          Canonical Mainnet (kvnc…dag)
+                        </div>
+                        <code
+                          data-testid="inspector-canonical-mainnet"
+                          className="block break-all font-mono text-[11px] text-fg"
+                        >
+                          {inspection.canonicalMainnet}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyField("mainnet", inspection.canonicalMainnet!)
+                        }
+                        data-testid="copy-canonical-mainnet-btn"
+                        aria-label="Copy canonical mainnet address"
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border bg-bg px-2 text-[10px] font-medium text-fg transition-colors hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                      >
+                        {copiedField === "mainnet" ? (
+                          <>
+                            <Check className="size-3 text-emerald-400" aria-hidden="true" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3" aria-hidden="true" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {inspection.canonicalTestnet ? (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-surface/70 px-2.5 py-1.5">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-medium text-muted">
+                          Canonical Testnet (tknc…dag)
+                        </div>
+                        <code
+                          data-testid="inspector-canonical-testnet"
+                          className="block break-all font-mono text-[11px] text-fg"
+                        >
+                          {inspection.canonicalTestnet}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopyField("testnet", inspection.canonicalTestnet!)
+                        }
+                        data-testid="copy-canonical-testnet-btn"
+                        aria-label="Copy canonical testnet address"
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border bg-bg px-2 text-[10px] font-medium text-fg transition-colors hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                      >
+                        {copiedField === "testnet" ? (
+                          <>
+                            <Check className="size-3 text-emerald-400" aria-hidden="true" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3" aria-hidden="true" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {inspection.payloadHex ? (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-border/70 bg-surface/70 px-2.5 py-1.5">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-medium text-muted">
+                          Raw 32-Byte Payload (0x…)
+                        </div>
+                        <code
+                          data-testid="inspector-payload-hex"
+                          className="block break-all font-mono text-[11px] text-fg"
+                        >
+                          {inspection.payloadHex}
+                        </code>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyField("payload", inspection.payloadHex!)}
+                        data-testid="copy-payload-hex-btn"
+                        aria-label="Copy raw 32-byte payload hex"
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded border border-border bg-bg px-2 text-[10px] font-medium text-fg transition-colors hover:border-gold/50 hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                      >
+                        {copiedField === "payload" ? (
+                          <>
+                            <Check className="size-3 text-emerald-400" aria-hidden="true" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3" aria-hidden="true" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p
+                role="alert"
+                data-testid="address-checksum-inspector-error"
+                className="rounded border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[11px] text-danger"
+              >
+                {inspection.error ?? "Invalid address format"}
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* Collapsible Recent Contract Events Timeline (collapsed by default) */}
