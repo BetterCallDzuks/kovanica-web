@@ -1900,6 +1900,102 @@ test("Section E: Explorer live stream indicator supports Polling fallback, WS Li
   }
 });
 
+test("Section E: Explorer auto-detects deployed WASM contract address and deep-links to Contract Inspector with zero errors", async () => {
+  const sampleContractHex =
+    "0000000000000000000000000000000000000000000000000000000000000001";
+  const { context, page } = await setupIsolatedPage({
+    viewport: { width: 1280, height: 800 },
+    apiSource: "local",
+  });
+
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  page.on("console", (msg) => {
+    if (msg.type() === "error" && !msg.text().includes("ERR_BLOCKED_BY_CLIENT")) {
+      consoleErrors.push(msg.text());
+    }
+  });
+
+  try {
+    await gotoAndSettle(
+      page,
+      `${baseUrl}/explorer?address=${sampleContractHex}`,
+      "BlockDAG Explorer",
+    );
+
+    const banner = page.getByTestId("address-contract-banner");
+    await banner.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+
+    const bannerText = await banner.innerText();
+    assert.ok(
+      bannerText.includes("Deployed WASM Contract Detected"),
+      "Contract auto-detection banner must show 'Deployed WASM Contract Detected'",
+    );
+    assert.ok(
+      bannerText.includes("4,096 bytes"),
+      `Banner must display deployed contract code size in bytes, got: ${bannerText}`,
+    );
+
+    const canonicalAddr = (await page.getByTestId("address-contract-canonical").innerText()).trim();
+    assert.match(
+      canonicalAddr,
+      /^kvnc[a-z0-9]{57}dag$/,
+      `Banner must display canonical kvnc…dag address, got: ${canonicalAddr}`,
+    );
+
+    const openBtn = page.getByTestId("open-in-contract-inspector-btn");
+    const href = await openBtn.getAttribute("href");
+    assert.equal(
+      href,
+      `/explorer?tab=contracts&contract=${canonicalAddr}`,
+      "Open in Contract Inspector link must target canonical ?tab=contracts&contract=<addr>",
+    );
+
+    // One-click switches directly to Contracts tab with contract pre-filled
+    await openBtn.click();
+    const contractsTab = page.locator('button[role="tab"]:has-text("Contracts")');
+    await page.waitForFunction(
+      () => {
+        const tabs = Array.from(document.querySelectorAll('button[role="tab"]'));
+        const contracts = tabs.find((t) => t.textContent?.includes("Contracts"));
+        return contracts?.getAttribute("aria-selected") === "true";
+      },
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
+    assert.equal(
+      await contractsTab.getAttribute("aria-selected"),
+      "true",
+      "Clicking Open in Contract Inspector must activate Contracts tab",
+    );
+
+    const contractInput = page.locator("#inspector-contract-address");
+    await contractInput.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    assert.equal(
+      await contractInput.inputValue(),
+      canonicalAddr,
+      "Contract Inspector address input must be pre-filled with canonical contract address",
+    );
+
+    assert.deepEqual(
+      pageErrors,
+      [],
+      `Address contract banner flow must not throw page errors: ${pageErrors.join("; ")}`,
+    );
+    assert.deepEqual(
+      consoleErrors,
+      [],
+      `Address contract banner flow must not log console errors: ${consoleErrors.join("; ")}`,
+    );
+  } catch (err) {
+    await saveFailureArtifact(page, "section-e-address-contract-banner", err);
+    throw err;
+  } finally {
+    await context.close();
+  }
+});
+
 // -----------------------------------------------------------------------------
 // VERIFICATION OF STRICT NETWORK ISOLATION
 // -----------------------------------------------------------------------------

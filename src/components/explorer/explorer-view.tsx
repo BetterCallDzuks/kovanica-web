@@ -15,8 +15,18 @@ import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
 import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
+import { LiveDagDrawer } from "@/components/explorer/live-dag-drawer";
 import { ContractInspectorPanel } from "@/components/explorer/contract-inspector-panel";
-import { parseContractInspectorDeepLink } from "@/lib/contracts/dry-run";
+import {
+  AddressContractBanner,
+  buildContractInspectorUrl,
+} from "@/components/explorer/address-contract-banner";
+import {
+  parseContractInspectorDeepLink,
+  type ContractStorageResponse,
+} from "@/lib/contracts/dry-run";
+import { apiPostJson } from "@/lib/api/client";
+import { toCanonicalAddress } from "@/lib/wallet/address";
 import { GlobalSearch } from "@/components/search/global-search";
 
 const TABS = [
@@ -43,6 +53,8 @@ export function ExplorerView() {
     ReturnType<typeof parseContractInspectorDeepLink>["presetId"]
   >(null);
   const [inspectFields, setInspectFields] = useState<Record<string, string> | null>(null);
+  const [inspectedAddress, setInspectedAddress] = useState<string | null>(null);
+  const [inspectedCodeBytes, setInspectedCodeBytes] = useState<number | null>(null);
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
@@ -56,7 +68,15 @@ export function ExplorerView() {
     const search = new URLSearchParams(window.location.search);
     const blockParam = search.get("block");
     const txParam = search.get("tx");
+    const addressParam = search.get("address") ?? search.get("addr");
     const deepLink = parseContractInspectorDeepLink(window.location.search);
+
+    if (addressParam) {
+      const canonical = toCanonicalAddress(addressParam);
+      setInspectedAddress(canonical);
+    } else {
+      setInspectedAddress(null);
+    }
 
     if (deepLink.isContractsTab) {
       if (deepLink.contractAddress) setInspectContract(deepLink.contractAddress);
@@ -94,6 +114,64 @@ export function ExplorerView() {
   const selected = blocks.find((b) => b.id === selectedBlock) ?? null;
   const selectedApi = state?.node.dag.find((b) => b.id === selectedBlock) ?? null;
   const n = state?.node;
+
+  const knownDagContracts = useMemo(() => {
+    const set = new Set<string>();
+    const dagBlocks = state?.node.dag ?? [];
+    for (const blk of dagBlocks) {
+      for (const tx of blk.txs ?? []) {
+        const rawContract =
+          tx.contract ?? (typeof tx.kind === "object" ? tx.kind?.contract : undefined);
+        if (typeof rawContract === "string" && rawContract.trim()) {
+          const canonical = toCanonicalAddress(rawContract);
+          if (canonical) set.add(canonical);
+        }
+      }
+    }
+    return set;
+  }, [state]);
+
+  const selectedBlockContract = useMemo(() => {
+    const txs = selectedApi?.txs ?? selected?.txs ?? [];
+    for (const tx of txs) {
+      const rawContract =
+        tx.contract ?? (typeof tx.kind === "object" ? tx.kind?.contract : undefined);
+      if (typeof rawContract === "string" && rawContract.trim()) {
+        const canonical = toCanonicalAddress(rawContract);
+        if (canonical) return canonical;
+      }
+    }
+    return null;
+  }, [selectedApi, selected]);
+
+  const activeBannerAddress = inspectedAddress ?? selectedBlockContract;
+
+  useEffect(() => {
+    if (!activeBannerAddress || source === "mainnet") {
+      setInspectedCodeBytes(null);
+      return;
+    }
+    let cancelled = false;
+    setInspectedCodeBytes(null);
+    void apiPostJson<ContractStorageResponse>("/api/contract_storage", {
+      contract: activeBannerAddress,
+      slot: `0x${"00".repeat(32)}`,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setInspectedCodeBytes(
+          typeof res.codeBytes === "number" && Number.isFinite(res.codeBytes)
+            ? res.codeBytes
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setInspectedCodeBytes(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBannerAddress, source]);
 
   // Endpoint verification check for the single live network
   const isHybridVerified =
@@ -150,8 +228,37 @@ export function ExplorerView() {
 
       {/* Explorer Global Search Toolbar */}
       <div className="border-b border-border bg-surface-2/40 px-4 py-2.5 md:px-6">
-        <GlobalSearch variant="explorer" externalState={state} />
+        <GlobalSearch
+          variant="explorer"
+          externalState={state}
+          onResolved={(target) => {
+            if (target.type === "address" && target.search?.address) {
+              setInspectedAddress(target.search.address);
+            }
+          }}
+        />
       </div>
+
+      {/* Deployed WASM Contract Auto-Detection Banner */}
+      {tab !== "Contracts" && activeBannerAddress ? (
+        <AddressContractBanner
+          address={activeBannerAddress}
+          codeBytes={inspectedCodeBytes}
+          knownContracts={knownDagContracts}
+          onOpenInspector={(canonicalAddr, preset) => {
+            setInspectContract(canonicalAddr);
+            if (preset) setInspectPreset(preset);
+            setTab("Contracts");
+            if (typeof window !== "undefined") {
+              window.history.replaceState(
+                window.history.state,
+                "",
+                buildContractInspectorUrl(canonicalAddr, preset),
+              );
+            }
+          }}
+        />
+      ) : null}
 
       {/* Liveness: a stalled chain is not a down endpoint */}
       {health && health !== "live" && (
@@ -258,6 +365,19 @@ export function ExplorerView() {
           setTab("Graph");
         }}
         onRefresh={() => void refresh()}
+      />
+
+      {/* Collapsible Live DAG & Mempool Stream Drawer */}
+      <LiveDagDrawer
+        state={state}
+        transport={transport}
+        paused={paused}
+        onTogglePause={togglePause}
+        onSelectBlock={(blockHash) => {
+          setSearchedId(blockHash);
+          setSelectedBlock(blockHash);
+          setTab("Graph");
+        }}
       />
 
       {/* Main DAG Graph canvas section with distinct state handling */}
