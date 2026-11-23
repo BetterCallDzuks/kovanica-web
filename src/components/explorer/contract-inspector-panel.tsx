@@ -7,12 +7,14 @@ import {
   Clock,
   Code2,
   Copy,
+  Database,
   FileCode,
   Fuel,
   History,
   Link2,
   Play,
   RotateCcw,
+  Search,
   ShieldAlert,
   SlidersHorizontal,
   Terminal,
@@ -22,18 +24,25 @@ import type { ApiSource } from "@/lib/api/contract";
 import { Button } from "@/components/ui/button";
 import {
   CONTRACT_PRESETS,
+  STORAGE_SLOT_PRESETS,
   buildContractCurlSnippet,
   buildContractInspectorDeepLink,
   buildContractSdkSnippet,
   decodeContractOutput,
+  decodeContractStorageValue,
+  derivePresetStorageSlot,
   encodePresetArgs,
   getContractPreset,
+  getStorageSlotPreset,
   parseContractError,
   parseContractInspectorDeepLink,
   type ContractCallRequest,
   type ContractCallResponse,
   type ContractPresetId,
+  type ContractStorageResponse,
   type DecodedContractOutput,
+  type DecodedStorageResult,
+  type StorageSlotPresetId,
 } from "@/lib/contracts/dry-run";
 import { formatAtomsDisplay } from "@/lib/contracts/decoders";
 import { shortId } from "@/lib/ledger/hash";
@@ -136,6 +145,15 @@ export function ContractInspectorPanel({
   const [showRpcPayload, setShowRpcPayload] = useState(false);
   const [history, setHistory] = useState<DryRunHistoryItem[]>([]);
   const [copiedAction, setCopiedAction] = useState<"link" | "curl" | "sdk" | null>(null);
+
+  // Storage Slot & Bincode State Reader state
+  const [storagePresetId, setStoragePresetId] = useState<StorageSlotPresetId>("name");
+  const [storageKeyInput, setStorageKeyInput] = useState<string>(
+    () => getStorageSlotPreset("name").defaultInput,
+  );
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageResponse, setStorageResponse] = useState<ContractStorageResponse | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialContract?.trim()) {
@@ -341,6 +359,68 @@ export function ContractInspectorPanel({
   }
 
   const canExecute = !running && contractValid && callerValid && encodedPreview.ok;
+
+  const storagePreset = useMemo(
+    () => getStorageSlotPreset(storagePresetId),
+    [storagePresetId],
+  );
+  const derivedStorageSlot = useMemo(
+    () => derivePresetStorageSlot(storagePresetId, storageKeyInput),
+    [storagePresetId, storageKeyInput],
+  );
+  const decodedStorage: DecodedStorageResult | null = useMemo(() => {
+    if (!storageResponse) return null;
+    return decodeContractStorageValue(
+      storageResponse.storageHex,
+      storageResponse.query.schemaHint,
+    );
+  }, [storageResponse]);
+
+  function selectStoragePreset(nextId: StorageSlotPresetId) {
+    const next = getStorageSlotPreset(nextId);
+    setStoragePresetId(nextId);
+    setStorageKeyInput(next.defaultInput);
+    setStorageResponse(null);
+    setStorageError(null);
+  }
+
+  async function handleReadStorage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!contractValid) {
+      setStorageError("Enter a valid contract address (kvnc…dag or 32-byte hex).");
+      return;
+    }
+    if (!derivedStorageSlot.ok) {
+      setStorageError(derivedStorageSlot.error);
+      return;
+    }
+
+    setStorageLoading(true);
+    setStorageError(null);
+    setStorageResponse(null);
+
+    try {
+      const res = await apiPostJson<ContractStorageResponse>("/api/contract_storage", {
+        contract: contractAddress.trim(),
+        slot: derivedStorageSlot.slotHex,
+        key: derivedStorageSlot.rawKey ?? undefined,
+        schemaHint: storagePreset.schemaHint,
+      });
+      setStorageResponse(res);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Contract storage read failed";
+      setStorageError(msg);
+    } finally {
+      setStorageLoading(false);
+    }
+  }
+
+  const canReadStorage = !storageLoading && contractValid && derivedStorageSlot.ok;
 
   return (
     <div className="space-y-5">
@@ -1034,6 +1114,411 @@ export function ContractInspectorPanel({
           </ul>
         </div>
       ) : null}
+
+      {/* Contract Storage Slot & Bincode State Reader */}
+      <section
+        aria-label="Contract Storage Slot and Bincode State Reader"
+        data-testid="contract-storage-reader"
+        className="space-y-4 rounded-lg border border-border bg-surface p-4"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <Database className="size-4 text-gold" />
+              <h3 className="font-display text-base text-fg">
+                Contract Storage Slot &amp; Bincode State Reader
+              </h3>
+              <span className="inline-flex items-center rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 font-mono text-[10px] font-medium text-gold">
+                kovanica_getStorageAt · BLAKE3 slot
+              </span>
+            </div>
+            <p className="max-w-3xl text-xs text-muted">
+              Derive canonical BLAKE3 storage slots (<code className="font-mono text-fg">name:</code>
+              , <code className="font-mono text-fg">token:meta</code>,{" "}
+              <code className="font-mono text-fg">escrow:</code>,{" "}
+              <code className="font-mono text-fg">htlc:</code>,{" "}
+              <code className="font-mono text-fg">vault:</code>,{" "}
+              <code className="font-mono text-fg">multisig:state</code>) or query any raw 32-byte
+              hex slot via <code className="font-mono text-fg">kovanica_getStorageAt</code> and
+              decode on-chain Bincode records.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+          {/* Left: Storage Slot Query Form */}
+          <form onSubmit={(e) => void handleReadStorage(e)} className="space-y-3.5">
+            <div className="space-y-2">
+              <span className="font-mono text-[10px] font-semibold tracking-wider text-subtle uppercase">
+                1. Storage Key Convention
+              </span>
+              <div
+                className="flex flex-wrap gap-1.5"
+                role="group"
+                aria-label="Contract storage slot presets"
+              >
+                {STORAGE_SLOT_PRESETS.map((sp) => {
+                  const active = sp.id === storagePresetId;
+                  return (
+                    <button
+                      key={sp.id}
+                      type="button"
+                      data-testid={`storage-preset-${sp.id}`}
+                      onClick={() => selectStoragePreset(sp.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors",
+                        active
+                          ? "border-gold/60 bg-gold/15 font-semibold text-gold"
+                          : "border-border bg-bg/60 text-muted hover:border-border/80 hover:text-fg",
+                      )}
+                    >
+                      {sp.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted">{storagePreset.description}</p>
+            </div>
+
+            {!storagePreset.fixedKey ? (
+              <div className="space-y-1">
+                <label
+                  htmlFor="inspector-storage-key-input"
+                  className="flex items-center justify-between text-xs font-medium text-fg"
+                >
+                  <span>
+                    {storagePreset.prefix
+                      ? `Key Identifier (prefixed with "${storagePreset.prefix}")`
+                      : "Raw Storage Key or 32-Byte Hex Slot"}
+                  </span>
+                  <span className="font-mono text-[10px] text-subtle">
+                    {storagePreset.prefix ? `${storagePreset.prefix}<id>` : "utf8 / hex32"}
+                  </span>
+                </label>
+                <input
+                  id="inspector-storage-key-input"
+                  data-testid="storage-key-input"
+                  type="text"
+                  value={storageKeyInput}
+                  onChange={(e) => setStorageKeyInput(e.target.value)}
+                  placeholder={storagePreset.placeholder}
+                  spellCheck={false}
+                  autoComplete="off"
+                  className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg placeholder:text-subtle focus:border-gold/60 focus:outline-none focus:ring-1 focus:ring-gold/40"
+                />
+              </div>
+            ) : null}
+
+            {/* Live Derived Slot Preview */}
+            <div className="rounded-md border border-border/70 bg-bg/70 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-subtle uppercase">
+                  <Code2 className="size-3 text-gold" />
+                  Derived 32-Byte Storage Slot
+                </span>
+                {derivedStorageSlot.ok ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-muted">
+                      {derivedStorageSlot.derivation === "blake3" && derivedStorageSlot.rawKey
+                        ? `blake3("${derivedStorageSlot.rawKey}")`
+                        : "raw 32-byte slot"}
+                    </span>
+                    <CopyInline text={derivedStorageSlot.slotHex} label="Storage Slot Hex" />
+                  </div>
+                ) : null}
+              </div>
+              {derivedStorageSlot.ok ? (
+                <p
+                  data-testid="derived-storage-slot-hex"
+                  className="mt-1.5 break-all font-mono text-[11px] text-fg select-all"
+                >
+                  {derivedStorageSlot.slotHex}
+                </p>
+              ) : (
+                <p className="mt-1.5 font-mono text-[11px] text-amber-300">
+                  {derivedStorageSlot.error}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <Button
+                type="submit"
+                variant="gold"
+                size="sm"
+                data-testid="read-storage-slot-btn"
+                disabled={!canReadStorage}
+                className="h-9 gap-1.5 px-4 text-xs"
+              >
+                {storageLoading ? (
+                  <>
+                    <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    <span>Reading Slot…</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="size-3.5" />
+                    <span>Read Storage Slot</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+
+          {/* Right: Storage Value & Decoded Bincode Record */}
+          <div
+            aria-live="polite"
+            data-testid="storage-reader-result"
+            className="flex flex-col gap-3 rounded-md border border-border bg-bg/50 p-3.5"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] font-semibold tracking-wider text-subtle uppercase">
+                Storage Slot State
+              </span>
+              {storageResponse && decodedStorage ? (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold",
+                    decodedStorage.isEmpty
+                      ? "border-border bg-surface text-muted"
+                      : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+                  )}
+                >
+                  {decodedStorage.isEmpty
+                    ? "Empty Slot"
+                    : `Decoded (${decodedStorage.record.kind})`}
+                </span>
+              ) : storageError ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-danger">
+                  Error
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] text-subtle">Idle</span>
+              )}
+            </div>
+
+            {!storageResponse && !storageError && !storageLoading ? (
+              <div className="flex flex-1 flex-col items-center justify-center rounded border border-dashed border-border/70 bg-bg/40 p-6 text-center">
+                <Database className="size-7 text-subtle" />
+                <p className="mt-2 text-xs font-medium text-fg">
+                  Ready to read on-chain storage slot
+                </p>
+                <p className="mt-1 max-w-xs text-[11px] text-muted">
+                  Select a key convention or enter a 32-byte slot hex and click Read Storage Slot
+                  to inspect raw storage bytes and decoded Bincode state.
+                </p>
+              </div>
+            ) : null}
+
+            {storageError ? (
+              <div className="rounded border border-danger/30 bg-danger/10 p-3 font-mono text-xs text-danger">
+                {storageError}
+              </div>
+            ) : null}
+
+            {storageResponse && decodedStorage ? (
+              <div className="space-y-3 font-mono text-xs">
+                {/* Decoded Record Fields */}
+                <div className="rounded border border-border bg-bg/90 p-3">
+                  <div className="mb-2 flex items-center justify-between text-[10px] text-subtle uppercase">
+                    <span>Bincode Record ({decodedStorage.record.kind})</span>
+                    <span>
+                      {decodedStorage.byteLength} B · {storageResponse.latencyMs} ms
+                    </span>
+                  </div>
+
+                  {decodedStorage.record.kind === "empty" ? (
+                    <p className="text-xs text-muted">{decodedStorage.record.summary}</p>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "name_entry" ? (
+                    <div className="space-y-2">
+                      <div>
+                        <span className="text-[10px] text-subtle uppercase">Owner</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="break-all text-gold">
+                            {decodedStorage.record.value.ownerAddress}
+                          </span>
+                          <CopyInline
+                            text={decodedStorage.record.value.ownerAddress}
+                            label="Owner Address"
+                          />
+                        </div>
+                      </div>
+                      <div className="border-t border-border/50 pt-1.5">
+                        <span className="text-[10px] text-subtle uppercase">Comms Pubkey</span>
+                        <p className="break-all text-fg">
+                          0x{decodedStorage.record.value.pubkeyHex}
+                        </p>
+                      </div>
+                      <div className="border-t border-border/50 pt-1.5">
+                        <span className="text-[10px] text-subtle uppercase">
+                          Relay Endpoints ({decodedStorage.record.value.relayEndpoints.length})
+                        </span>
+                        <ul className="mt-1 space-y-1">
+                          {decodedStorage.record.value.relayEndpoints.map((ep, idx) => (
+                            <li
+                              key={idx}
+                              className="rounded bg-surface px-2 py-1 text-[11px] text-fg"
+                            >
+                              {ep}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "token_meta" ? (
+                    <dl className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <dt className="text-[10px] text-subtle uppercase">Name / Symbol</dt>
+                        <dd className="font-semibold text-fg">
+                          {decodedStorage.record.value.name} ({decodedStorage.record.value.symbol})
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] text-subtle uppercase">Decimals / Status</dt>
+                        <dd className="text-fg">
+                          {decodedStorage.record.value.decimals} dec ·{" "}
+                          {decodedStorage.record.value.paused ? "Paused" : "Active"}
+                        </dd>
+                      </div>
+                      <div className="col-span-2 border-t border-border/50 pt-1.5">
+                        <dt className="text-[10px] text-subtle uppercase">Total Supply (base units)</dt>
+                        <dd className="text-gold">{decodedStorage.record.value.totalSupply}</dd>
+                      </div>
+                      <div className="col-span-2 border-t border-border/50 pt-1.5">
+                        <dt className="text-[10px] text-subtle uppercase">Owner</dt>
+                        <dd className="break-all text-fg">
+                          {decodedStorage.record.value.ownerAddress}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "escrow" ? (
+                    <div className="space-y-1.5">
+                      <p>
+                        <span className="text-subtle">Threshold:</span>{" "}
+                        <span className="text-fg">
+                          {decodedStorage.record.value.threshold} of{" "}
+                          {decodedStorage.record.value.partiesAddresses.length}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-subtle">Amount:</span>{" "}
+                        <span className="text-gold">
+                          {formatAtomsDisplay(decodedStorage.record.value.amount)} KVNC
+                        </span>{" "}
+                        ({decodedStorage.record.value.amount} atoms)
+                      </p>
+                      <p>
+                        <span className="text-subtle">Deadline:</span>{" "}
+                        <span className="text-fg">{decodedStorage.record.value.deadline}</span>
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "htlc" ? (
+                    <div className="space-y-1.5">
+                      <p className="break-all">
+                        <span className="text-subtle">Hashlock:</span>{" "}
+                        <span className="text-fg">0x{decodedStorage.record.value.hashlockHex}</span>
+                      </p>
+                      <p className="break-all">
+                        <span className="text-subtle">Recipient:</span>{" "}
+                        <span className="text-gold">
+                          {decodedStorage.record.value.recipientAddress}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-subtle">Timelock:</span>{" "}
+                        <span className="text-fg">{decodedStorage.record.value.timelock}</span>
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "vault" ? (
+                    <div className="space-y-1.5">
+                      <p className="break-all">
+                        <span className="text-subtle">Owner:</span>{" "}
+                        <span className="text-gold">
+                          {decodedStorage.record.value.ownerAddress}
+                        </span>
+                      </p>
+                      <p>
+                        <span className="text-subtle">Lock Until:</span>{" "}
+                        <span className="text-fg">{decodedStorage.record.value.lockUntil}</span>
+                      </p>
+                      {decodedStorage.record.value.amount ? (
+                        <p>
+                          <span className="text-subtle">Locked Amount:</span>{" "}
+                          <span className="text-fg">
+                            {formatAtomsDisplay(decodedStorage.record.value.amount)} KVNC
+                          </span>
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "multisig" ? (
+                    <div className="space-y-1.5">
+                      <p>
+                        <span className="text-subtle">Threshold:</span>{" "}
+                        <span className="text-gold">
+                          {decodedStorage.record.value.threshold} of{" "}
+                          {decodedStorage.record.value.ownersAddresses.length} signers
+                        </span>
+                      </p>
+                      <ul className="space-y-1 text-[11px] text-fg">
+                        {decodedStorage.record.value.ownersAddresses.map((addr, idx) => (
+                          <li key={idx} className="break-all rounded bg-surface px-2 py-1">
+                            {addr}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "address" ? (
+                    <p className="break-all text-gold">{decodedStorage.record.canonical}</p>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "u64" ||
+                  decodedStorage.record.kind === "u128" ||
+                  decodedStorage.record.kind === "utf8" ? (
+                    <p className="break-all text-fg">{decodedStorage.record.value}</p>
+                  ) : null}
+
+                  {decodedStorage.record.kind === "raw" ? (
+                    <p className="text-muted">
+                      Opaque binary storage value ({decodedStorage.byteLength} bytes).
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Raw Storage Hex */}
+                <div className="rounded border border-border/70 bg-bg/70 p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold tracking-wider text-subtle uppercase">
+                      Raw Storage Hex (kovanica_getStorageAt)
+                    </span>
+                    <CopyInline text={decodedStorage.rawHex} label="Raw Storage Hex" />
+                  </div>
+                  <p
+                    data-testid="raw-storage-hex"
+                    className="mt-1 max-h-28 overflow-auto break-all text-[11px] text-muted select-all"
+                  >
+                    {decodedStorage.rawHex}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

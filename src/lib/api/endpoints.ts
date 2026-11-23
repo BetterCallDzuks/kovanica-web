@@ -49,6 +49,12 @@ export const ENDPOINTS: EndpointRow[] = [
     note: "read-only contract dry-run simulation (kovanica_call + estimateGas)",
     read: true,
   },
+  {
+    method: "POST",
+    path: "/api/contract_storage",
+    note: "read-only contract storage slot & Bincode state reader (kovanica_getStorageAt)",
+    read: true,
+  },
   { method: "POST", path: "/api/prepare", note: "sighash + fee + change" },
   { method: "POST", path: "/api/submit", note: "queue signed tx" },
   {

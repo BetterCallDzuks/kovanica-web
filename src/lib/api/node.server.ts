@@ -1,9 +1,18 @@
 import { parseAddr } from "@/lib/wallet/address";
 import {
   buildContractCallRequest,
+  buildContractStorageRequest,
+  computeStorageSlotHex,
+  encodeEscrowStorage,
+  encodeHtlcStorage,
+  encodeMultisigStorage,
   encodeNameEntry,
+  encodeTokenMetadataStorage,
+  encodeVaultStorage,
+  isStorageBytesEmpty,
   type ContractCallRequest,
   type ContractCallResponse,
+  type ContractStorageResponse,
 } from "@/lib/contracts/dry-run";
 import {
   BincodeReader,
@@ -654,5 +663,116 @@ export function localContractCall(
     source: "local",
     rpcMethod: "kovanica_call",
     call,
+  };
+}
+
+function buildLocalStorageFixtures(): Map<string, Uint8Array> {
+  const fixtures = new Map<string, Uint8Array>();
+  const addKey = (key: string, bytes: Uint8Array) => {
+    const slot = computeStorageSlotHex(key);
+    if (slot.ok) {
+      fixtures.set(slot.slotHex, bytes);
+    }
+  };
+
+  for (const [name, entry] of Object.entries(LOCAL_NAME_ENTRIES)) {
+    const owner = new Uint8Array(32).fill(entry.ownerByte);
+    const pubkey = new Uint8Array(32).fill(entry.pubkeyByte);
+    addKey(`name:${name}`, encodeNameEntry(owner, pubkey, entry.relays));
+  }
+
+  const tokenBytes = encodeTokenMetadataStorage({
+    name: "Kovanica Test Token",
+    symbol: "KVNT",
+    decimals: 9,
+    totalSupply: 1_000_000_000_000_000n,
+    owner: new Uint8Array(32).fill(0x11),
+    paused: false,
+  });
+  addKey("token:meta", tokenBytes);
+  addKey("kvnc/v1/state", tokenBytes);
+
+  const nftBytes = encodeTokenMetadataStorage({
+    name: "Kovanica Genesis Artifacts",
+    symbol: "KVNFT",
+    decimals: 0,
+    totalSupply: 256n,
+    owner: new Uint8Array(32).fill(0x22),
+    paused: false,
+  });
+  addKey("nft:meta", nftBytes);
+
+  addKey(
+    "escrow:1",
+    encodeEscrowStorage(
+      [new Uint8Array(32).fill(0x11), new Uint8Array(32).fill(0x22)],
+      2,
+      5_000_000_000n,
+      1_800_000_000n,
+    ),
+  );
+
+  addKey(
+    "htlc:1",
+    encodeHtlcStorage(
+      new Uint8Array(32).fill(0xcc),
+      1_800_000_000n,
+      new Uint8Array(32).fill(0x11),
+      2_500_000_000n,
+    ),
+  );
+
+  addKey(
+    "vault:1",
+    encodeVaultStorage(
+      new Uint8Array(32).fill(0x22),
+      1_900_000_000n,
+      10_000_000_000n,
+    ),
+  );
+
+  addKey(
+    "multisig:state",
+    encodeMultisigStorage(
+      [
+        new Uint8Array(32).fill(0x11),
+        new Uint8Array(32).fill(0x22),
+        new Uint8Array(32).fill(0x33),
+      ],
+      2,
+    ),
+  );
+
+  return fixtures;
+}
+
+const LOCAL_STORAGE_FIXTURES = buildLocalStorageFixtures();
+
+/**
+ * Deterministic read-only contract storage slot simulator for `source=local`.
+ * Mirrors the `kovanica_getStorageAt(contract, slotHex)` response contract.
+ */
+export function localContractStorage(
+  rawBody: Partial<Record<string, unknown>>,
+): ContractStorageResponse | string {
+  const started = Date.now();
+  const built = buildContractStorageRequest(rawBody);
+  if (!built.ok) return built.error;
+
+  const { query } = built;
+  const recordBytes = LOCAL_STORAGE_FIXTURES.get(query.slotHex) ?? new Uint8Array(0);
+  const emptyCheck = isStorageBytesEmpty(recordBytes);
+  const storageHex = recordBytes.length > 0 ? `0x${bytesToHex(recordBytes)}` : "0x";
+
+  return {
+    ok: true,
+    storageHex,
+    isEmpty: emptyCheck.isEmpty,
+    byteLength: recordBytes.length,
+    codeBytes: 4096,
+    latencyMs: Math.max(1, Date.now() - started),
+    source: "local",
+    rpcMethod: "kovanica_getStorageAt",
+    query,
   };
 }

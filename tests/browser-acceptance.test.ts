@@ -398,8 +398,11 @@ async function setupIsolatedPage(
 
     // 2. Intercept potential mutation requests locally (never hit real backends or cause unintended writes)
     if (req.method() === "POST") {
-      // Read-only Wasmi dry-runs against the local in-memory node never mutate state or hit external hosts
-      if (url.pathname === "/api/contract_call" && url.searchParams.get("source") === "local") {
+      // Read-only Wasmi dry-runs and storage slot reads against the local in-memory node never mutate state or hit external hosts
+      if (
+        (url.pathname === "/api/contract_call" || url.pathname === "/api/contract_storage") &&
+        url.searchParams.get("source") === "local"
+      ) {
         await route.continue();
         return;
       }
@@ -1413,7 +1416,36 @@ test("Section E: Explorer Contract Inspector (?tab=contracts & tab click) runs n
       "Copy SDK Snippet button must confirm SDK Copied",
     );
 
-    // 6. Verify zero uncaught page or console errors
+    // 6. Verify Contract Storage Slot & Bincode State Reader section (`kovanica_getStorageAt`)
+    const storageSection = page.getByTestId("contract-storage-reader");
+    await storageSection.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    const derivedSlotHex = await page.getByTestId("derived-storage-slot-hex").innerText();
+    assert.match(
+      derivedSlotHex.trim(),
+      /^0x[0-9a-f]{64}$/,
+      "Storage reader must derive a 32-byte BLAKE3 slot hex",
+    );
+
+    const readStorageBtn = page.getByTestId("read-storage-slot-btn");
+    await readStorageBtn.click();
+    await waitForBodyText(page, "Decoded (name_entry)");
+    const storageResultText = await page.getByTestId("storage-reader-result").innerText();
+    assert.ok(
+      storageResultText.includes("https://relay1.kovanica.online"),
+      "Decoded storage slot for name:alice must display registered relay endpoint",
+    );
+
+    // Switch to token:meta preset and read decoded TokenMetadata record
+    await page.getByTestId("storage-preset-token_meta").click();
+    await readStorageBtn.click();
+    await waitForBodyText(page, "Kovanica Test Token (KVNT)");
+    const tokenStorageText = await page.getByTestId("storage-reader-result").innerText();
+    assert.ok(
+      tokenStorageText.includes("Decoded (token_meta)"),
+      "Storage slot reader must decode token:meta Bincode record",
+    );
+
+    // 7. Verify zero uncaught page or console errors
     assert.deepEqual(
       pageErrors,
       [],
