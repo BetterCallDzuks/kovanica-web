@@ -2314,3 +2314,411 @@ export function decodeContractStorageValue(
   };
 }
 
+// --- Transaction Receipt & Emitted Log Bincode Inspector (`kovanica_getTransactionReceipt`) ---
+
+export type ReceiptLogPresetId =
+  | "auto"
+  | "name"
+  | "token_meta"
+  | "escrow"
+  | "htlc"
+  | "vault"
+  | "multisig"
+  | "raw";
+
+export type ReceiptLogPreset = {
+  id: ReceiptLogPresetId;
+  label: string;
+  description: string;
+  schemaHint: StorageRecordSchema;
+};
+
+export const RECEIPT_LOG_PRESETS: readonly ReceiptLogPreset[] = [
+  {
+    id: "auto",
+    label: "Auto-Detect Bincode",
+    description:
+      "Automatically detect NameEntry, TokenMetadata, Escrow, HTLC, Vault, Multisig, JSON, or primitive Bincode log payloads.",
+    schemaHint: "auto",
+  },
+  {
+    id: "name",
+    label: "NameEntry",
+    description: "Decode emitted log payloads as comms Name Registry Bincode NameEntry records.",
+    schemaHint: "name_entry",
+  },
+  {
+    id: "token_meta",
+    label: "TokenMetadata",
+    description: "Decode emitted log payloads as KVP-102 / KVP-106 TokenMetadata records.",
+    schemaHint: "token_meta",
+  },
+  {
+    id: "escrow",
+    label: "Escrow",
+    description: "Decode emitted log payloads as M-of-N multi-party Escrow records.",
+    schemaHint: "escrow",
+  },
+  {
+    id: "htlc",
+    label: "HTLC",
+    description: "Decode emitted log payloads as Hash Time-Locked Contract (HTLC) records.",
+    schemaHint: "htlc",
+  },
+  {
+    id: "vault",
+    label: "Vault",
+    description: "Decode emitted log payloads as time-locked KVNC Vault records.",
+    schemaHint: "vault",
+  },
+  {
+    id: "multisig",
+    label: "Multisig",
+    description: "Decode emitted log payloads as M-of-N Multisig threshold records.",
+    schemaHint: "multisig",
+  },
+  {
+    id: "raw",
+    label: "Raw Hex / Primitives",
+    description: "Inspect raw log hex bytes and primitive integer / UTF-8 / JSON views.",
+    schemaHint: "auto",
+  },
+];
+
+export function getReceiptLogPreset(id: ReceiptLogPresetId): ReceiptLogPreset {
+  return RECEIPT_LOG_PRESETS.find((p) => p.id === id) ?? RECEIPT_LOG_PRESETS[0]!;
+}
+
+export function isReceiptLogPresetId(value: string): value is ReceiptLogPresetId {
+  return RECEIPT_LOG_PRESETS.some((p) => p.id === value);
+}
+
+/** Local simulator demo transaction hashes for one-click Receipt & Log inspection. */
+export const LOCAL_DEMO_SUCCESS_RECEIPT_TX = `0x${"11".repeat(32)}`;
+export const LOCAL_DEMO_REVERTED_RECEIPT_TX = `0xdead${"00".repeat(30)}`;
+export const LOCAL_DEMO_PENDING_RECEIPT_TX = `0x${"00".repeat(32)}`;
+
+/** Validate and normalize a 32-byte transaction hash to `0x` + 64 lowercase hex chars. */
+export function normalizeReceiptTxHash(
+  raw: string,
+): { ok: true; txHash: string } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { ok: false, error: "Transaction hash (`txHash`) is required" };
+  }
+  if (!/^(?:0[xX])?[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return {
+      ok: false,
+      error: "Transaction hash must be a 32-byte hex string (64 hex characters)",
+    };
+  }
+  const clean = trimmed.replace(/^0[xX]/, "").toLowerCase();
+  return { ok: true, txHash: `0x${clean}` };
+}
+
+export type ContractReceiptQuery = {
+  txHash: string;
+  presetId: ReceiptLogPresetId;
+};
+
+/** Validate and canonicalize a `POST /api/contract_receipt` request payload. */
+export function buildContractReceiptRequest(
+  raw: Partial<Record<string, unknown>>,
+): { ok: true; query: ContractReceiptQuery } | { ok: false; error: string } {
+  const txRaw =
+    typeof raw.txHash === "string"
+      ? raw.txHash
+      : typeof raw.tx === "string"
+        ? raw.tx
+        : typeof raw.hash === "string"
+          ? raw.hash
+          : "";
+  const norm = normalizeReceiptTxHash(txRaw);
+  if (!norm.ok) return norm;
+
+  const presetRaw = typeof raw.presetId === "string" ? raw.presetId.trim() : "auto";
+  const presetId: ReceiptLogPresetId = isReceiptLogPresetId(presetRaw) ? presetRaw : "auto";
+
+  return {
+    ok: true,
+    query: {
+      txHash: norm.txHash,
+      presetId,
+    },
+  };
+}
+
+export type DecodedReceiptLogPayload = {
+  rawHex: string;
+  byteLength: number;
+  presetId: ReceiptLogPresetId;
+  storageDecoded: DecodedStorageResult;
+  outputDecoded: DecodedContractOutput;
+  record: DecodedStorageRecord;
+  summary: string;
+};
+
+function summarizeStorageRecord(
+  record: DecodedStorageRecord,
+  outputDecoded: DecodedContractOutput,
+): string {
+  switch (record.kind) {
+    case "empty":
+      return record.summary;
+    case "name_entry": {
+      const relays = record.value.relayEndpoints;
+      const relayText = relays.length > 0 ? relays.join(", ") : "no relays";
+      return `NameEntry · ${record.value.ownerAddress} (${relayText})`;
+    }
+    case "token_meta":
+      return `TokenMetadata · ${record.value.name} (${record.value.symbol}) · ${record.value.decimals} dec · supply ${record.value.totalSupply}`;
+    case "escrow":
+      return `Escrow · ${record.value.threshold} of ${record.value.partiesAddresses.length} parties · ${record.value.amount} atoms`;
+    case "htlc":
+      return `HTLC · recipient ${record.value.recipientAddress} · timelock ${record.value.timelock}`;
+    case "vault":
+      return `Vault · owner ${record.value.ownerAddress} · lockUntil ${record.value.lockUntil}`;
+    case "multisig":
+      return `Multisig · ${record.value.threshold} of ${record.value.ownersAddresses.length} signers`;
+    case "address":
+      return `Address · ${record.canonical}`;
+    case "u64":
+      return `u64 · ${record.value}`;
+    case "u128":
+      return `u128 · ${record.value}`;
+    case "utf8":
+      if (outputDecoded.primary.kind === "json") {
+        return `JSON (${outputDecoded.byteLength} B)`;
+      }
+      return `UTF-8 · ${record.value}`;
+    case "raw":
+      if (outputDecoded.primary.kind === "bincode_string") {
+        return `Bincode String · ${outputDecoded.primary.value}`;
+      }
+      return `Raw binary log (${record.byteLength} B)`;
+  }
+}
+
+/**
+ * Decode an emitted transaction receipt log `data` hex payload using Kovanica's
+ * Bincode storage and output decoders (`decodeContractStorageValue` + `decodeContractOutput`).
+ */
+export function decodeContractReceiptLog(
+  dataHex: string,
+  presetId: ReceiptLogPresetId = "auto",
+): DecodedReceiptLogPayload {
+  const norm = normalizeHexData(dataHex);
+  const normalizedHex = norm.ok ? norm.hex : "0x";
+  const byteLength = norm.ok ? norm.byteLength : 0;
+
+  if (presetId === "raw") {
+    const outputDecoded = decodeContractOutput(normalizedHex);
+    const rawRecord: DecodedStorageRecord =
+      byteLength === 0
+        ? {
+            kind: "empty",
+            isZeroBytes32: false,
+            summary: "Empty log payload (0 bytes)",
+          }
+        : { kind: "raw", byteLength };
+    const storageDecoded: DecodedStorageResult = {
+      rawHex: normalizedHex,
+      byteLength,
+      isEmpty: byteLength === 0,
+      isZeroBytes32: false,
+      record: rawRecord,
+    };
+    return {
+      rawHex: normalizedHex,
+      byteLength,
+      presetId,
+      storageDecoded,
+      outputDecoded,
+      record: rawRecord,
+      summary: summarizeStorageRecord(rawRecord, outputDecoded),
+    };
+  }
+
+  const preset = getReceiptLogPreset(presetId);
+  const storageDecoded = decodeContractStorageValue(normalizedHex, preset.schemaHint);
+  const outputDecoded = decodeContractOutput(
+    normalizedHex,
+    presetId === "name" ? "name_resolve" : undefined,
+  );
+
+  return {
+    rawHex: normalizedHex,
+    byteLength: storageDecoded.byteLength,
+    presetId,
+    storageDecoded,
+    outputDecoded,
+    record: storageDecoded.record,
+    summary: summarizeStorageRecord(storageDecoded.record, outputDecoded),
+  };
+}
+
+export type RawContractReceiptLog = {
+  address?: string | null;
+  topics?: string[] | null;
+  data?: string | null;
+  logIndex?: number | string | null;
+};
+
+export type RawContractTransactionReceipt = {
+  transactionHash?: string | null;
+  txHash?: string | null;
+  status?: number | string | boolean | null;
+  gasUsed?: number | string | null;
+  blockHash?: string | null;
+  blockNumber?: number | string | null;
+  from?: string | null;
+  to?: string | null;
+  contractAddress?: string | null;
+  logs?: RawContractReceiptLog[] | null;
+  revertReason?: string | null;
+};
+
+export type ParsedContractReceiptLog = {
+  index: number;
+  address: string | null;
+  topics: string[];
+  dataHex: string;
+  byteLength: number;
+  decoded: DecodedReceiptLogPayload;
+};
+
+export type ParsedContractTransactionReceipt = {
+  txHash: string;
+  status: "success" | "reverted";
+  statusCode: 1 | 0;
+  gasUsed: number | null;
+  blockHash: string | null;
+  blockNumber: number | null;
+  from: string | null;
+  to: string | null;
+  contractAddress: string | null;
+  revertReason: string | null;
+  logsCount: number;
+  logs: ParsedContractReceiptLog[];
+};
+
+function parseReceiptQuantity(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed =
+    trimmed.startsWith("0x") || trimmed.startsWith("0X")
+      ? Number.parseInt(trimmed.slice(2), 16)
+      : Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseReceiptStatus(value: unknown): { status: "success" | "reverted"; statusCode: 1 | 0 } {
+  if (value === false || value === 0 || value === "0" || value === "0x0" || value === "0X0") {
+    return { status: "reverted", statusCode: 0 };
+  }
+  if (typeof value === "string" && /revert|fail/i.test(value)) {
+    return { status: "reverted", statusCode: 0 };
+  }
+  return { status: "success", statusCode: 1 };
+}
+
+function normalizeOptionalAddr(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return toCanonicalAddress(trimmed) ?? trimmed;
+}
+
+/**
+ * Parse and decode a raw transaction receipt object from `kovanica_getTransactionReceipt`,
+ * normalizing status (`success` / `reverted`), gas used, block hash, and decoding each
+ * emitted log payload with Bincode decoders.
+ */
+export function parseContractTransactionReceipt(
+  rawReceipt: RawContractTransactionReceipt | null | undefined,
+  presetId: ReceiptLogPresetId = "auto",
+): ParsedContractTransactionReceipt | null {
+  if (!rawReceipt || typeof rawReceipt !== "object") {
+    return null;
+  }
+
+  const rawTxHash =
+    typeof rawReceipt.transactionHash === "string" && rawReceipt.transactionHash.trim()
+      ? rawReceipt.transactionHash.trim()
+      : typeof rawReceipt.txHash === "string" && rawReceipt.txHash.trim()
+        ? rawReceipt.txHash.trim()
+        : `0x${"00".repeat(32)}`;
+  const normTx = normalizeReceiptTxHash(rawTxHash);
+  const txHash = normTx.ok ? normTx.txHash : rawTxHash;
+
+  const { status, statusCode } = parseReceiptStatus(rawReceipt.status);
+  const gasUsed = parseReceiptQuantity(rawReceipt.gasUsed);
+  const blockNumber = parseReceiptQuantity(rawReceipt.blockNumber);
+  const blockHash =
+    typeof rawReceipt.blockHash === "string" && rawReceipt.blockHash.trim()
+      ? rawReceipt.blockHash.trim().startsWith("0x") ||
+        rawReceipt.blockHash.trim().startsWith("0X")
+        ? rawReceipt.blockHash.trim().toLowerCase()
+        : `0x${rawReceipt.blockHash.trim().toLowerCase()}`
+      : null;
+
+  const from = normalizeOptionalAddr(rawReceipt.from);
+  const to = normalizeOptionalAddr(rawReceipt.to);
+  const contractAddress = normalizeOptionalAddr(rawReceipt.contractAddress);
+  const revertReason =
+    typeof rawReceipt.revertReason === "string" && rawReceipt.revertReason.trim()
+      ? rawReceipt.revertReason.trim()
+      : null;
+
+  const rawLogs = Array.isArray(rawReceipt.logs) ? rawReceipt.logs : [];
+  const logs: ParsedContractReceiptLog[] = rawLogs.map((log, idx) => {
+    const logIndex = parseReceiptQuantity(log?.logIndex) ?? idx;
+    const address = normalizeOptionalAddr(log?.address) ?? contractAddress ?? to;
+    const topics = Array.isArray(log?.topics)
+      ? log.topics
+          .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+          .map((t) => t.trim())
+      : [];
+    const dataRaw = typeof log?.data === "string" ? log.data : "0x";
+    const decoded = decodeContractReceiptLog(dataRaw, presetId);
+    return {
+      index: logIndex,
+      address,
+      topics,
+      dataHex: decoded.rawHex,
+      byteLength: decoded.byteLength,
+      decoded,
+    };
+  });
+
+  return {
+    txHash,
+    status,
+    statusCode,
+    gasUsed,
+    blockHash,
+    blockNumber,
+    from,
+    to,
+    contractAddress,
+    revertReason,
+    logsCount: logs.length,
+    logs,
+  };
+}
+
+export type ContractReceiptResponse = {
+  ok: true;
+  found: boolean;
+  receipt: RawContractTransactionReceipt | null;
+  latencyMs: number;
+  source: "testnet" | "local";
+  rpcMethod: "kovanica_getTransactionReceipt";
+  query: ContractReceiptQuery;
+};
+
+

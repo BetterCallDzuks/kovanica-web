@@ -14,6 +14,7 @@ import {
   localBlocksDump,
   localBootstrap,
   localContractCall,
+  localContractReceipt,
   localContractStorage,
   localFaucet,
   localHead,
@@ -44,11 +45,14 @@ import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.serv
 import { isAssetId } from "../asset-id";
 import {
   buildContractCallRequest,
+  buildContractReceiptRequest,
   buildContractStorageRequest,
   isStorageBytesEmpty,
   type ContractCallRequest,
   type ContractCallResponse,
+  type ContractReceiptResponse,
   type ContractStorageResponse,
+  type RawContractTransactionReceipt,
 } from "../contracts/dry-run";
 
 const CORS: Record<string, string> = {
@@ -666,6 +670,48 @@ async function executeLiveContractStorage(req: Request): Promise<Response> {
   }
 }
 
+/**
+ * Fetch a transaction receipt and its emitted logs from the live testnet node via
+ * `kovanica_getTransactionReceipt(txHash)`.
+ */
+async function executeLiveContractReceipt(req: Request): Promise<Response> {
+  let body: Partial<Record<string, unknown>>;
+  try {
+    body = (await req.json()) as Partial<Record<string, unknown>>;
+  } catch {
+    return text("invalid JSON body", 400);
+  }
+
+  const built = buildContractReceiptRequest(body);
+  if (!built.ok) {
+    return text(built.error, 400);
+  }
+
+  const { query } = built;
+  const started = Date.now();
+
+  try {
+    const rawReceipt = await callRpc<RawContractTransactionReceipt | null>(
+      "kovanica_getTransactionReceipt",
+      [query.txHash],
+    );
+    const found = rawReceipt !== null && typeof rawReceipt === "object";
+    const resp: ContractReceiptResponse = {
+      ok: true,
+      found,
+      receipt: found ? rawReceipt : null,
+      latencyMs: Math.max(1, Date.now() - started),
+      source: "testnet",
+      rpcMethod: "kovanica_getTransactionReceipt",
+      query,
+    };
+    return json(resp);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "contract receipt read failed";
+    return text(`testnet node error: ${msg}`, rpcFailureStatus(e));
+  }
+}
+
 export async function dispatchApi(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
@@ -749,6 +795,10 @@ export async function dispatchApi(req: Request): Promise<Response> {
     if (name === "contract_storage") {
       if (method !== "POST") return text("method not allowed", 405);
       return executeLiveContractStorage(req);
+    }
+    if (name === "contract_receipt") {
+      if (method !== "POST") return text("method not allowed", 405);
+      return executeLiveContractReceipt(req);
     }
     if (name === "rwa") {
       return detailLookup("kovanica_getRwaAsset", url.pathname.replace(/^\/api\/rwa\/?/, ""));
@@ -1055,6 +1105,17 @@ export async function dispatchApi(req: Request): Promise<Response> {
           return text("invalid JSON body", 400);
         }
         const res = localContractStorage(body);
+        if (typeof res === "string") return text(res, 400);
+        return json(res);
+      }
+      case "contract_receipt": {
+        let body: Partial<Record<string, unknown>>;
+        try {
+          body = (await req.json()) as Partial<Record<string, unknown>>;
+        } catch {
+          return text("invalid JSON body", 400);
+        }
+        const res = localContractReceipt(body);
         if (typeof res === "string") return text(res, 400);
         return json(res);
       }
