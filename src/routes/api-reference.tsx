@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Check, Copy, Terminal } from "lucide-react";
 import { ApiReferenceView } from "@/components/api/api-reference-view";
+import { RpcMethodExplorer } from "@/components/api/rpc-method-explorer";
 import {
   DEFAULT_TESTNET_RPC_URL,
   RPC_IDENTITY_HEADERS,
@@ -29,6 +30,10 @@ function ApiReferencePage() {
   return (
     <div className="bg-bg text-fg">
       <ApiReferenceView />
+
+      <section className="mx-auto w-full max-w-4xl px-4 pb-8 md:px-6">
+        <RpcMethodExplorer />
+      </section>
 
       <section className="mx-auto w-full max-w-4xl px-4 pb-10 md:px-6">
         <div
