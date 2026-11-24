@@ -33,6 +33,19 @@ export const MAX_SUPPLY = 90_200_000 * ATOM;
 // subsidy = 2.5 KVNC (s₀) → min_fee = max(2.5 * 10^9 / 500_000, 1) = 5,000 atoms.
 // Note: 500_000 here is the fee-floor divider, not HALVING_ERA (8_200_000).
 export const MIN_FEE = Math.max(Math.floor(SUBSIDY / 500_000), 1);
+
+/**
+ * Canonical Balanced-tier fixed operation fee floors in KVNC atoms
+ * (75% burned, 25% miner on mainnet/testnet; 100% burned on devnet).
+ */
+export const FIXED_FEES = {
+  deploy: 1 * ATOM, // 1 KVNC
+  token_create: 5 * ATOM, // 5 KVNC
+  nft_create_collection: 2 * ATOM, // 2 KVNC
+  nft_mint: Math.floor(0.1 * ATOM), // 0.1 KVNC
+  rwa_create: 10 * ATOM, // 10 KVNC
+  rwa_mint: Math.floor(0.5 * ATOM), // 0.5 KVNC
+} as const;
 export const K = 5;
 export const TREASURY = "cecc1507dc1ddd7295951c290888f095adb9044d1b73d696e6df065d683bd4fc";
 

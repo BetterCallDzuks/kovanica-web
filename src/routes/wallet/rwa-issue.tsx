@@ -10,7 +10,8 @@ import { parseAddr } from "@/lib/wallet/address";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { IpfsMetadataUpload } from "@/components/wallet/ipfs-upload";
-import { createRwaMetadata } from "@/lib/rwa/metadata";
+import { computeMetadataHash, createRwaMetadata } from "@/lib/rwa/metadata";
+import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 
 const ASSET_CLASSES = [
   { value: "RE", label: "Real Estate (RE)" },
@@ -50,7 +51,7 @@ function RwaIssuePage() {
   const [metadataCid, setMetadataCid] = useState<string | null>(null);
 
   // Success step state
-  const [successTxId] = useState<string | null>(null);
+  const [successTxId, setSuccessTxId] = useState<string | null>(null);
 
   // Derive asset_id from issuer
   const handleDerive = async () => {
@@ -103,12 +104,33 @@ function RwaIssuePage() {
 
     setMinting(true);
     try {
-      // TODO: Implement mint flow
-      // 1. Use metadataCid to compute metadata_hash (SHA256 of canonical JSON)
-      // 2. Prepare mint transaction with asset_id and metadata_hash
-      // 3. Sign and submit
-      // For now, show the prepared transaction
-      toast.success("Mint flow - implementation needed for node API integration");
+      const metadata = createRwaMetadata({
+        name: `RWA ${assetClass} ${uniqueId}`,
+        description: `RWA asset: ${assetClass} - ${uniqueId}`,
+        image: `ipfs://${metadataCid}`,
+        asset_class: assetClass as "RE" | "BOND" | "INVOICE" | "COMMODITY" | "FUND" | "OTHER",
+        total_supply: amount,
+      });
+      const metadataHash = await computeMetadataHash(metadata);
+      const qs = new URLSearchParams({
+        asset_id: derivedAssetId,
+        to: dest,
+        amount: String(atoms),
+        asset_class: assetClass,
+        unique_id: uniqueId,
+        version: String(Number(version) || 1),
+        metadata_cid: metadataCid,
+        metadata_hash: metadataHash,
+        fee: String(FIXED_FEES.rwa_create),
+        ...(collectionId ? { collection_id: collectionId } : {}),
+      });
+      const res = await api<{ tx_hash?: string; txid?: string; status?: string }>(
+        `/api/rwa/mint?${qs.toString()}`,
+        "POST",
+      );
+      setSuccessTxId(res.tx_hash ?? res.txid ?? derivedAssetId);
+      setStep("success");
+      toast.success("KVP-106 RWA issuance submitted");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Mint failed");
     } finally {
@@ -358,6 +380,30 @@ function RwaIssuePage() {
               <p className="text-[10px] text-subtle">
                 Upload metadata to IPFS. The CID will be hashed and stored on-chain as
                 metadata_hash.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border bg-bg p-3 text-xs text-muted space-y-1">
+              <div className="flex justify-between">
+                <span>RWA Registration (`rwa_create`)</span>
+                <span className="font-mono text-fg">
+                  {FIXED_FEES.rwa_create / ATOM} {TOKEN}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Contract Deploy (`Deploy`)</span>
+                <span className="font-mono text-fg">
+                  {FIXED_FEES.deploy / ATOM} {TOKEN}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Subsequent Mint (`rwa_mint`)</span>
+                <span className="font-mono text-fg">
+                  {FIXED_FEES.rwa_mint / ATOM} {TOKEN}
+                </span>
+              </div>
+              <p className="pt-1 text-[10px] text-subtle">
+                Fee split: 75% burned, 25% to block miner.
               </p>
             </div>
 
