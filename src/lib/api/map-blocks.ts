@@ -3,32 +3,51 @@ import type { ApiDagBlock } from "./contract";
 
 export function dagToBlocks(dag: ApiDagBlock[], order: string[]): Block[] {
   const heightOf = new Map(order.map((id, i) => [id, i]));
-  return dag.map((d) => ({
-    id: d.id,
-    parents: d.parents,
-    selectedParent: d.selected_parent,
-    work: d.work,
-    timestamp: d.timestamp_ms,
-    nonce: d.nonce,
-    blueScore: d.blue_score,
-    colour: d.colour,
-    height: typeof d.work === "number" ? d.work : (heightOf.get(d.id) ?? 0),
-    txs: d.txs.map((t) => ({
-      id: t.id,
-      coinbase: t.coinbase,
-      to: t.outputs[0]?.owner,
-      amount: t.outputs.reduce((n, o) => n + o.value, 0),
-      type: t.type,
-      kind: t.kind,
-      contract: t.contract,
-      method: t.method,
-      args: t.args,
-      call_value: t.call_value,
-      value: t.value,
-      gas_limit: t.gas_limit,
-      raw: t.raw,
-    })),
-  }));
+  return dag.map((d) => {
+    const parsedDifficulty =
+      typeof d.difficulty === "number"
+        ? Number.isFinite(d.difficulty)
+          ? d.difficulty
+          : null
+        : typeof d.difficulty === "string" && d.difficulty.trim() !== ""
+          ? Number.isFinite(Number(d.difficulty))
+            ? Number(d.difficulty)
+            : null
+          : undefined;
+
+    return {
+      id: d.id,
+      parents: d.parents,
+      selectedParent: d.selected_parent,
+      work: d.work,
+      timestamp: d.timestamp_ms,
+      nonce: d.nonce,
+      blueScore: d.blue_score,
+      colour: d.colour,
+      height: typeof d.work === "number" ? d.work : (heightOf.get(d.id) ?? 0),
+      ...(d.target_bits !== undefined ? { targetBits: d.target_bits } : {}),
+      ...(parsedDifficulty !== undefined ? { difficulty: parsedDifficulty } : {}),
+      ...(d.pow_hash !== undefined ? { powHash: d.pow_hash } : {}),
+      ...(d.state_root !== undefined ? { stateRoot: d.state_root } : {}),
+      ...(d.tx_merkle_root !== undefined ? { txMerkleRoot: d.tx_merkle_root } : {}),
+      ...(d.pow_timestamp !== undefined ? { powTimestamp: d.pow_timestamp } : {}),
+      txs: d.txs.map((t) => ({
+        id: t.id,
+        coinbase: t.coinbase,
+        to: t.outputs[0]?.owner,
+        amount: t.outputs.reduce((n, o) => n + o.value, 0),
+        type: t.type,
+        kind: t.kind,
+        contract: t.contract,
+        method: t.method,
+        args: t.args,
+        call_value: t.call_value,
+        value: t.value,
+        gas_limit: t.gas_limit,
+        raw: t.raw,
+      })),
+    };
+  });
 }
 
 /**
