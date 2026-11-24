@@ -16,6 +16,7 @@ import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
 import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
 import { LiveDagDrawer } from "@/components/explorer/live-dag-drawer";
+import { BlockPowDrawer } from "@/components/explorer/block-pow-drawer";
 import { ExplorerDiagnosticsDrawer } from "@/components/explorer/diagnostics-drawer";
 import { ContractInspectorPanel } from "@/components/explorer/contract-inspector-panel";
 import {
@@ -591,6 +592,7 @@ function GraphPanel({
             <span className="font-mono text-muted break-all">{selected.selectedParent}</span>
           </div>
         )}
+        <BlockPowDrawer block={selected} apiBlock={apiBlock} />
       </article>
       <aside className="rounded-lg border border-border bg-surface p-4">
         <p className="text-[10px] tracking-wide text-subtle uppercase">Executed Transactions ({txs.length})</p>

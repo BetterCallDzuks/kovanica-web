@@ -39,6 +39,13 @@ export type Block = {
   colour: Colour;
   height: number;
   txs: Tx[];
+  /** Optional PoW header & proof fields preserved from RPC block headers. */
+  targetBits?: number | string | null;
+  difficulty?: number | null;
+  powHash?: string | null;
+  stateRoot?: string | null;
+  txMerkleRoot?: string | null;
+  powTimestamp?: number | string | null;
 };
 
 import type { HardwareDeviceType } from "@/lib/wallet/hardware/types";

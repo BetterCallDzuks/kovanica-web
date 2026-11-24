@@ -100,6 +100,13 @@ export type ApiDagBlock = {
   blue_score: number;
   colour: "genesis" | "chain" | "blue" | "red";
   txs: ApiTx[];
+  /** Optional PoW header & proof fields exposed by full block header RPCs. */
+  target_bits?: number | string | null;
+  difficulty?: number | string | null;
+  pow_hash?: string | null;
+  state_root?: string | null;
+  tx_merkle_root?: string | null;
+  pow_timestamp?: number | string | null;
 };
 export type ApiUtxo = {
   tx: string;
