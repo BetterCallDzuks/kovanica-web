@@ -65,6 +65,7 @@ import {
   decodeWireTxAutoHex,
   type DecodeWireTxAutoResult,
 } from "@/lib/explorer/raw-tx-decode";
+import { StorageSlotReader } from "@/components/explorer/storage-slot-reader";
 import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 import { parseAddr, toCanonicalAddress } from "@/lib/wallet/address";
@@ -1945,6 +1946,9 @@ export function ContractInspectorPanel({
           </div>
         </div>
       </section>
+
+      {/* SDK-Compatible Storage Slot Deriver & Live Reader */}
+      <StorageSlotReader source={source} contractAddress={contractAddress} />
 
       {/* Transaction Receipt & Event Log Bincode Decoder */}
       <section
