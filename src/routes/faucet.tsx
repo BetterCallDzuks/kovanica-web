@@ -5,9 +5,9 @@ import { FaucetView } from "@/components/faucet/faucet-view";
 import {
   FAUCET_CANONICAL_NETWORK_TAG,
   FAUCET_CHAIN_ID,
-  formatFaucetCooldown,
-  validateFaucetRecipient,
-} from "@/lib/faucet/preflight";
+  formatCooldownRemaining,
+  validateFaucetAddress,
+} from "@/lib/faucet/faucet-telemetry";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/faucet")({ component: FaucetPage });
@@ -17,7 +17,7 @@ function FaucetPage() {
 
   const trimmed = recipientInput.trim();
   const verdict = useMemo(
-    () => (trimmed.length > 0 ? validateFaucetRecipient(trimmed) : null),
+    () => (trimmed.length > 0 ? validateFaucetAddress(trimmed) : null),
     [trimmed],
   );
 
@@ -47,7 +47,7 @@ function FaucetPage() {
               <span>{FAUCET_CANONICAL_NETWORK_TAG}</span>
             </span>
             <span className="font-mono text-[11px] text-subtle">
-              Cooldown: {formatFaucetCooldown(0)}
+              Cooldown: {formatCooldownRemaining(0)}
             </span>
           </div>
 

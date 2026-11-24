@@ -1,10 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FaucetStatusBar } from "@/components/faucet/faucet-status-bar";
 import { NetworkBadge } from "@/components/layout/network-badge";
 import { MinimalHeader } from "@/components/layout/minimal-header";
 import { SURFACE } from "@/lib/surfaces";
-import { isAddr, hexToKvnc } from "@/lib/wallet/address";
+import {
+  formatCooldownRemaining,
+  parseFaucetTelemetrySummary,
+  validateFaucetAddress,
+  type FaucetHealthInput,
+} from "@/lib/faucet/faucet-telemetry";
 import { cn } from "@/lib/utils";
 import { NETWORK_ID } from "@/lib/api/contract";
 import type { ApiState } from "@/lib/api/contract";
@@ -32,8 +38,13 @@ const ERROR_COPY: Record<Exclude<ErrorKind, null>, string> = {
   other: "",
 };
 
+export interface FaucetViewProps {
+  /** Optional raw OpenMetrics text or structured health telemetry for the status bar. */
+  initialTelemetry?: string | FaucetHealthInput | null;
+}
+
 /** Single-task testnet faucet — one card, one job. Wire to POST /api/faucet. */
-export function FaucetView() {
+export function FaucetView({ initialTelemetry = null }: FaucetViewProps = {}) {
   const [address, setAddress] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorKind, setErrorKind] = useState<ErrorKind>(null);
@@ -94,20 +105,41 @@ export function FaucetView() {
   }, [isCoolingDown]);
 
   const raw = address.trim();
-  const addrState = raw === "" ? "empty" : isAddr(raw) ? "valid" : "invalid";
+  const addrValidation = useMemo(
+    () => (raw === "" ? null : validateFaucetAddress(raw)),
+    [raw],
+  );
+  const addrState = raw === "" ? "empty" : addrValidation?.valid ? "valid" : "invalid";
   const normalized =
-    addrState === "valid" && /^[0-9a-f]{64}$/i.test(raw) ? hexToKvnc(raw) : null;
+    addrValidation?.valid &&
+    addrValidation.canonicalAddress &&
+    addrValidation.canonicalAddress !== raw.toLowerCase()
+      ? addrValidation.canonicalAddress
+      : null;
+
+  const telemetrySummary = useMemo(() => {
+    if (initialTelemetry !== null) {
+      return parseFaucetTelemetrySummary(initialTelemetry);
+    }
+    if (headError === "dry" || errorKind === "dry") {
+      return parseFaucetTelemetrySummary({ available: true, lowBalance: true });
+    }
+    if (head?.faucet) {
+      return parseFaucetTelemetrySummary({ available: true });
+    }
+    return parseFaucetTelemetrySummary(null);
+  }, [initialTelemetry, head, headError, errorKind]);
 
   const faucetClosed = head !== null && !head.faucet;
   const disabledReason =
     phase === "submitting"
       ? null
       : cooldownLeft > 0
-        ? `Faucet cooling down — ${cooldownLeft}s`
+        ? `Faucet cooling down — ${formatCooldownRemaining(cooldownLeft * 1000)}`
         : faucetClosed
           ? "The faucet is currently closed."
           : addrState === "invalid"
-            ? "Enter a valid Kovanica address."
+            ? "Enter a valid PRO-21 Kovanica address."
             : addrState === "empty"
               ? "Enter a Kovanica address first."
               : null;
@@ -121,16 +153,19 @@ export function FaucetView() {
   }
 
   async function submit() {
-    if (!isAddr(raw)) {
+    const preflight = validateFaucetAddress(raw);
+    if (!preflight.valid) {
       setErrorKind("invalid-address");
+      setErrorMessage(preflight.reason ?? ERROR_COPY["invalid-address"]);
       return;
     }
+    const targetAddress = preflight.canonicalAddress ?? raw;
     setErrorKind(null);
     setErrorMessage("");
     setPhase("submitting");
     try {
       // No `amount`: the faucet dispenses a fixed amount and reports what it sent.
-      const r = await fetch(`/api/faucet?to=${encodeURIComponent(raw)}&source=testnet`, {
+      const r = await fetch(`/api/faucet?to=${encodeURIComponent(targetAddress)}&source=testnet`, {
         method: "POST",
       });
       const text = await r.text();
@@ -216,7 +251,14 @@ export function FaucetView() {
             )}
           </p>
 
-          <div className="mt-6 rounded-xl border border-border bg-surface p-5">
+          <FaucetStatusBar
+            summary={telemetrySummary}
+            cooldownRemainingMs={cooldownLeft * 1000}
+            loading={headLoading}
+            className="mt-5"
+          />
+
+          <div className="mt-4 rounded-xl border border-border bg-surface p-5">
             {/* Address */}
             <label htmlFor="faucet-address" className="eyebrow">
               Address
@@ -228,7 +270,7 @@ export function FaucetView() {
                 setAddress(e.target.value);
                 if (errorKind === "invalid-address") setErrorKind(null);
               }}
-              placeholder="kvnc…dag (canonical PRO-21)"
+              placeholder="kvnc…dag or tknc…dag (canonical PRO-21)"
               spellCheck={false}
               autoComplete="off"
               className={cn(
@@ -239,7 +281,9 @@ export function FaucetView() {
               )}
             />
             {addrState === "invalid" && (
-              <p className="mt-1.5 text-xs text-danger">{ERROR_COPY["invalid-address"]}</p>
+              <p className="mt-1.5 text-xs text-danger">
+                {addrValidation?.reason ?? ERROR_COPY["invalid-address"]}
+              </p>
             )}
             {normalized && (
               <p className="mt-1.5 truncate font-mono text-[11px] text-subtle">
