@@ -22,6 +22,7 @@ import {
   AddressContractBanner,
   buildContractInspectorUrl,
 } from "@/components/explorer/address-contract-banner";
+import { AccountHistoryPanel } from "@/components/explorer/account-history-toolbar";
 import {
   parseContractInspectorDeepLink,
   type ContractStorageResponse,
@@ -259,6 +260,11 @@ export function ExplorerView() {
             }
           }}
         />
+      ) : null}
+
+      {/* Inspected Account Transaction History with Direction Filter & CSV/JSON Export */}
+      {tab !== "Contracts" && inspectedAddress ? (
+        <AccountHistoryPanel address={inspectedAddress} source={source} />
       ) : null}
 
       {/* Liveness: a stalled chain is not a down endpoint */}
