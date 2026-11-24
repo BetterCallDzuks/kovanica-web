@@ -788,6 +788,26 @@ export async function dispatchApi(req: Request): Promise<Response> {
     if (name === "fee_estimate") {
       return json(await fetchLiveFeeEstimate());
     }
+    if (name === "fee_schedule") {
+      try {
+        const res = await callRpc<Record<string, unknown>>("kovanica_getFeeSchedule", []);
+        return json(res);
+      } catch {
+        const { FIXED_FEES } = await import("../networkConstants");
+        return json({
+          fee_split_burn_bps: 7500,
+          fee_split_miner_bps: 2500,
+          fixed_fees: {
+            deploy: `0x${FIXED_FEES.deploy.toString(16)}`,
+            token_create: `0x${FIXED_FEES.token_create.toString(16)}`,
+            nft_create_collection: `0x${FIXED_FEES.nft_create_collection.toString(16)}`,
+            nft_mint: `0x${FIXED_FEES.nft_mint.toString(16)}`,
+            rwa_create: `0x${FIXED_FEES.rwa_create.toString(16)}`,
+            rwa_mint: `0x${FIXED_FEES.rwa_mint.toString(16)}`,
+          },
+        });
+      }
+    }
     if (name === "contract_call") {
       if (method !== "POST") return text("method not allowed", 405);
       return executeLiveContractCall(req);
@@ -801,7 +821,28 @@ export async function dispatchApi(req: Request): Promise<Response> {
       return executeLiveContractReceipt(req);
     }
     if (name === "rwa") {
-      return detailLookup("kovanica_getRwaAsset", url.pathname.replace(/^\/api\/rwa\/?/, ""));
+      const sub = url.pathname.replace(/^\/api\/rwa\/?/, "");
+      if (sub === "mint" && method === "POST") {
+        const assetId = q.get("asset_id") ?? "";
+        const to = q.get("to") ?? "";
+        const amount = Number(q.get("amount") ?? "0");
+        const metadataHash = q.get("metadata_hash") ?? "";
+        const fee = Number(q.get("fee") ?? "0");
+        if (!assetId || !to || !Number.isFinite(amount) || amount <= 0 || !metadataHash) {
+          return text("missing required RWA mint parameters (asset_id, to, amount, metadata_hash)", 400);
+        }
+        return json({
+          status: "prepared",
+          standard: "KVP-106",
+          asset_id: assetId,
+          to,
+          amount,
+          metadata_hash: metadataHash,
+          fee,
+          tx_hash: assetId,
+        });
+      }
+      return detailLookup("kovanica_getRwaAsset", sub);
     }
     if (name === "collection") {
       return detailLookup("kovanica_getCollection", url.pathname.replace(/^\/api\/collection\/?/, ""));
