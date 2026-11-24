@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { CliCheatsheet } from "@/components/docs/cli-cheatsheet";
 import { SourceSwitch } from "@/components/layout/source-switch";
 import { Button } from "@/components/ui/button";
 import { api, useApiSource } from "@/lib/api/client";
@@ -18,6 +19,7 @@ const SECTIONS = [
   { id: "protocol", label: "Protocol" },
   { id: "tokenomics", label: "Tokenomics" },
   { id: "node-ops", label: "Node operations" },
+  { id: "cli-cheatsheet", label: "CLI cheat-sheet" },
   { id: "api-reference", label: "API reference" },
   { id: "roadmap", label: "Roadmap" },
 ];
@@ -332,6 +334,19 @@ export function DocsView() {
               </ul>
             </li>
           </ol>
+        </section>
+
+        {/* CLI cheat-sheet */}
+        <section id="cli-cheatsheet" className="mt-10 scroll-mt-20">
+          <h2 className="font-display text-2xl tracking-tight text-fg">CLI cheat-sheet</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+            Build validated, copy-ready <code>kovanica</code> CLI commands for node pre-flight diagnostics, JSON-RPC probing, offline snapshot verification, transaction decoding, air-gap envelopes, and keystore audits.
+          </p>
+          <CliCheatsheet
+            defaultNetwork={
+              source === "mainnet" ? "mainnet" : source === "local" ? "devnet" : "testnet"
+            }
+          />
         </section>
 
         {/* API reference */}
