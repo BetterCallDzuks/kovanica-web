@@ -40,7 +40,8 @@ import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
 import { parseTargetBits } from "@/lib/explorer/mining-metrics";
-import { faucetEndpoint, probeHealth, rpcCall, RpcError, type HealthProbeResult } from "./rpc-url.server";
+import { faucetEndpoint, probeHealth, rpcCall, rpcEndpoint, RpcError, type HealthProbeResult } from "./rpc-url.server";
+import { fetchLiveDagBlocks } from "./live-dag.server";
 import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.server";
 import { isAssetId } from "../asset-id";
 import {
@@ -297,13 +298,12 @@ async function fetchLiveState(): Promise<ApiState> {
     : [];
   const mempool = Array.isArray(pending) ? pendingIds.length : null;
 
-  /**
-   * seed1 publishes DAG tips but no per-height headers under hybrid PoW:
-   * `kovanica_getLeaderHeader` and `kovanica_getBlockHeaderByNumber` return
-   * null for every height (checked 2026-11-15). The graph is therefore empty
-   * rather than a synthetic chain of `0xblock…` ids.
-   */
-  const dag: ApiState["node"]["dag"] = [];
+  const dag = await fetchLiveDagBlocks({
+    committedHeight: currentHeight,
+    tips: tipList,
+    callRpc,
+    cacheScope: rpcEndpoint(),
+  });
   const health = summarise(probe);
 
   const rawDifficulty =
