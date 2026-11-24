@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ShieldCheck, AlertTriangle, XCircle } from "lucide-react";
 import { Shell } from "@/components/layout/shell";
+import { EcosystemHealthMatrix } from "@/components/network/ecosystem-health-matrix";
 import { NetworkView } from "@/components/network/network-view";
 import { useApiSource } from "@/lib/api/client";
 import type { ApiSource } from "@/lib/api/contract";
@@ -147,6 +148,8 @@ function NetworkPage() {
           </div>
         </div>
       </section>
+
+      <EcosystemHealthMatrix source={source} />
 
       <NetworkView />
     </Shell>
