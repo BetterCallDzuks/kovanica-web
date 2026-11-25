@@ -446,66 +446,72 @@ export function DocsView() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-border bg-surface-2 font-mono text-[10px] uppercase tracking-wider text-muted">
                 <tr>
-                  <th className="px-3 py-2">Standard</th>
                   <th className="px-3 py-2">RFC</th>
+                  <th className="px-3 py-2">KVP</th>
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Purpose &amp; Surface</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60 text-muted">
                 <tr>
-                  <td className="px-3 py-2 font-mono text-gold">KVP-20</td>
-                  <td className="px-3 py-2 font-mono">—</td>
-                  <td className="px-3 py-2 text-fg font-medium">Fungible Contract Token</td>
-                  <td className="px-3 py-2">ERC-20-style approve/transfer interface for AMM pairs &amp; bridge tokens (/swap, /pools)</td>
-                </tr>
-                <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-001</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-101</td>
-                  <td className="px-3 py-2 font-mono">RFC-001</td>
                   <td className="px-3 py-2 text-fg font-medium">Multisig Wallets</td>
                   <td className="px-3 py-2">M-of-N shared custody, spend proposals &amp; partial signatures (/multisig)</td>
                 </tr>
                 <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-002</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-102</td>
-                  <td className="px-3 py-2 font-mono">RFC-002</td>
                   <td className="px-3 py-2 text-fg font-medium">Native Multi-Asset Tokens</td>
                   <td className="px-3 py-2">On-chain fungible tokens, transfers &amp; AMM pool state (/multi-asset, /pools)</td>
                 </tr>
                 <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-003</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-103</td>
-                  <td className="px-3 py-2 font-mono">RFC-003</td>
                   <td className="px-3 py-2 text-fg font-medium">Stealth Addresses</td>
                   <td className="px-3 py-2">Privacy-preserving one-time stealth addresses (/stealth)</td>
                 </tr>
                 <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-004</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-104</td>
-                  <td className="px-3 py-2 font-mono">RFC-004</td>
                   <td className="px-3 py-2 text-fg font-medium">HTLC Atomic Swaps</td>
                   <td className="px-3 py-2">Hash Time-Locked Contracts for cross-chain swaps (/htlc, /wallet/atomic-swap)</td>
                 </tr>
                 <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-005</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-105</td>
-                  <td className="px-3 py-2 font-mono">RFC-005</td>
                   <td className="px-3 py-2 text-fg font-medium">Time-Lock Vaults</td>
                   <td className="px-3 py-2">CLTV / CSV time-locked vaults &amp; treasury vesting (/vaults)</td>
                 </tr>
                 <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-006</td>
+                  <td className="px-3 py-2 font-mono">—</td>
+                  <td className="px-3 py-2 text-fg font-medium">Fee Floor &amp; Wave B Base Fee</td>
+                  <td className="px-3 py-2">Atoms/byte fee floor &amp; EIP-1559 dynamic base fee (/api/fee_estimate, /api/base_fee)</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-007</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-106</td>
-                  <td className="px-3 py-2 font-mono">RFC-007</td>
                   <td className="px-3 py-2 text-fg font-medium">RWA &amp; Native NFTs</td>
                   <td className="px-3 py-2">Institutional RWA (allowlist/freeze/coupons; /rwa, /wallet/rwa-issue, /wallet/rwa-manage) &amp; Native NFTs (/nft)</td>
                 </tr>
                 <tr>
-                  <td className="px-3 py-2 font-mono text-teal">PRO-21</td>
+                  <td className="px-3 py-2 font-mono text-blue">RFC-008</td>
                   <td className="px-3 py-2 font-mono">—</td>
-                  <td className="px-3 py-2 text-fg font-medium">Canonical Address Format</td>
-                  <td className="px-3 py-2">64-char kvnc…dag (Ed25519 + 29-bit BLAKE3 checksum)</td>
+                  <td className="px-3 py-2 text-fg font-medium">On-Chain Name Registry</td>
+                  <td className="px-3 py-2">Human-readable name resolution (NameRegistryClient; no KVP #)</td>
                 </tr>
                 <tr>
-                  <td className="px-3 py-2 font-mono text-blue">RFC-006 / 008</td>
-                  <td className="px-3 py-2 font-mono">RFC-006 / 008</td>
-                  <td className="px-3 py-2 text-fg font-medium">Fee Floor &amp; Name Registry</td>
-                  <td className="px-3 py-2">Atoms/byte fee floor + Wave B base fee (/api/base_fee) &amp; On-chain Name Registry (no KVP #)</td>
+                  <td className="px-3 py-2 font-mono">—</td>
+                  <td className="px-3 py-2 font-mono text-gold">KVP-20</td>
+                  <td className="px-3 py-2 text-fg font-medium">Fungible Contract Token</td>
+                  <td className="px-3 py-2">ERC-20-style approve/transfer interface for AMM pairs &amp; bridge tokens (/swap, /pools)</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-mono">—</td>
+                  <td className="px-3 py-2 font-mono text-teal">PRO-21</td>
+                  <td className="px-3 py-2 text-fg font-medium">Canonical Address Format</td>
+                  <td className="px-3 py-2">64-char kvnc…dag (Ed25519 + 29-bit BLAKE3 checksum)</td>
                 </tr>
               </tbody>
             </table>

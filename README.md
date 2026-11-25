@@ -45,19 +45,20 @@ Full domain, subdomain, route, and API inventory: **[`docs/domain-and-link-map.m
 
 ## KVP & RFC Standards Registry
 
-> Kovanica protocol proposals use **`KVP-101`..`KVP-106`** (plus **`KVP-20`** for fungible DEX pairs); the `001`..`008` numbers are the companion **`RFC-001`..`RFC-008`** specs.
+> The `001`–`008` numbers belong to the companion **`RFC-001`–`RFC-008`** specs (ordered sequentially below); protocol proposals use **`KVP-101`–`KVP-106`** (plus **`KVP-20`** for fungible DEX pairs and **`PRO-21`** for canonical addresses).
 
-| Standard | Companion RFC | Name | Purpose / Surface |
+| RFC | KVP | Name | Purpose / Surface |
 | :--- | :--- | :--- | :--- |
-| **`KVP-20`** | ERC-20-style | Fungible Contract Token | Standard `approve`/`transfer`/`transfer_from` interface for `/swap`, `/pools` (`kovanica-amm`) & wrapped bridge assets |
-| **`KVP-101`** | `RFC-001` | Multisig Wallets | M-of-N shared custody, spend proposals & partial signatures (`/multisig`) |
-| **`KVP-102`** | `RFC-002` | Native Multi-Asset Tokens | On-chain fungible tokens (`5 KVNC` create), balances, transfers & AMM pools (`/multi-asset`, `/pools`, `/wallet`) |
-| **`KVP-103`** | `RFC-003` | Stealth Addresses | Privacy-preserving one-time stealth addresses (`/stealth`) |
-| **`KVP-104`** | `RFC-004` | HTLC Atomic Swaps | Hash Time-Locked Contracts with redeem/refund (`/htlc`, `/wallet/atomic-swap`) |
-| **`KVP-105`** | `RFC-005` | Time-Lock Vaults | CLTV / CSV vaults & treasury vesting (`/vaults`) |
-| **`KVP-106`** | `RFC-007` | Real-World Assets (RWA) & Native NFTs | Institutional RWA (`kvp106:rwa:v1` BLAKE3 ID, allowlist/freeze/coupons; `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`) & Native NFTs (`/nft`) |
-| **`PRO-21`** | Canonical Address | Address Format | 64-char `kvnc` + 57 base32 + `dag` (Ed25519 + 29-bit BLAKE3 checksum) |
-| **`RFC-006`** / **`RFC-008`** | Fee Floor / Name Registry | Fees & Names | Atoms/byte fee floor + Wave B base fee (`/api/base_fee`); On-chain Name Registry (`NameRegistryClient`, no KVP #) |
+| **`RFC-001`** | `KVP-101` | Multisig Wallets | M-of-N shared custody, spend proposals & partial signatures (`/multisig`) |
+| **`RFC-002`** | `KVP-102` | Native Multi-Asset Tokens | On-chain fungible tokens (`5 KVNC` create), balances, transfers & AMM pools (`/multi-asset`, `/pools`, `/wallet`) |
+| **`RFC-003`** | `KVP-103` | Stealth Addresses | Privacy-preserving one-time stealth addresses (`/stealth`) |
+| **`RFC-004`** | `KVP-104` | HTLC Atomic Swaps | Hash Time-Locked Contracts with redeem/refund (`/htlc`, `/wallet/atomic-swap`) |
+| **`RFC-005`** | `KVP-105` | Time-Lock Vaults | CLTV / CSV vaults & treasury vesting (`/vaults`) |
+| **`RFC-006`** | — | Fee Floor & Wave B Base Fee | Atoms/byte fee floor + EIP-1559 dynamic base fee (`/api/fee_estimate`, `/api/base_fee`) |
+| **`RFC-007`** | `KVP-106` | Real-World Assets (RWA) & Native NFTs | Institutional RWA (`kvp106:rwa:v1`, allowlist/freeze/coupons; `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`) & Native NFTs (`/nft`) |
+| **`RFC-008`** | — | On-Chain Name Registry | Human-readable name resolution (`NameRegistryClient`; intentionally holds no KVP #) |
+| — | **`KVP-20`** | Fungible Contract Token | ERC-20-style `approve`/`transfer`/`transfer_from` for `/swap`, `/pools` (`kovanica-amm`) & wrapped bridge assets |
+| — | **`PRO-21`** | Canonical Address Format | 64-char `kvnc` + 57 base32 + `dag` (Ed25519 + 29-bit BLAKE3 checksum) |
 
 ---
 

@@ -231,19 +231,19 @@ All 21 legacy protocol endpoints below (plus `/api/rtc` and unimplemented `endpo
 
 ---
 
-## 8. KVP & RFC Standards Reference (`KVP-20`, `KVP-101`..`KVP-106`, `RFC-001`..`RFC-008`)
+## 8. KVP & RFC Standards Reference (`RFC-001` → `RFC-008`)
 
-> Kovanica uses **`KVP-101`..`KVP-106`** (plus **`KVP-20`** for fungible contract token pairs). There are no `KVP-001`..`KVP-009` IDs; `001`..`008` are the companion **`RFC-001`..`RFC-008`** specification documents.
+> The `001`–`008` numbers are the companion **`RFC-001`–`RFC-008`** specifications (ordered sequentially below); protocol proposals use **`KVP-101`–`KVP-106`** (plus **`KVP-20`** and **`PRO-21`**).
 
-| Standard | RFC | Name | Routes / Surfaces |
+| RFC | KVP | Name | Routes / Surfaces |
 |---|---|---|---|
-| `KVP-20` | — | Fungible Contract Token Interface | `/swap`, `/pools` (`kovanica-amm` pairs & wrapped bridge tokens) |
-| `KVP-101` | `RFC-001` | Multisig Wallets | `/multisig` |
-| `KVP-102` | `RFC-002` | Native Multi-Asset Tokens | `/multi-asset`, `/pools`, `/swap`, `/wallet` |
-| `KVP-103` | `RFC-003` | Stealth Addresses | `/stealth` |
-| `KVP-104` | `RFC-004` | HTLC Atomic Swaps | `/htlc`, `/wallet/atomic-swap` |
-| `KVP-105` | `RFC-005` | Time-Lock Vaults | `/vaults` |
-| `KVP-106` | `RFC-007` | Real-World Assets (RWA) & Native NFTs | `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`, `/explorer/rwa/$assetId`, `/nft` |
-| `PRO-21` | — | Canonical 64-char Address Format (`kvnc…dag`) | All Mainnet (Chain `1`) & Testnet (Chain `2`) surfaces |
-| `RFC-006` | `RFC-006` | Fee Floor & Wave B Base Fee | `/api/fee_estimate`, `/api/base_fee` |
-| `RFC-008` | `RFC-008` | On-Chain Name Registry (no KVP #) | `kovanica-sdk`, `wallet-web`, `kovanica-playground` |
+| `RFC-001` | `KVP-101` | Multisig Wallets | `/multisig` |
+| `RFC-002` | `KVP-102` | Native Multi-Asset Tokens | `/multi-asset`, `/pools`, `/swap`, `/wallet` |
+| `RFC-003` | `KVP-103` | Stealth Addresses | `/stealth` |
+| `RFC-004` | `KVP-104` | HTLC Atomic Swaps | `/htlc`, `/wallet/atomic-swap` |
+| `RFC-005` | `KVP-105` | Time-Lock Vaults | `/vaults` |
+| `RFC-006` | — | Fee Floor & Wave B Base Fee | `/api/fee_estimate`, `/api/base_fee` |
+| `RFC-007` | `KVP-106` | Real-World Assets (RWA) & Native NFTs | `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`, `/explorer/rwa/$assetId`, `/nft` |
+| `RFC-008` | — | On-Chain Name Registry (no KVP #) | `kovanica-sdk`, `wallet-web`, `kovanica-playground` |
+| — | `KVP-20` | Fungible Contract Token Interface | `/swap`, `/pools` (`kovanica-amm` pairs & wrapped bridge tokens) |
+| — | `PRO-21` | Canonical 64-char Address Format (`kvnc…dag`) | All Mainnet (Chain `1`) & Testnet (Chain `2`) surfaces |
