@@ -20,6 +20,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Activity,
   ArrowLeftRight,
+  Briefcase,
   Building2,
   ChevronDown,
   Code2,
@@ -132,6 +133,7 @@ export const NAV_GROUPS = [
       { to: "/docs" as const, label: "Docs", icon: FileText, desc: "Protocol specs & CLI reference", exact: false },
       { to: "/api-reference" as const, label: "API Reference", icon: Terminal, desc: "JSON-RPC 2.0 & HTTP contract", exact: false },
       { to: "/playground" as const, label: "Playground", icon: Code2, desc: "Onboarding, API console & snippets", exact: false },
+      { to: "/pricing" as const, label: "Pricing & Services", icon: Briefcase, desc: "RPC tiers, RWA SaaS, listings & sponsorships", exact: false },
     ],
   },
 ] as const;

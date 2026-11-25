@@ -11,6 +11,7 @@ import {
   formatTokenUnits,
   parseTokenUnits,
 } from "@/lib/amm/math";
+import { computeSwapInterfaceFee, getSwapInterfaceFeeConfig } from "@/lib/monetization";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/swap")({
@@ -74,6 +75,12 @@ function SwapPage() {
     if (!amountInRaw || amountInRaw <= 0n) return null;
     return computeSwapQuote(amountInRaw, reserveIn, reserveOut, slippageBps);
   }, [amountInRaw, reserveIn, reserveOut, slippageBps]);
+
+  const interfaceFeeConfig = getSwapInterfaceFeeConfig();
+  const interfaceFeeRaw = useMemo(
+    () => (amountInRaw && amountInRaw > 0n ? computeSwapInterfaceFee(amountInRaw, interfaceFeeConfig.feeBps) : 0n),
+    [amountInRaw, interfaceFeeConfig.feeBps],
+  );
 
   const batchSteps = useMemo(() => {
     if (!amountInRaw || !quote) return [];
@@ -285,6 +292,16 @@ function SwapPage() {
               <span>LP Fee (0.30%)</span>
               <span className="font-mono text-fg">
                 {formatTokenUnits(quote.feeAmount, tokenIn.decimals, 6)} {tokenIn.symbol}
+              </span>
+            </div>
+            <div className="flex justify-between text-muted">
+              <Link to="/pricing" className="hover:text-gold hover:underline">
+                Interface Fee ({(interfaceFeeConfig.feeBps / 100).toFixed(2)}%)
+              </Link>
+              <span className="font-mono text-fg">
+                {interfaceFeeConfig.active
+                  ? `${formatTokenUnits(interfaceFeeRaw, tokenIn.decimals, 6)} ${tokenIn.symbol}`
+                  : "0 (testnet)"}
               </span>
             </div>
             <div className="flex justify-between text-muted">
