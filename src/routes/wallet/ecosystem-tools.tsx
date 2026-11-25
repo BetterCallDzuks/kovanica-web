@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Clock, ArrowLeftRight, KeyRound, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
@@ -31,6 +31,29 @@ function EcosystemToolsPage() {
   const [maxSpendKvnc, setMaxSpendKvnc] = useState("5");
   const [durationRounds, setDurationRounds] = useState("21600");
 
+  // Live EIP-1559 Base Fee & Storage Deposit telemetry (Wave B)
+  const [baseFeeAtoms, setBaseFeeAtoms] = useState<number>(1);
+  const [depositPerByteAtoms, setDepositPerByteAtoms] = useState<number>(100_000);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/base_fee")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: Record<string, unknown> | null) => {
+        if (!active || !data) return;
+        const parseHex = (v: unknown, fallback: number) =>
+          typeof v === "string" && v.startsWith("0x")
+            ? Number.parseInt(v, 16) || fallback
+            : Number(v) || fallback;
+        setBaseFeeAtoms(parseHex(data.base_fee_per_byte, 1));
+        setDepositPerByteAtoms(parseHex(data.storage_deposit_per_byte, 100_000));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 md:py-8 space-y-6">
       <div className="flex items-center gap-3">
@@ -45,6 +68,18 @@ function EcosystemToolsPage() {
             Scheduler, Bridge &amp; Session Keys
           </h1>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface/60 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <span>
+          Dynamic Base Fee: <strong className="font-mono text-fg">{baseFeeAtoms} atoms/byte</strong>
+        </span>
+        <span>
+          Refundable Storage Deposit:{" "}
+          <strong className="font-mono text-fg">
+            {(depositPerByteAtoms / ATOM).toFixed(4)} {TOKEN}/byte
+          </strong>
+        </span>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
