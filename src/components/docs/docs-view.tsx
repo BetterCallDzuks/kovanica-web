@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { CliCheatsheet } from "@/components/docs/cli-cheatsheet";
 import { SourceSwitch } from "@/components/layout/source-switch";
+import { SponsorSlot } from "@/components/monetization/sponsor-slot";
 import { Button } from "@/components/ui/button";
 import { api, useApiSource } from "@/lib/api/client";
 import { ATOM, MIN_FEE, type ApiBootstrap, NETWORK_LABEL } from "@/lib/api/contract";
@@ -104,13 +105,19 @@ export function DocsView() {
               {s.label}
             </a>
           ))}
-          <div className="mt-4 border-t border-border pt-3">
+          <div className="mt-4 flex flex-col gap-0.5 border-t border-border pt-3">
             <a
               href={SURFACE.api}
               className="rounded-md px-2.5 py-1.5 font-mono text-[11px] tracking-wide text-amber-400 uppercase transition-colors hover:bg-surface-2 hover:text-fg"
             >
               API Reference →
             </a>
+            <Link
+              to="/pricing"
+              className="rounded-md px-2.5 py-1.5 font-mono text-[11px] tracking-wide text-teal uppercase transition-colors hover:bg-surface-2 hover:text-fg"
+            >
+              Pricing &amp; Services →
+            </Link>
           </div>
         </nav>
       </aside>
@@ -429,10 +436,17 @@ export function DocsView() {
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
             Explore planned protocol milestones, {NETWORK_LABEL} hybrid verification, and mainnet deployment readiness.
           </p>
-          <Button asChild variant="outline" size="sm" className="mt-4">
-            <Link to="/roadmap">Open roadmap</Link>
-          </Button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/roadmap">Open roadmap</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/pricing">Pricing &amp; Services</Link>
+            </Button>
+          </div>
         </section>
+
+        <SponsorSlot surface="docs" showPlaceholder className="mt-10" />
       </div>
     </div>
   );
