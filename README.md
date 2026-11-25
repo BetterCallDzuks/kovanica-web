@@ -1,32 +1,45 @@
 # kovanica-web
 
-Public web application, BlockDAG Explorer, Wallet, Mining Pool portal, Faucet, and API Reference for the **Kovanica (KVNC)** Layer-1 blockchain — live at **[kovanica.online](https://kovanica.online)** (TanStack Start + Vite + Nitro 3).
+Public web application, BlockDAG Explorer, Wallet, AMM DEX, KVP-106 RWA Portal, Stratum Mining Pool, Faucet, API Reference, and Ecosystem Services hub for the **Kovanica (KVNC)** Layer-1 blockchain — live at **[kovanica.online](https://kovanica.online)** (TanStack Start + Vite + Nitro 3).
 
 > [!IMPORTANT]
 > **Live Network Boundaries & Visual DNA:**
 > - **Canonical Networks:** Mainnet (Chain ID `1`, frozen tag `1-f35df34c92001436`, launching `1.1.2027`, read-only pre-launch) and live Testnet (Chain ID `2`, frozen tag `2-24cdb5fadd98b207`, Hybrid PoW + GHOSTDAG `K=5`, `4s` target block time, `KovanicaHash`, zero stake on consensus).
-> - **Brand Tokens (`src/styles.css`):** Ink (`--color-bg`), Paper (`--color-fg`), and Kovanica Copper/Gold (`--color-gold`).
-> - **Zero Committed Secrets:** Runtime configuration is injected exclusively via environment variables (`KOVANICA_*`, `GROK_AUTH_*`, `GROK_PREVIEW_CLIENT_SECRET`); never commit hosts, IPs, ports, keys, or `.env` files.
+> - **Brand Tokens (`src/styles.css`):** Ink (`--color-bg` `#09090b`), Surface (`#121214` / `#1a1a1e`), Paper (`--color-fg` `#f2f1ee`), Kovanica Gold (`--color-gold` `#F2A900`), Teal (`#2fbaa4`), Blue (`#8aa0b4`), and `Fraunces` / `IBM Plex Sans` / `IBM Plex Mono`.
+> - **Zero Committed Secrets & Zero Tracking Cookies:** Runtime configuration is injected exclusively via environment variables (`KOVANICA_*`, `VITE_*`); never commit hosts, IPs, ports, keys, or `.env` files. Zero third-party ad scripts or tracking cookies.
 
 ---
 
-## Features
+## Navigation & Surfaces (5 Pure Function Tabs)
 
-1. **BlockDAG Explorer (`/explorer`):**
-   - **Live DAG Visualization & Streaming:** Interactive GHOSTDAG canvas, WebSocket live head/leader stream with bounded exponential backoff & HTTP fallback, and `LiveDagDrawer` with real-time **Fee Pressure & 1.2x Buffered Fee** pill (`low` / `normal` / `elevated` / `congested`).
-   - **Inline TxCard Bincode Decoder & Deep-Links:** Inline decoded Wasmi contract call arguments with 1-click **Decode Receipt Logs** and **Inspect Contract** links.
-   - **Offline Universal Raw Wire Tx Decoder:** Decodes both native **Transfer** (`196` bytes, variant `0`) and Wasmi **Call** (variant `6`) raw wire transactions completely offline with PRO-21 address formatting and recognized contract argument decoding.
-   - **Contract Inspector & Event Log Timeline:** Collapsible **Recent Contract Events** timeline (`kovanica_getLogs`) with topic/text filtering, inline Bincode decoding, and 1-click inspector deep-links.
-   - **PRO-21 Address Checksum & Payload Inspector:** Validates 29-bit BLAKE3 checksums for `kvnc…dag` and `tknc…dag`, displays canonical Mainnet/Testnet forms + raw 32-byte payload hex, and provides 1-click copy.
-   - **KovanicaHash Miner & Stratum TLS Command Builder:** Collapsible shell-safe `kovanica mine` CLI generator supporting Stratum TLS and Solo RPC modes across Testnet and Mainnet.
-   - **Diagnostics Drawer & RPC Latency Sparkline:** Rolling 20-sample RPC latency ring buffer (`p50` / `p95` / `max` + SVG sparkline), sync-lag classification, and canonical network tag verification.
+All app surfaces share the unified `<Shell>` (`src/components/layout/shell.tsx`) with a single-source-of-truth `NAV_GROUPS` taxonomy (shared with `HomeTestnet`), contextual section sub-nav on Trade/Assets/Wallet routes, and a cross-subdomain **Ecosystem Switcher**:
 
-2. **Ecosystem Surfaces (`/faucet`, `/network`, `/pool`, `/api-reference`, `/wallet`, `/docs`):**
-   - **Testnet Faucet (`/faucet`):** Fixed testnet dispense with live client-side **PRO-21 Pre-Flight Guard** (`2-24cdb5fadd98b207`), legacy 64-hex rejection on Chain 2, and cooldown countdown (`KOVANICA_FAUCET_URL` unset reports unavailable honestly).
-   - **Network Status (`/network`):** Canonical Mainnet & Testnet identities, frozen consensus constants (`KovanicaHash`, `GHOSTDAG K=5`, `4s`), and ecosystem service readiness strip.
-   - **Mining Pool Portal (`/pool`):** Frozen emission & Stratum TLS v1 operational spec strip (`2.5 KVNC`, `8,200,000` blocks/era, `3/4` decay, `3/4 burn / 1/4 miner`, adaptive VarDiff, graceful `client.reconnect` drain).
-   - **API Reference (`/api-reference`):** Canonical HTTP identity headers (`X-Kovanica-Chain-Id`, `X-Kovanica-Network-Tag`, `X-Kovanica-Rpc-Version`), `kovanica_mempoolStats` fee-percentile schema, and copyable JSON-RPC 2.0 batch `curl -i` quick-reference.
-   - **Web Wallet & Assets (`/wallet`, `/download`, `/docs`):** Browser wallet powered by vendored `@kovanica/sdk-wasm` (`vendor/kovanica-sdk-wasm`), release downloads, and in-app release notes (`src/lib/content/whats-new.ts`).
+| Tab | Routes | Purpose |
+| :--- | :--- | :--- |
+| **Explore** | `/explorer`, `/network`, `/pool`, `/map`, `/dash`, `/roadmap` | Live BlockDAG Explorer (8 tabs + drawers), peer/sync telemetry, **Stratum V1 TLS Mining Pool** (`MinerCommandBuilder`), Origins Map, Dashboard, Roadmap |
+| **Trade** | `/swap`, `/pools`, `/wallet/dex`, `/wallet/atomic-swap` | Native AMM Swap (Wave A 1-tx batch + Wave B fee telemetry), **AMM Liquidity Pools** (add/remove liquidity + on-chain KVP-102 `PoolView` quote calculator), Orderbook DEX, Atomic Swaps |
+| **Assets** | `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`, `/multi-asset`, `/nft`, `/wallet/token-listings` | Public KVP-106 RWA Registry (`/explorer/rwa/$assetId`), deterministic RWA issuance (`/api/rwa/derive`), institutional RWA compliance portal, Multi-Asset balances, Native NFTs, Token Listings |
+| **Wallet** | `/wallet`, `/faucet`, `/wallet/airdrops`, `/wallet/coinjoin`, `/wallet/ecosystem-tools` | PRO-21 browser vault (`@kovanica/sdk-wasm`), hardware signing, Testnet Faucet (with PRO-21 pre-flight guard), Airdrops, CoinJoin, Ecosystem Tools (scheduler, bridge, passkeys) |
+| **Build** | `/multisig`, `/htlc`, `/vaults`, `/stealth`, `/docs`, `/api-reference`, `/playground`, `/pricing` | Smart contract consoles, Documentation (`docs.kovanica.online`), JSON-RPC 2.0 API Reference, Built-in Playground (`playground.kovanica.online`), and **Pricing & Services** (`/pricing`) |
+
+Full domain, subdomain, route, and API inventory: **[`docs/domain-and-link-map.md`](docs/domain-and-link-map.md)**.
+
+---
+
+## Ecosystem Services & Runtime Configuration
+
+`/pricing` (`src/routes/pricing.tsx`) and `POST /api/inquiries` (`src/lib/api/inquiries.server.ts`) provide the non-token services and monetization foundation (Managed RPC/Indexer tiers, RWA Issuer SaaS, Swap interface fee disclosure, Official Mining Pool fee, Verified Listings & zero-cookie Sponsorships, and Enterprise Support).
+
+| Env Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `KOVANICA_RPC_URL` | `https://rpc-testnet.kovanica.online` | Upstream Testnet JSON-RPC origin |
+| `KOVANICA_FAUCET_URL` | unset | Upstream Testnet faucet dispense endpoint |
+| `KOVANICA_INQUIRIES_FILE` | `data/inquiries.jsonl` | Append-only JSONL file storing validated `POST /api/inquiries` leads |
+| `VITE_SWAP_INTERFACE_FEE_BPS` | `0` (testnet) | Optional front-end swap interface fee in basis points (`0..100` = `0.00%..1.00%`) |
+| `VITE_SWAP_FEE_RECIPIENT` | unset | Optional fee recipient address when `VITE_SWAP_INTERFACE_FEE_BPS > 0` |
+| `VITE_MINING_POOL_FEE_PCT` | `1.0` | Planned mainnet Stratum mining pool fee percentage (`0%` on testnet) |
+| `VITE_SPONSOR_URL` / `VITE_SPONSOR_TEXT` / `VITE_SPONSOR_LABEL` / `VITE_SPONSOR_CTA` | unset (off) | Static, zero-cookie `https://` sponsor banner rendered by `<SponsorSlot>` |
+| `VITE_PARTNER_HARDWARE_URL` / `VITE_PARTNER_VPS_URL` | unset (off) | Optional `https://` hardware wallet & node VPS partner links on `/pricing` |
 
 ---
 
@@ -35,7 +48,7 @@ Public web application, BlockDAG Explorer, Wallet, Mining Pool portal, Faucet, a
 | Network | Chain ID | Canonical Network Tag | Address Policy | Live Status |
 | :--- | :---: | :--- | :--- | :--- |
 | **Mainnet** | `1` | `1-f35df34c92001436` | Strict PRO-21 (`kvnc…dag`) | Pre-launch (`1.1.2027`, read-only) |
-| **Testnet** | `2` | `2-24cdb5fadd98b207` | Strict PRO-21 (`kvnc…dag` / `tknc…dag`) | **Live** (`v0.3.0-node`) |
+| **Testnet** | `2` | `2-24cdb5fadd98b207` | Strict PRO-21 (`kvnc…dag` / `tknc…dag`) | **Live** (`https://rpc-testnet.kovanica.online/rpc`) |
 | **Devnet** | `3` | Ephemeral `3-<16 hex>` | PRO-21 + legacy 64-hex | Local development only |
 
 ---
@@ -49,7 +62,7 @@ npm ci
 # 2. Run local development server
 npm run dev
 
-# 3. Run typecheck, strict lint (0 warnings), unit + Playwright E2E tests, and build
+# 3. Run typecheck, strict lint (0 warnings), unit + Playwright tests, and build
 npm run typecheck
 npx eslint . --max-warnings 0
 npm test
@@ -66,9 +79,9 @@ npm run build:vps
 | Repository | Role |
 | :--- | :--- |
 | **[BetterCallDzuks/kovanica-l1](https://github.com/BetterCallDzuks/kovanica-l1)** | Rust Layer-1 node, Hybrid PoW + GHOSTDAG consensus, Wasmi runtime, RPC, Stratum, Faucet, Indexer, Lightnode & CLI |
-| **[BetterCallDzuks/kovanica-sdk](https://github.com/BetterCallDzuks/kovanica-sdk)** | Official TypeScript SDK (`v0.5.0`) — browser & Node.js client, failover transport, facades, offline codecs & air-gap envelopes |
-| **[BetterCallDzuks/kovanica-web](https://github.com/BetterCallDzuks/kovanica-web)** | Public site, BlockDAG Explorer, Faucet, Pool portal & API Reference (`kovanica.online`) |
-| **[BetterCallDzuks/kovanica-apps](https://github.com/BetterCallDzuks/kovanica-apps)** | Client apps — `wallet-web`, `console-desktop`, `node-desktop`, `desktop`, Android & iOS |
-| **[BetterCallDzuks/kovanica-playground](https://github.com/BetterCallDzuks/kovanica-playground)** | Interactive developer RPC console & 7 `kovanica-sdk v0.5.0` studios |
+| **[BetterCallDzuks/kovanica-sdk](https://github.com/BetterCallDzuks/kovanica-sdk)** | Official TypeScript SDK (`v0.9.0`) — browser & Node.js client, failover transport, Wave A–D facades, offline codecs & air-gap envelopes |
+| **[BetterCallDzuks/kovanica-web](https://github.com/BetterCallDzuks/kovanica-web)** | Public site, BlockDAG Explorer, AMM DEX, RWA Portal, Mining Pool, Faucet, API Reference & Pricing (`kovanica.online`) |
+| **[BetterCallDzuks/kovanica-apps](https://github.com/BetterCallDzuks/kovanica-apps)** | Client apps — `wallet-web`, `browser-extension` (MV3 `window.kovanica`), `console-desktop`, `node-desktop`, `desktop`, Android & iOS |
+| **[BetterCallDzuks/kovanica-playground](https://github.com/BetterCallDzuks/kovanica-playground)** | Interactive developer RPC console & 4-group `kovanica-sdk v0.9.0` studios |
 
 Governance rules and full-scope plan: [`docs/AGENT-RULES.md`](https://github.com/BetterCallDzuks/kovanica-l1/blob/main/docs/AGENT-RULES.md) and [`docs/PLAN-FULL-SCOPE.md`](https://github.com/BetterCallDzuks/kovanica-l1/blob/main/docs/PLAN-FULL-SCOPE.md).

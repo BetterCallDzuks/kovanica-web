@@ -74,44 +74,47 @@
 
 ---
 
-## 3. `kovanica-web` Internal Routes (36 Routes)
+## 3. `kovanica-web` Internal Routes (37 Routes)
 
-| Route Path | File | Current Chrome | Nav Reachability & Status | M1-A / Pending Milestone |
+All app, DeFi, RWA, wallet, mining, docs, and pricing routes now wrap in the unified `<Shell>` (`src/components/layout/shell.tsx`) with **5 pure function tabs** (`Explore · Trade · Assets · Wallet · Build`), contextual sub-navigation on Trade/Assets/Wallet routes, and zero orphaned routes (`tests/m1bc-shell-and-routes.test.ts`).
+
+| Route Path | File | Chrome | Nav Group & Status | Notes |
 |---|---|---|---|---|
-| `/` | `routes/index.tsx` | Role-based (`LandingChrome` / `PlaygroundChrome` / `Shell`) | `OK` | **M1-C**: Streamline `HomeLanding` & `HomeTestnet`. |
-| `/explorer` | `routes/explorer.tsx` | `Shell` | `OK` | **M1-C**: Collapsible telemetry strip; preserve all 8 tabs & drawers. |
-| `/explorer/rwa/$assetId` | `routes/explorer/rwa.$assetId.tsx` | `Shell` | `OK` (`FIXED_IN_M1A` Tailwind `amber-*` fix) | Done for M1-A. |
-| `/wallet` | `routes/wallet.tsx` | `Shell` (exact match only) | `OK` (child `/wallet/*` routes lack `<Shell>`) | **M1-B**: Wrap `/wallet` layout + child routes in `<Shell>` + `WalletDefiNav`. |
-| `/wallet/rwa-issue` | `routes/wallet/rwa-issue.tsx` | None | `FIXED_IN_M1A` (`/api/rwa/derive` + Tailwind); `INCONSISTENT` (no `<Shell>`, line 446 `window.location.href = "/wallet"`) | **M1-B**: `<Shell>`, nav reachability, `<Link to="/wallet">`. |
-| `/wallet/rwa-manage` | `routes/wallet/rwa-manage.tsx` | None | `FIXED_IN_M1A` (Tailwind); `MISSING_TARGET` (unreachable from nav, no `<Shell>`) | **M1-B**: `<Shell>` + `WalletDefiNav`. |
-| `/wallet/ecosystem-tools` | `routes/wallet/ecosystem-tools.tsx` | None | `FIXED_IN_M1A` (Tailwind); `MISSING_TARGET` (0 incoming links, no `<Shell>`) | **M1-B**: `<Shell>` + `WalletDefiNav`. |
-| `/wallet/dex` | `routes/wallet/dex.tsx` | None | `MISSING_TARGET` (0 incoming links, no `<Shell>`, legacy `/api/htlc/*` unimplemented) | **M1-B**: `<Shell>` + nav. |
-| `/wallet/airdrops` | `routes/wallet/airdrops.tsx` | None | `MISSING_TARGET` (0 incoming links, no `<Shell>`, legacy `/api/airdrop/*` unimplemented) | **M1-B**: `<Shell>` + nav. |
-| `/wallet/token-listings` | `routes/wallet/token-listings.tsx` | None | `INCONSISTENT` (no `<Shell>`, legacy `/api/dex/*` unimplemented) | **M1-B**: `<Shell>` + nav. |
-| `/wallet/atomic-swap` | `routes/wallet/atomic-swap.tsx` | `Shell` | `FIXED_IN_M1A` (`violet-500` Tailwind); `MISSING_TARGET` (orphaned from nav, legacy `/api/htlc/*`) | **M1-B**: Surface in nav. |
-| `/wallet/coinjoin` | `routes/wallet/coinjoin.tsx` | `Shell` | `MISSING_TARGET` (orphaned from nav, legacy `/api/coinjoin/*` unimplemented) | **M1-B**: Surface in nav. |
-| `/wallet/collection/$collectionId` | `routes/wallet/collection.$collectionId.tsx` | `Shell` | `OK` (`FIXED_IN_M1A` Tailwind `purple-*`/`amber-*`) | Done for M1-A. |
-| `/wallet/nft/$assetId` | `routes/wallet/nft.$assetId.tsx` | `Shell` | `OK` (`FIXED_IN_M1A` Tailwind `purple-*`/`amber-*`) | Done for M1-A. |
-| `/swap` | `routes/swap.tsx` | None | `FIXED_IN_M1A` (Tailwind); `MISSING_TARGET` (not in `<Shell>` nav, no `<Shell>`) | **M1-B**: `<Shell>` + 4-bucket IA + `WalletDefiNav`. |
-| `/pools` | `routes/pools.tsx` | None | `FIXED_IN_M1A` (Tailwind); `INCONSISTENT` (`/pool` vs `/pools` collision, no `<Shell>`) | **M1-B**: `<Shell>` + AMM Pools vs Mining Pool disambiguation. |
-| `/pool` | `routes/pool.tsx` | `Shell` | `INCONSISTENT` (labeled "Pools" in nav despite being KVP-102 + Stratum mining) | **M1-B**: Clarify label vs `/pools`. |
-| `/rwa` | `routes/rwa.tsx` | None | `FIXED_IN_M1A` (Tailwind); `MISSING_TARGET` (not in `<Shell>` nav, no `<Shell>`) | **M1-B**: `<Shell>` + nav reachability. |
-| `/multi-asset` | `routes/multi-asset.tsx` | None | `FIXED_IN_M1A` (Tailwind in `multi-asset-view.tsx`); `MISSING_TARGET` (orphaned hub, no `<Shell>`) | **M1-B**: `<Shell>` + nav reachability. |
-| `/stealth` | `routes/stealth.tsx` | None | `MISSING_TARGET` (orphaned, no `<Shell>`, legacy `/api/stealth/*` unimplemented) | **M1-B**: `<Shell>` + nav. |
-| `/nft` | `routes/nft.tsx` | None | `PLACEHOLDER` ("Ledger Phase 1 pending", disabled buttons) | **M1-B**: Wrap in `<Shell>` + nav. |
-| `/multisig` | `routes/multisig.tsx` | `Shell` | `OK` (nav), `MISSING_TARGET` (legacy `/api/multisig/*` unimplemented) | Audited in §4. |
-| `/htlc` | `routes/htlc.tsx` | `Shell` | `OK` (nav), `MISSING_TARGET` (legacy `/api/htlc/*` unimplemented) | Audited in §4. |
-| `/vaults` | `routes/vaults.tsx` | `Shell` | `OK` (nav), `MISSING_TARGET` (legacy `/api/vault/*` unimplemented) | Audited in §4. |
-| `/faucet` | `routes/faucet.tsx` | `MinimalHeader` | `OK` | **M1-C**: Layout audit. |
-| `/network` | `routes/network.tsx` | `Shell` | `OK` | **M1-C**: Layout audit. |
-| `/map` | `routes/map.tsx` | `Shell` | `OK` | **M1-C**: Layout audit. |
-| `/dash` | `routes/dash.tsx` | `Shell` | `OK` (`FIXED_IN_M1A` wallet CTA link) | Done for M1-A. |
-| `/roadmap` | `routes/roadmap.tsx` | `Shell` | `OK` | **M1-C**: Layout audit. |
-| `/docs` | `routes/docs.tsx` | `Shell` | `OK` (`FIXED_IN_M1A` API Reference label & repo ref) | **M1-C**: Layout audit. |
-| `/api-reference` | `routes/api-reference.tsx` | `MinimalHeader` | `OK` (`FIXED_IN_M1A` eyebrow & `/docs` sidebar link) | Done for M1-A. |
-| `/playground`, `/playground/api-console`, `/playground/snippets` | `routes/playground*.tsx` | `PlaygroundChrome` | `OK` (`FIXED_IN_M1A` `snippets.tsx`, `api-console.tsx`, `playground-onboarding.tsx`) | **M1-B**: Ecosystem links in `PlaygroundChrome`. |
-| `/api/$` | `routes/api/$.ts` | Server handler | `FIXED_IN_M1A` (added `/api/rwa/derive`, `/api/supply`, `/api/submit_tx`) | See §4 audit table. |
-| `/download/$` | `routes/download/$.ts` | Server handler | `FIXED_IN_M1A` (`BetterCallDzuks/kovanica-l1`, `Object.hasOwn` prototype-property `404` guard) | Verified in `tests/m1a-links-and-hosts.test.ts`. |
+| `/` | `routes/index.tsx` | Role-based (`LandingChrome` / `PlaygroundChrome` / `Shell`) | `DEPLOYED` | `HomeLanding` (apex) & `HomeTestnet` (reuses `NAV_GROUPS`). |
+| `/explorer` | `routes/explorer.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Collapsible telemetry strip + all 8 tabs & drawers. |
+| `/explorer/rwa/$assetId` | `routes/explorer/rwa.$assetId.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Deep-linked from `/rwa`. |
+| `/network` | `routes/network.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Peers, seeds & sync telemetry. |
+| `/pool` | `routes/pool.tsx` | `Shell` | **Explore** (`DEPLOYED` — PR #34) | **Stratum V1 TLS Mining Pool** (`MinerCommandBuilder` + Stratum TLS spec + pool fee badge). |
+| `/map` | `routes/map.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Global origin pulse choropleth. |
+| `/dash` | `routes/dash.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Network overview dashboard. |
+| `/roadmap` | `routes/roadmap.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Protocol milestones & RFCs. |
+| `/swap` | `routes/swap.tsx` | `Shell` | **Trade** (`DEPLOYED`) | Native AMM Swap + Wave A batch + configurable interface fee row. |
+| `/pools` | `routes/pools.tsx` | `Shell` | **Trade** (`DEPLOYED` — PR #34) | **AMM Liquidity Pools** (add/remove liquidity + on-chain KVP-102 `PoolView` quote calculator). |
+| `/wallet/dex` | `routes/wallet/dex.tsx` | `Shell` (via parent `wallet.tsx`) | **Trade** (`DEPLOYED`) | On-chain orderbook DEX. |
+| `/wallet/atomic-swap` | `routes/wallet/atomic-swap.tsx` | `Shell` (via parent `wallet.tsx`) | **Trade** (`DEPLOYED`) | Cross-chain HTLC swaps. |
+| `/rwa` | `routes/rwa.tsx` | `Shell` | **Assets** (`DEPLOYED`) | Public KVP-106 RWA Registry linking into `/explorer/rwa/$assetId`. |
+| `/wallet/rwa-issue` | `routes/wallet/rwa-issue.tsx` | `Shell` (via parent `wallet.tsx`) | **Assets** (`DEPLOYED`) | Deterministic KVP-106 issuance (`/api/rwa/derive`) + SPA `<Link to="/wallet">`. |
+| `/wallet/rwa-manage` | `routes/wallet/rwa-manage.tsx` | `Shell` (via parent `wallet.tsx`) | **Assets** (`DEPLOYED`) | Allowlist, freeze & coupon scheduler. |
+| `/multi-asset` | `routes/multi-asset.tsx` | `Shell` | **Assets** (`DEPLOYED`) | KVP-102 token balances & transfers. |
+| `/nft` | `routes/nft.tsx` | `Shell` | **Assets** (`DEPLOYED`) | KVP-106 non-fungible assets. |
+| `/wallet/token-listings` | `routes/wallet/token-listings.tsx` | `Shell` (via parent `wallet.tsx`) | **Assets** (`DEPLOYED`) | Token registry submissions. |
+| `/wallet/collection/$collectionId` | `routes/wallet/collection.$collectionId.tsx` | `Shell` (via parent `wallet.tsx`) | **Assets** (`DEPLOYED`) | KVP-106 collection detail. |
+| `/wallet/nft/$assetId` | `routes/wallet/nft.$assetId.tsx` | `Shell` (via parent `wallet.tsx`) | **Assets** (`DEPLOYED`) | KVP-106 NFT detail. |
+| `/wallet` | `routes/wallet.tsx` | `Shell` | **Wallet** (`DEPLOYED`) | PRO-21 vault, hardware & sends (parent layout for `/wallet/*` with `ShellContext` guard). |
+| `/faucet` | `routes/faucet.tsx` | `Shell` | **Wallet** (`DEPLOYED`) | Testnet KVNC faucet + PRO-21 pre-flight guard + zero-cookie `<SponsorSlot>`. |
+| `/wallet/airdrops` | `routes/wallet/airdrops.tsx` | `Shell` (via parent `wallet.tsx`) | **Wallet** (`DEPLOYED`) | Batch token distribution. |
+| `/wallet/coinjoin` | `routes/wallet/coinjoin.tsx` | `Shell` (via parent `wallet.tsx`) | **Wallet** (`DEPLOYED`) | Collaborative privacy rounds. |
+| `/wallet/ecosystem-tools` | `routes/wallet/ecosystem-tools.tsx` | `Shell` (via parent `wallet.tsx`) | **Wallet** (`DEPLOYED`) | Scheduler, bridge & passkeys. |
+| `/multisig` | `routes/multisig.tsx` | `Shell` | **Build** (`DEPLOYED`) | M-of-N shared custody. |
+| `/htlc` | `routes/htlc.tsx` | `Shell` | **Build** (`DEPLOYED`) | Hash Time-Locked Contracts. |
+| `/vaults` | `routes/vaults.tsx` | `Shell` | **Build** (`DEPLOYED`) | Time-locked vaults (CLTV / CSV). |
+| `/stealth` | `routes/stealth.tsx` | `Shell` | **Build** (`DEPLOYED`) | KVP-103 one-time addresses. |
+| `/docs` | `routes/docs.tsx` | `Shell` | **Build** (`DEPLOYED`) | Protocol specs, CLI cheatsheet & ecosystem services links. |
+| `/api-reference` | `routes/api-reference.tsx` | `Shell` | **Build** (`DEPLOYED`) | JSON-RPC 2.0 & HTTP contract. |
+| `/playground`, `/playground/api-console`, `/playground/snippets` | `routes/playground*.tsx` | `PlaygroundChrome` | **Build** (`DEPLOYED`) | Onboarding, API console, snippets + Ecosystem Switcher. |
+| `/pricing` | `routes/pricing.tsx` | `Shell` | **Build** (`DEPLOYED` — PR #35) | Services & Pricing hub (6 non-token revenue streams) + `POST /api/inquiries` intake + `<SponsorSlot>`. |
+| `/api/$` | `routes/api/$.ts` | Server handler | `DEPLOYED` | Includes `/api/rwa/derive`, `/api/supply`, `/api/submit_tx`, and `/api/inquiries`. |
+| `/download/$` | `routes/download/$.ts` | Server handler | `DEPLOYED` | `BetterCallDzuks/kovanica-l1` + `Object.hasOwn` prototype guard. |
 
 ---
 
@@ -122,6 +125,7 @@
 | Endpoint | Method | Source Support | Behavior / Notes | Status |
 |---|---|---|---|---|
 | `/api/spec` | `GET` | `testnet`, `mainnet`, `local` | Returns plain-text protocol spec (`GET /download/install.sh` + `BetterCallDzuks/kovanica-l1` fixed). | `OK` (`FIXED_IN_M1A`) |
+| `/api/inquiries` | `POST` | `testnet`, `mainnet`, `local` | **Added in PR #35**: Validated, honeypot-protected, rate-limited lead intake for RPC tiers, RWA SaaS, verified listings, sponsorships & enterprise support; persists to `KOVANICA_INQUIRIES_FILE` (`data/inquiries.jsonl`). `405` on non-POST. | `DEPLOYED` |
 | `/api/health` | `GET` | `testnet` | Liveness probe against `rpcOrigin()/health`. | `OK` |
 | `/api/head`, `/api/bootstrap`, `/api/state`, `/api/utxos`, `/api/history`, `/api/fee_estimate` | `GET` | `testnet`, `local` | Live JSON-RPC proxy (`testnet`) or in-memory node (`local`); `mainnet` returns `503`. | `OK` |
 | `/api/supply` | `GET` | `testnet`, `local` | **Added in M1-A**: Queries `kovanica_syncStatus` + `probeHealth()` on `testnet` (returns live `blocks` + canonical supply constants with `null` for unexposed `circulating`/`burned`/`native_minted`; `502`/`503` when `kovanica_syncStatus` RPC itself fails or returns `503`, and `200` with `health.state: "stalled"` / `health.status: 503` when `/health` is `503` while `kovanica_syncStatus` returns `200`, matching `/api/head`, `/api/bootstrap`, and `/api/state`; `405` on non-GET) and `localState().node` on `local`. `mainnet` returns `503`. | `FIXED_IN_M1A` |
@@ -220,6 +224,7 @@ All 21 legacy protocol endpoints below (plus `/api/rtc` and unimplemented `endpo
 | **M1-A** (`kovanica-web`, completed here) | Branch `feat/reorganize-simplify-web-ux`, `docs/domain-and-link-map.md`, `surfaces.ts`, `host.ts` (roles + `:port` stripping), `__root.tsx` redirects, `network.ts`, `networkConstants.ts`, `api/spec.ts`, `rpc-spec.ts`, `download/$.ts`, `KovanicaDAG` → `BetterCallDzuks` fixes, `api.kovanica.online` → `/api-reference` & `rpc-testnet.kovanica.online/rpc`, `mainnet-launching.tsx` & `source-switch.tsx` launching labels, `contract-inspector-panel.tsx` & `dry-run.ts` RPC URLs, `.org` → `.online` (`engine.ts`, `trezor-provider.ts`), `dashboard.tsx` & `playground-onboarding.tsx` `/wallet` CTAs, `miner-command-builder.tsx` Stratum placeholder note, 17-file Tailwind v4 shade/`bg-surface` fixes, `POST /api/rwa/derive`, `GET /api/supply`, `POST /api/submit_tx`, `snippets.tsx` & `api-console.tsx` alignment, M1-A unit tests. |
 | **M1-B** (`kovanica-web`, completed) | Unified `<Shell>` across `/wallet/*` (removed `!isExact` bypass), `/swap`, `/pools`, `/rwa`, `/multi-asset`, `/stealth`, `/nft`, `/faucet`, `/api-reference`; 4-bucket IA navigation (`Explore`, `Trade & RWA`, `Wallet & Tools`, `Contracts & Docs`) + Ecosystem Switcher (`surfaces.ts`); persistent Wallet & DeFi sub-nav strip; `/pool` (Stratum Mining Pool) vs `/pools` (AMM Liquidity Pools) disambiguation; `rwa-issue.tsx` SPA `<Link to="/wallet">`; replaced `pool.kovanica.online` placeholder with RFC 2606 `stratum.example.com:3333` and `/api/supply` playground snippet/preset with `/api/base_fee`. |
 | **M1-C** (`kovanica-web`, completed) | Page layout simplification (`HomeLanding` strip downloads + tightened grids, `HomeTestnet` categorized 1-click surface groups, `ExplorerView` collapsible telemetry & drawers strip above `DagCanvas`, `PlaygroundChrome` Ecosystem Switcher); `/rwa` links into `/explorer/rwa/$assetId`; zero orphaned routes; automated `tests/m1bc-shell-and-routes.test.ts` verifying `<Shell>` wrapping, zero banned links, zero orphaned routes, and preserved design tokens. |
-| **M2** (`kovanica-apps`, parallel branch `feat/simplify-ux-and-links`) | `wallet-web` & `browser-extension` RPC presets, chain-aware explorer links, Ecosystem Switcher, IA simplification (tracked in `PROJECT.md`; outside M1-A verification scope). |
-| **M3** (`kovanica-playground`, parallel branch `feat/simplify-playground-and-links`) | `App.tsx` GitHub org fix, public RPC preset, `.org` → `.online` relays, `WalletContractConsole.tsx` sub-tabs, `WaveARwaStudio.tsx` dark tokens, `README.md` SDK version sync (tracked in `PROJECT.md`; outside M1-A verification scope). |
+| **M2** (`kovanica-apps`, merged in PR #24) | `wallet-web` & `browser-extension` RPC presets, chain-aware explorer links, Ecosystem Switcher, IA simplification. |
+| **M3** (`kovanica-playground`, merged in PR #24) | `App.tsx` GitHub org fix, public RPC preset, `.org` → `.online` relays, `WalletContractConsole.tsx` sub-tabs, `WaveARwaStudio.tsx` dark tokens, `README.md` SDK version sync. |
+| **Follow-up PRs (#33–#35, merged & deployed)** | PR #33: Standardized 5 pure function tabs (`Explore · Trade · Assets · Wallet · Build`) shared by `Shell` and `HomeTestnet`. PR #34: `/pool` renders Stratum Mining Pool (`MinerCommandBuilder`) and `/pools` hosts AMM Liquidity Pools + on-chain KVP-102 `PoolView`. PR #35: `/pricing` Services & Pricing hub, `POST /api/inquiries` intake, configurable Swap/Pool fees, and zero-cookie `<SponsorSlot>`. |
 | **Out-of-Scope (DNS/TLS/L1/Vendor)** | Edge TLS SAN for `mainnet.kovanica.online`, DNS provisioning (`api.`, `apps.`, `pool.`, `seed2.`, `relay*.`, `indexer.`), nginx static `/download/install.sh`, `kovanica-l1/node/scripts/install.sh:50` (`KovanicaDAG`), `kovanica-l1` `v*-node` release tags, `vendor/kovanica-sdk-wasm/package.json`. |
