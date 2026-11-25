@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "verify:hardware": "tsx scripts/verify-hardware-mock.ts",
     "check:auth": "node scripts/check-auth-invariant.mjs",
+    "inquiries:digest": "node scripts/inquiries-digest.mjs",
     "test": "node --test 'scripts/**/*.test.mjs' && node --import tsx --test tests/*.test.ts",
     "test:browser": "node --import tsx --test tests/browser-acceptance.test.ts",
     "lint": "eslint .",
