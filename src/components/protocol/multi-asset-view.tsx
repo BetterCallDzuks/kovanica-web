@@ -127,8 +127,36 @@ export function MultiAssetView() {
         selection never mixes assets.
       </p>
 
-      {/* Token tools — NFT, RWA, Pools */}
+      {/* Token tools — Swap, Pools, RWA, NFT */}
       <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          to="/swap"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <ArrowRightLeft className="size-3.5 text-emerald" />
+          AMM Swap
+        </Link>
+        <Link
+          to="/pools"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <Waves className="size-3.5 text-blue" />
+          DEX Pools
+        </Link>
+        <Link
+          to="/rwa"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <Landmark className="size-3.5 text-gold" />
+          RWA Registry
+        </Link>
+        <Link
+          to="/wallet/rwa-manage"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+        >
+          <Landmark className="size-3.5 text-purple" />
+          RWA Compliance
+        </Link>
         <Link
           to="/wallet/rwa-issue"
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
@@ -149,7 +177,7 @@ export function MultiAssetView() {
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
           <Waves className="size-3.5 text-blue" />
-          Pools
+          Mining Pool
         </Link>
       </div>
 
