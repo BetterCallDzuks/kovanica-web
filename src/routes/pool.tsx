@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Lock } from "lucide-react";
+import { Activity, Compass, FileText, Lock, Pickaxe } from "lucide-react";
 import { Shell } from "@/components/layout/shell";
-import { PoolView } from "@/components/protocol/pool-view";
+import { MinerCommandBuilder } from "@/components/explorer/miner-command-builder";
 import { useApiSource } from "@/lib/api/client";
 import { POOL_FROZEN_SPEC, summarizePoolStratumConfig } from "@/lib/pool/stratum-summary";
 
@@ -76,7 +76,69 @@ function PoolPage() {
         </div>
       </section>
 
-      <PoolView />
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6 md:px-8 md:py-8">
+        <header className="flex flex-col gap-2 border-b border-border pb-5">
+          <div className="flex items-center gap-2 font-mono text-[11px] tracking-brand text-gold uppercase">
+            <Pickaxe className="size-3.5 shrink-0" aria-hidden="true" />
+            <span>KovanicaHash PoW · Stratum V1 TLS</span>
+          </div>
+          <h1 className="font-display text-3xl tracking-tight text-fg italic md:text-4xl">
+            Mining Pool
+          </h1>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted">
+            Connect CPU or GPU miners over encrypted Stratum V1 TLS or solo RPC. Configure your
+            PRO-21 payout address, worker name, and thread count below to generate a validated{" "}
+            <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg">
+              kovanica mine
+            </code>{" "}
+            command.
+          </p>
+        </header>
+
+        <MinerCommandBuilder defaultOpen={true} defaultNetwork={activeNetwork} />
+
+        <section
+          aria-label="Mining telemetry links"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+        >
+          <Link
+            to="/explorer"
+            className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-gold/40 hover:bg-surface-2"
+          >
+            <Compass className="mt-0.5 size-4 shrink-0 text-blue" />
+            <div>
+              <div className="text-sm font-medium text-fg">BlockDAG Explorer</div>
+              <div className="mt-0.5 text-xs text-muted">
+                Live hashrate, difficulty &amp; recent mined blocks
+              </div>
+            </div>
+          </Link>
+          <Link
+            to="/network"
+            className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-gold/40 hover:bg-surface-2"
+          >
+            <Activity className="mt-0.5 size-4 shrink-0 text-blue" />
+            <div>
+              <div className="text-sm font-medium text-fg">Network Telemetry</div>
+              <div className="mt-0.5 text-xs text-muted">
+                Connected peers, seeds &amp; sync health
+              </div>
+            </div>
+          </Link>
+          <Link
+            to="/docs"
+            className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-gold/40 hover:bg-surface-2"
+          >
+            <FileText className="mt-0.5 size-4 shrink-0 text-blue" />
+            <div>
+              <div className="text-sm font-medium text-fg">Mining &amp; CLI Docs</div>
+              <div className="mt-0.5 text-xs text-muted">
+                Stratum TLS flags, certificates &amp; solo setup
+              </div>
+            </div>
+          </Link>
+        </section>
+      </main>
     </Shell>
   );
 }
