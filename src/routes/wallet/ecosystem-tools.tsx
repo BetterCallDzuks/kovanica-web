@@ -19,11 +19,13 @@ function EcosystemToolsPage() {
   const [maxRuns, setMaxRuns] = useState("12");
   const [bountyKvnc, setBountyKvnc] = useState("0.05");
 
-  // Bridge state (Wave D #10)
-  const [bridgeAsset, setBridgeAsset] = useState<"wUSDC" | "wEURC">("wUSDC");
-  const [sourceChain, setSourceChain] = useState<"Ethereum" | "Base" | "Solana">("Base");
+  // Bridge state (Wave D #10 — Bitcoin, Solana & All EVM Chains)
+  const [bridgeAsset, setBridgeAsset] = useState<string>("wUSDC");
+  const [sourceChain, setSourceChain] = useState<string>("8453");
+  const [customEvmChainId, setCustomEvmChainId] = useState<string>("");
   const [bridgeAmount, setBridgeAmount] = useState("100");
   const [destAddress, setDestAddress] = useState("");
+  const [bridgePreview, setBridgePreview] = useState<string>("");
 
   // Passkey & Session Key state (Wave C #7 & #8)
   const [sessionContract, setSessionContract] = useState("");
@@ -174,37 +176,65 @@ function EcosystemToolsPage() {
 
       {tab === "bridge" && (
         <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
-          <h2 className="font-medium text-fg">Canonical Stablecoin Bridge (kovanica-bridge)</h2>
+          <h2 className="font-medium text-fg">
+            Multi-Chain Bridge (Bitcoin, Solana &amp; All EVM Chains)
+          </h2>
           <p className="text-xs text-muted">
-            M-of-N threshold relayer bridge minting wrapped KVP-102 stablecoins ({bridgeAsset}) via
-            CPI and burning on outbound withdrawal.
+            M-of-N threshold relayer bridge minting wrapped KVP-102 assets ({bridgeAsset}) via Wave
+            A CPI and burning on outbound withdrawal across BTC, SOL, and any EIP-155 EVM chain.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-xs text-muted block mb-1">Asset</label>
+              <label className="text-xs text-muted block mb-1">Wrapped Asset</label>
               <select
                 value={bridgeAsset}
-                onChange={(e) => setBridgeAsset(e.target.value as "wUSDC" | "wEURC")}
+                onChange={(e) => setBridgeAsset(e.target.value)}
                 className="w-full h-10 rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
               >
-                <option value="wUSDC">wUSDC</option>
-                <option value="wEURC">wEURC</option>
+                <option value="wUSDC">wUSDC (Stablecoin)</option>
+                <option value="wUSDT">wUSDT (Stablecoin)</option>
+                <option value="wEURC">wEURC (Euro Stablecoin)</option>
+                <option value="wBTC">wBTC (Bitcoin)</option>
+                <option value="wETH">wETH (Ethereum / L2s)</option>
+                <option value="wSOL">wSOL (Solana)</option>
+                <option value="wBNB">wBNB (BNB Chain)</option>
+                <option value="wPOL">wPOL (Polygon PoS)</option>
+                <option value="wAVAX">wAVAX (Avalanche)</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted block mb-1">External Chain</label>
+              <label className="text-xs text-muted block mb-1">External Network</label>
               <select
                 value={sourceChain}
-                onChange={(e) =>
-                  setSourceChain(e.target.value as "Ethereum" | "Base" | "Solana")
-                }
+                onChange={(e) => setSourceChain(e.target.value)}
                 className="w-full h-10 rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
               >
-                <option value="Base">Base</option>
-                <option value="Ethereum">Ethereum</option>
-                <option value="Solana">Solana</option>
+                <option value="0">Bitcoin (BTC · Chain 0)</option>
+                <option value="501">Solana (SOL · Chain 501)</option>
+                <option value="1">Ethereum Mainnet (EVM · 1)</option>
+                <option value="8453">Base (EVM · 8453)</option>
+                <option value="42161">Arbitrum One (EVM · 42161)</option>
+                <option value="10">Optimism (EVM · 10)</option>
+                <option value="137">Polygon PoS (EVM · 137)</option>
+                <option value="56">BNB Smart Chain (EVM · 56)</option>
+                <option value="43114">Avalanche C-Chain (EVM · 43114)</option>
+                <option value="59144">Linea (EVM · 59144)</option>
+                <option value="534352">Scroll (EVM · 534352)</option>
+                <option value="81457">Blast (EVM · 81457)</option>
+                <option value="custom-evm">Custom EVM Chain ID…</option>
               </select>
             </div>
+            {sourceChain === "custom-evm" && (
+              <div className="sm:col-span-2">
+                <label className="text-xs text-muted block mb-1">Custom EIP-155 EVM Chain ID</label>
+                <input
+                  value={customEvmChainId}
+                  onChange={(e) => setCustomEvmChainId(e.target.value)}
+                  placeholder="e.g. 324 (zkSync), 5000 (Mantle), 100 (Gnosis)"
+                  className="w-full h-10 rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
+                />
+              </div>
+            )}
             <div>
               <label className="text-xs text-muted block mb-1">Amount ({bridgeAsset})</label>
               <input
@@ -214,25 +244,66 @@ function EcosystemToolsPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-muted block mb-1">Destination Address</label>
+              <label className="text-xs text-muted block mb-1">
+                Destination ({sourceChain === "0" ? "BTC bc1/1/3…" : sourceChain === "501" ? "Solana Base58" : "EVM 0x…"})
+              </label>
               <input
                 value={destAddress}
                 onChange={(e) => setDestAddress(e.target.value)}
-                placeholder="0x… or Solana base58"
+                placeholder={
+                  sourceChain === "0"
+                    ? "bc1q…"
+                    : sourceChain === "501"
+                      ? "So11111…"
+                      : "0x…"
+                }
                 className="w-full h-10 rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
               />
             </div>
           </div>
           <Button
             className="w-full"
-            onClick={() =>
-              toast.success(
-                `Prepared bridge_request_withdraw (${bridgeAmount} ${bridgeAsset} → ${sourceChain})`,
-              )
-            }
+            onClick={() => {
+              const resolvedId =
+                sourceChain === "custom-evm" ? Number(customEvmChainId) : Number(sourceChain);
+              const addr = destAddress.trim();
+              const valid =
+                resolvedId === 0
+                  ? /^(bc1[a-z0-9]{25,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/.test(addr)
+                  : resolvedId === 501
+                    ? /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)
+                    : /^0x[0-9a-fA-F]{40}$/.test(addr);
+              if (!Number.isFinite(resolvedId) || resolvedId < 0) {
+                toast.error("Enter a valid EIP-155 EVM chain ID");
+                return;
+              }
+              if (!valid) {
+                toast.error("Invalid destination address format for selected network");
+                return;
+              }
+              setBridgePreview(
+                JSON.stringify(
+                  {
+                    entry: "bridge_request_withdraw",
+                    dest_chain_id: resolvedId,
+                    asset: bridgeAsset,
+                    amount: bridgeAmount,
+                    destination: addr,
+                  },
+                  null,
+                  2,
+                ),
+              );
+              toast.success(`Prepared ${bridgeAmount} ${bridgeAsset} withdrawal to chain ${resolvedId}`);
+            }}
           >
-            Request Bridge Withdrawal
+            Prepare Multi-Chain Withdrawal Payload
           </Button>
+          {bridgePreview && (
+            <pre className="rounded-lg border border-border bg-bg p-3 font-mono text-[11px] text-fg overflow-x-auto">
+              {bridgePreview}
+            </pre>
+          )}
         </div>
       )}
 
