@@ -3,12 +3,14 @@ import { Activity, Compass, FileText, Lock, Pickaxe } from "lucide-react";
 import { Shell } from "@/components/layout/shell";
 import { MinerCommandBuilder } from "@/components/explorer/miner-command-builder";
 import { useApiSource } from "@/lib/api/client";
+import { getMiningPoolFeeConfig } from "@/lib/monetization";
 import { POOL_FROZEN_SPEC, summarizePoolStratumConfig } from "@/lib/pool/stratum-summary";
 
 function PoolPage() {
   const source = useApiSource();
   const activeNetwork = source === "mainnet" ? "mainnet" : "testnet";
   const summary = summarizePoolStratumConfig(activeNetwork);
+  const poolFee = getMiningPoolFeeConfig();
 
   return (
     <Shell>
@@ -72,6 +74,13 @@ function PoolPage() {
             <span className="rounded-md border border-border bg-bg px-2 py-0.5">
               VarDiff: {summary.varDiffMode} · Drain: {summary.gracefulDrainMethod}
             </span>
+            <Link
+              to="/pricing"
+              search={{ topic: "pool" }}
+              className="rounded-md border border-border bg-bg px-2 py-0.5 text-muted hover:border-gold/40 hover:text-gold"
+            >
+              Pool Fee: {poolFee.testnetFeePct}% testnet · {poolFee.plannedMainnetFeePct.toFixed(1)}% planned mainnet
+            </Link>
           </div>
         </div>
       </section>

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ShieldAlert, ShieldCheck, Shield } from "lucide-react";
 import { FaucetView } from "@/components/faucet/faucet-view";
 import { Shell } from "@/components/layout/shell";
+import { SponsorSlot } from "@/components/monetization/sponsor-slot";
 import {
   FAUCET_CANONICAL_NETWORK_TAG,
   FAUCET_CHAIN_ID,
@@ -85,6 +86,10 @@ function FaucetPage() {
       </section>
 
       <FaucetView />
+
+      <div className="mx-auto w-full max-w-3xl px-4 pb-8">
+        <SponsorSlot surface="faucet" showPlaceholder />
+      </div>
       </div>
     </Shell>
   );

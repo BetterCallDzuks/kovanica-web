@@ -35,6 +35,12 @@ export function LandingChrome({ children }: { children: React.ReactNode }) {
             Roadmap
           </a>
           <a
+            href={`${SURFACE.testnet}/pricing`}
+            className="hidden h-9 items-center rounded-md px-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg md:inline-flex"
+          >
+            Pricing
+          </a>
+          <a
             href={SURFACE.github}
             target="_blank"
             rel="noopener noreferrer"

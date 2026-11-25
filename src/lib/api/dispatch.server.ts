@@ -38,6 +38,7 @@ import {
 import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap } from "./contract";
 import { encodeAddress, parseAddr, toCanonicalAddress } from "../wallet/address";
 import { listPools, listTokens, getTokenState } from "./tokens.server";
+import { handleInquirySubmission } from "./inquiries.server";
 import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
@@ -852,6 +853,16 @@ export async function dispatchApi(req: Request): Promise<Response> {
     return withCors(
       new Response(spec, { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } }),
     );
+  }
+
+  if (name === "inquiries") {
+    if (method !== "POST") return text("method not allowed", 405);
+    const clientKey =
+      req.headers.get("cf-connecting-ip") ??
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "local";
+    const result = await handleInquirySubmission(req, clientKey);
+    return json(result.body, result.status);
   }
 
   // Mainnet has no public RPC endpoint prior to 1.1.2027 genesis launch
