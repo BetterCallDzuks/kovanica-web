@@ -171,3 +171,21 @@ test("Shell defines 5 canonical function tabs with unique routes and HomeTestnet
     "HomeTestnet must reuse NAV_GROUPS from shell.tsx so tab names and groupings stay 100% consistent",
   );
 });
+
+test("/pool renders Stratum Mining Pool (MinerCommandBuilder) and /pools hosts AMM PoolView", () => {
+  const poolRoute = readFileSync(join(SRC_DIR, "routes/pool.tsx"), "utf8");
+  const poolsRoute = readFileSync(join(SRC_DIR, "routes/pools.tsx"), "utf8");
+
+  assert.ok(
+    poolRoute.includes("MinerCommandBuilder"),
+    "/pool must render MinerCommandBuilder for Stratum mining",
+  );
+  assert.ok(
+    !poolRoute.includes("PoolView"),
+    "/pool must not render AMM liquidity PoolView",
+  );
+  assert.ok(
+    poolsRoute.includes("PoolView"),
+    "/pools must host on-chain KVP-102 PoolView alongside AMM liquidity management",
+  );
+});

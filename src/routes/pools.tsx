@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowLeftRight, Plus, Minus, Zap, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Shell } from "@/components/layout/shell";
+import { PoolView } from "@/components/protocol/pool-view";
 import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
@@ -304,6 +305,10 @@ function PoolsPage() {
           </div>
         )}
       </div>
+
+      <section aria-label="On-chain KVP-102 pool quotes" className="border-t border-border pt-6">
+        <PoolView />
+      </section>
       </main>
     </Shell>
   );

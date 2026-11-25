@@ -640,16 +640,27 @@ test("Section A: desktop viewport renders home, explorer, wallet, pool, and docs
     await page.reload({ waitUntil: "domcontentloaded" });
     assert.ok((await page.locator("body").innerText()).includes("Wallet"));
 
-    // 4. Pool (/pool)
-    await gotoAndSettle(page, `${baseUrl}/pool`, "TEST / KVNC");
+    // 4a. Mining Pool (/pool)
+    await gotoAndSettle(page, `${baseUrl}/pool`, "Mining Pool");
+    const miningPoolText = await page.locator("body").innerText();
+    assert.ok(miningPoolText.includes("Mining Pool"), "Pool route must render 'Mining Pool'");
+    assert.ok(
+      /Stratum Mining Pool/i.test(miningPoolText),
+      "Pool route must render Stratum Mining Pool spec strip",
+    );
+    await page.reload({ waitUntil: "domcontentloaded" });
+    assert.ok((await page.locator("body").innerText()).includes("Mining Pool"));
+
+    // 4b. Liquidity Pools (/pools)
+    await gotoAndSettle(page, `${baseUrl}/pools`, "TEST / KVNC");
     const poolText = await page.locator("body").innerText();
-    assert.ok(poolText.includes("Liquidity pools"), "Pool route must render 'Liquidity pools'");
-    assert.ok(poolText.includes("TEST / KVNC"), "Pool route must render deterministic TEST / KVNC pool");
+    assert.ok(poolText.includes("Liquidity pools"), "Pools route must render 'Liquidity pools'");
+    assert.ok(poolText.includes("TEST / KVNC"), "Pools route must render deterministic TEST / KVNC pool");
     assert.ok(
       poolText.includes("Open in Wallet (Unsupported)"),
-      "Pool route must render disabled 'Open in Wallet (Unsupported)' button",
+      "Pools route must render disabled 'Open in Wallet (Unsupported)' button",
     );
-    // Direct reload on Pool
+    // Direct reload on Pools
     await page.reload({ waitUntil: "domcontentloaded" });
     assert.ok((await page.locator("body").innerText()).includes("Liquidity pools"));
 
@@ -677,7 +688,8 @@ test("Section A: mobile viewport (390x844) renders without horizontal scroll ove
       ["/", "Kovanica"],
       ["/explorer", "BlockDAG Explorer"],
       ["/wallet", "PRO-21"],
-      ["/pool", "Liquidity pools"],
+      ["/pool", "Mining Pool"],
+      ["/pools", "Liquidity pools"],
       ["/docs", "Getting started"],
     ];
     for (const [route, marker] of routes) {
@@ -873,7 +885,7 @@ test("Section B: unreachable services, malformed responses, and unknown statisti
 
   try {
     // 1. Malformed /api/pools response renders explicit error instead of crashing
-    await gotoAndSettle(page, `${baseUrl}/pool`, "Malformed pools response");
+    await gotoAndSettle(page, `${baseUrl}/pools`, "Malformed pools response");
     const poolText = await page.locator("body").innerText();
     assert.ok(
       poolText.includes("Malformed pools response"),
@@ -1023,7 +1035,7 @@ test("Section C: delayed old-network response and late errors do not cause cross
     await waitForHeaderBalance(page, "5 KVNC");
 
     triggerLatePoolError = true;
-    await gotoAndSettle(page, `${baseUrl}/pool`);
+    await gotoAndSettle(page, `${baseUrl}/pools`);
 
     // Switch to mainnet while testnet /api/pools error is delayed in-flight
     await mainnetBtn.click();
@@ -1144,7 +1156,7 @@ test("Section D: quote-only pool calculator calculates exact quotes without fina
   const { context, page } = await setupIsolatedPage({ viewport: { width: 1280, height: 800 } });
 
   try {
-    await gotoAndSettle(page, `${baseUrl}/pool`, "Liquidity pools");
+    await gotoAndSettle(page, `${baseUrl}/pools`, "Liquidity pools");
 
     const input = page.locator("input[placeholder=\"0\"]");
     await assert.doesNotReject(input.waitFor({ timeout: 5000 }));
@@ -1195,8 +1207,8 @@ test("Section D: pool handoff to wallet renders capability gap blocker, rejects 
   const { context, page } = await setupIsolatedPage({ viewport: { width: 1280, height: 800 } });
 
   try {
-    // 1. Start at pool
-    await gotoAndSettle(page, `${baseUrl}/pool`, "Liquidity pools");
+    // 1. Start at pools
+    await gotoAndSettle(page, `${baseUrl}/pools`, "Liquidity pools");
 
     // 2. Navigate to wallet with valid handoff query
     const tokenHex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -1217,10 +1229,10 @@ test("Section D: pool handoff to wallet renders capability gap blocker, rejects 
       "Handoff banner must state that pool remains quote-only",
     );
 
-    // 3. Navigate back to /pool
+    // 3. Navigate back to /pools
     await page.goBack();
     await waitForBodyText(page, "Liquidity pools");
-    assert.ok(page.url().includes("/pool"), "Back navigation must return to /pool");
+    assert.ok(page.url().includes("/pools"), "Back navigation must return to /pools");
     const backPoolText = await page.locator("body").innerText();
     assert.ok(backPoolText.includes("Liquidity pools"), "Pool page must remain intact after back navigation");
 
