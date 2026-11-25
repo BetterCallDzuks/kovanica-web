@@ -2,6 +2,7 @@ import { SPEC_TEXT } from "./spec";
 import {
   ATOM,
   DECIMALS,
+  FOUNDER_AMOUNT,
   HALVING_ERA,
   MAX_SUPPLY,
   MIN_FEE,
@@ -31,10 +32,11 @@ import {
   localReset,
   localState,
   localSubmit,
+  localSubmitTx,
   localUtxos,
 } from "./node.server";
 import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap } from "./contract";
-import { parseAddr, toCanonicalAddress } from "../wallet/address";
+import { encodeAddress, parseAddr, toCanonicalAddress } from "../wallet/address";
 import { listPools, listTokens, getTokenState } from "./tokens.server";
 import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
@@ -713,6 +715,128 @@ async function executeLiveContractReceipt(req: Request): Promise<Response> {
   }
 }
 
+const RWA_ASSET_CLASSES = new Set(["RE", "BOND", "INVOICE", "COMMODITY", "FUND", "OTHER"]);
+const MAX_RWA_UNIQUE_ID_BYTES = 128;
+
+async function handleRwaDerive(
+  req: Request,
+  q: URLSearchParams,
+  method: string,
+): Promise<Response> {
+  if (method !== "POST") return text("method not allowed", 405);
+
+  let body: Record<string, unknown> = {};
+  if (req.body !== null) {
+    try {
+      const rawBody = await req.text();
+      if (rawBody.trim().length > 0) {
+        const parsed = JSON.parse(rawBody) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          body = parsed as Record<string, unknown>;
+        }
+      }
+    } catch {
+      return text("invalid JSON body", 400);
+    }
+  }
+
+  const rawIssuer = q.get("issuer") ?? (typeof body.issuer === "string" ? body.issuer : "");
+  const rawClass =
+    q.get("class") ??
+    q.get("asset_class") ??
+    (typeof body.class === "string"
+      ? body.class
+      : typeof body.asset_class === "string"
+        ? body.asset_class
+        : "");
+  const rawUniqueId =
+    q.get("id") ??
+    q.get("unique_id") ??
+    (typeof body.id === "string"
+      ? body.id
+      : typeof body.unique_id === "string"
+        ? body.unique_id
+        : "");
+  const rawVersionParam = q.get("version");
+  const rawVersion =
+    rawVersionParam !== null
+      ? rawVersionParam
+      : body.version !== undefined && body.version !== null
+        ? String(body.version)
+        : "1";
+
+  const issuerHex = parseAddr(rawIssuer);
+  if (!issuerHex) {
+    return text("invalid issuer address: expected 64-hex or kvnc…dag", 400);
+  }
+  const assetClass = rawClass.trim();
+  if (!RWA_ASSET_CLASSES.has(assetClass)) {
+    return text(
+      "invalid asset class: expected RE, BOND, INVOICE, COMMODITY, FUND, or OTHER",
+      400,
+    );
+  }
+  const enc = new TextEncoder();
+  const uniqueIdBytes = enc.encode(rawUniqueId);
+  if (uniqueIdBytes.length === 0 || uniqueIdBytes.length > MAX_RWA_UNIQUE_ID_BYTES) {
+    return text("invalid unique_id: must be 1..128 UTF-8 bytes", 400);
+  }
+  if (!/^\d+$/.test(rawVersion.trim())) {
+    return text("invalid version: expected positive 32-bit integer", 400);
+  }
+  const versionNum = Number(rawVersion.trim());
+  if (!Number.isInteger(versionNum) || versionNum < 1 || versionNum > 0xffff_ffff) {
+    return text("invalid version: expected positive 32-bit integer (1..4294967295)", 400);
+  }
+
+  const preimage = concat([
+    enc.encode("kvp106:rwa:v1"),
+    hexToBytes(issuerHex),
+    Uint8Array.of(0),
+    enc.encode(assetClass),
+    Uint8Array.of(0),
+    uniqueIdBytes,
+    u32le(versionNum),
+  ]);
+  const digest = blake3(preimage);
+  return json({
+    asset_id: bytesToHex(digest),
+    asset_id_kvnc: encodeAddress(digest),
+  });
+}
+
+async function parseSubmitTxHex(
+  req: Request,
+): Promise<{ ok: true; hex: string } | { ok: false; res: Response }> {
+  let body: { tx_hex?: unknown };
+  try {
+    body = (await req.json()) as { tx_hex?: unknown };
+  } catch {
+    return { ok: false, res: text("invalid JSON body", 400) };
+  }
+  const raw = typeof body?.tx_hex === "string" ? body.tx_hex.trim() : "";
+  const cleanHex = raw.replace(/^0x/i, "").toLowerCase();
+  if (!cleanHex || cleanHex.length % 2 !== 0 || !/^[0-9a-f]+$/.test(cleanHex)) {
+    return { ok: false, res: text("invalid tx_hex: expected non-empty even-length hex", 400) };
+  }
+  return { ok: true, hex: cleanHex };
+}
+
+const LEGACY_UNIMPLEMENTED_ACTIONS = new Set([
+  "airdrop",
+  "auth",
+  "block",
+  "coinjoin",
+  "dex",
+  "htlc",
+  "light_proof",
+  "light_sync",
+  "multisig",
+  "rtc",
+  "stealth",
+  "vault",
+]);
+
 export async function dispatchApi(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
@@ -737,6 +861,16 @@ export async function dispatchApi(req: Request): Promise<Response> {
       return text("mainnet transactions disabled prior to 1.1.2027 launch", 403);
     }
     return text("mainnet launching soon", 503);
+  }
+
+  if (LEGACY_UNIMPLEMENTED_ACTIONS.has(name)) {
+    return json(
+      {
+        error: `Endpoint '/api/${name}' is not implemented on this node surface; use Wasmi contract calls or JSON-RPC instead.`,
+        code: "NOT_IMPLEMENTED",
+      },
+      501,
+    );
   }
 
   // When querying testnet (or public by default)
@@ -770,6 +904,36 @@ export async function dispatchApi(req: Request): Promise<Response> {
     if (name === "head") {
       try {
         return json(await fetchLiveHead());
+      } catch (e) {
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
+      }
+    }
+    if (name === "supply") {
+      if (method !== "GET") return text("method not allowed", 405);
+      try {
+        const [sync, probe] = await Promise.all([
+          callRpc<any>("kovanica_syncStatus"),
+          probeHealth(),
+        ]);
+        const currentHeight = numberOrNull(sync?.committedHeight) ?? 0;
+        return json({
+          network: NETWORK_ID,
+          token: TOKEN,
+          decimals: DECIMALS,
+          atom: ATOM,
+          blocks: currentHeight,
+          max_supply: MAX_SUPPLY,
+          founder_amount: FOUNDER_AMOUNT,
+          treasury_total: 8_000_000 * ATOM,
+          mining_subsidy_budget: 82_000_000 * ATOM,
+          subsidy: SUBSIDY,
+          halving_era: HALVING_ERA,
+          circulating: null,
+          burned: null,
+          native_minted: null,
+          source: "testnet",
+          health: summarise(probe),
+        });
       } catch (e) {
         return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
       }
@@ -852,7 +1016,7 @@ export async function dispatchApi(req: Request): Promise<Response> {
       return executeLiveContractReceipt(req);
     }
     if (name === "rwa") {
-      const sub = url.pathname.replace(/^\/api\/rwa\/?/, "");
+      const sub = url.pathname.replace(/^\/api\/rwa\/?/, "").replace(/\/$/, "");
       if (sub === "registry" || sub === "list" || sub === "") {
         try {
           const live = await callRpc<unknown[]>("kovanica_listRwaAssets", []);
@@ -880,6 +1044,9 @@ export async function dispatchApi(req: Request): Promise<Response> {
           standard: "KVP-106",
           asset: found,
         });
+      }
+      if (sub === "derive") {
+        return handleRwaDerive(req, q, method);
       }
       if (sub === "mint" && method === "POST") {
         const assetId = q.get("asset_id") ?? "";
@@ -1094,6 +1261,23 @@ export async function dispatchApi(req: Request): Promise<Response> {
         return text(e instanceof Error ? e.message : "prepare failed", 400);
       }
     }
+    if (name === "submit_tx") {
+      if (method !== "POST") return text("method not allowed", 405);
+      const parsed = await parseSubmitTxHex(req);
+      if (!parsed.ok) return parsed.res;
+      try {
+        const txHash = await callRpc("kovanica_sendRawTransaction", [parsed.hex]);
+        return json({ ok: true, tx: txHash });
+      } catch (e) {
+        if (e instanceof RpcError && e.status === 401) {
+          return text("writes are not available via the public RPC", 403);
+        }
+        if (e instanceof RpcError && (e.status === 502 || e.status === 503 || e.status === null)) {
+          return text(`testnet node error: ${e.message}`, rpcFailureStatus(e));
+        }
+        return text(e instanceof Error ? e.message : "submit_tx failed", 400);
+      }
+    }
     if (name === "submit") {
       try {
         const from = q.get("from") ?? "";
@@ -1136,12 +1320,42 @@ export async function dispatchApi(req: Request): Promise<Response> {
   }
 
   // Local mock fallback for local testing
+  if (name === "rwa" && url.pathname.replace(/^\/api\/rwa\/?/, "").replace(/\/$/, "") === "derive") {
+    return handleRwaDerive(req, q, method);
+  }
+  if (name === "supply" && method !== "GET") {
+    return text("method not allowed", 405);
+  }
+  if (name === "submit_tx" && method !== "POST") {
+    return text("method not allowed", 405);
+  }
+
   if (method === "GET") {
     switch (name) {
       case "head":
         return json(localHead());
       case "bootstrap":
         return json(localBootstrap({ ok: false, error: "local source" }));
+      case "supply": {
+        const node = localState().node;
+        return json({
+          network: NETWORK_ID,
+          token: TOKEN,
+          decimals: DECIMALS,
+          atom: ATOM,
+          blocks: node.blocks,
+          max_supply: MAX_SUPPLY,
+          founder_amount: FOUNDER_AMOUNT,
+          treasury_total: 8_000_000 * ATOM,
+          mining_subsidy_budget: 82_000_000 * ATOM,
+          subsidy: SUBSIDY,
+          halving_era: HALVING_ERA,
+          circulating: node.supply,
+          burned: 0,
+          native_minted: node.issuance,
+          source: "local",
+        });
+      }
       case "state":
         return json(localState());
       case "utxos":
@@ -1168,6 +1382,13 @@ export async function dispatchApi(req: Request): Promise<Response> {
     switch (name) {
       case "prepare":
         return json(localPrepare(q.get("from"), q.get("to"), q.get("amount")));
+      case "submit_tx": {
+        const parsed = await parseSubmitTxHex(req);
+        if (!parsed.ok) return parsed.res;
+        const res = localSubmitTx(parsed.hex);
+        if (typeof res === "string") return text(res, 400);
+        return json(res);
+      }
       case "submit":
         return json(localSubmit(q.get("from"), q.get("to"), q.get("amount"), q.get("sig")));
       case "produce":

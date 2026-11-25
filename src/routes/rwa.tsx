@@ -12,6 +12,7 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Shell } from "@/components/layout/shell";
 import {
   DEFAULT_RWA_REGISTRY,
   type RwaAssetClass,
@@ -75,14 +76,15 @@ function RwaExplorerRegistryPage() {
   const activeCount = useMemo(() => assets.filter((a) => !a.paused).length, [assets]);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8 space-y-6">
+    <Shell>
+      <main className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link to="/explorer" className="text-muted hover:text-fg transition-colors">
             <ArrowLeft className="size-5" />
           </Link>
           <div>
-            <p className="font-mono text-[10px] tracking-wide text-purple uppercase">
+            <p className="font-mono text-[10px] tracking-wide text-purple-400 uppercase">
               KVP-106 Institutional Registry · Source: {source}
             </p>
             <h1 className="font-display text-2xl tracking-tight text-fg">
@@ -110,23 +112,23 @@ function RwaExplorerRegistryPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-xs text-muted">
-            <Building2 className="size-3.5 text-purple" />
+            <Building2 className="size-3.5 text-purple-400" />
             <span>Registered KVP-106 Assets</span>
           </div>
           <p className="mt-1 font-mono text-2xl text-fg">{assets.length}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-xs text-muted">
-            <ShieldCheck className="size-3.5 text-emerald" />
+            <ShieldCheck className="size-3.5 text-emerald-400" />
             <span>Active / Compliant</span>
           </div>
-          <p className="mt-1 font-mono text-2xl text-emerald">
+          <p className="mt-1 font-mono text-2xl text-emerald-400">
             {activeCount} / {assets.length}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-xs text-muted">
-            <Users className="size-3.5 text-purple" />
+            <Users className="size-3.5 text-purple-400" />
             <span>Verified Holders</span>
           </div>
           <p className="mt-1 font-mono text-2xl text-fg">{totalHolders.toLocaleString("en-US")}</p>
@@ -200,7 +202,7 @@ function RwaExplorerRegistryPage() {
                         PAUSED
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald/15 px-2.5 py-0.5 text-[10px] font-mono text-emerald">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-mono text-emerald-400">
                         <CheckCircle2 className="size-3" />
                         COMPLIANT
                       </span>
@@ -214,11 +216,18 @@ function RwaExplorerRegistryPage() {
                     {asset.issuerAddress.slice(0, 12)}…{asset.issuerAddress.slice(-6)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link to="/wallet/rwa-manage">
-                      <Button size="sm" variant="outline" className="text-xs h-7">
-                        Manage
-                      </Button>
-                    </Link>
+                    <div className="inline-flex items-center gap-1.5">
+                      <Link to="/explorer/rwa/$assetId" params={{ assetId: asset.assetId }}>
+                        <Button size="sm" variant="ghost" className="text-xs h-7">
+                          Inspect
+                        </Button>
+                      </Link>
+                      <Link to="/wallet/rwa-manage">
+                        <Button size="sm" variant="outline" className="text-xs h-7">
+                          Manage
+                        </Button>
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -233,6 +242,7 @@ function RwaExplorerRegistryPage() {
           </table>
         </div>
       </div>
-    </div>
+      </main>
+    </Shell>
   );
 }

@@ -60,7 +60,7 @@ export function IpfsMetadataUpload({ metadata, onSuccess, onError, gatewayUrl: _
   return (
     <div className="rounded-lg border border-border bg-surface p-4 space-y-4">
       <div className="flex items-center gap-2">
-        <Upload className="size-5 text-amber" />
+        <Upload className="size-5 text-amber-400" />
         <h3 className="font-medium text-fg">Upload Metadata to IPFS</h3>
       </div>
 
@@ -77,10 +77,10 @@ export function IpfsMetadataUpload({ metadata, onSuccess, onError, gatewayUrl: _
       )}
 
       {cid ? (
-        <div className="rounded-lg border border-emerald/30 bg-emerald/5 p-4 space-y-2">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 space-y-2">
           <div className="flex items-center gap-2">
-            <CheckCircle className="size-5 text-emerald" />
-            <span className="font-medium text-emerald">Upload successful!</span>
+            <CheckCircle className="size-5 text-emerald-400" />
+            <span className="font-medium text-emerald-400">Upload successful!</span>
           </div>
           <div className="flex items-center gap-2">
             <code className="flex-1 font-mono text-xs text-fg break-all">{cid}</code>
@@ -95,7 +95,7 @@ export function IpfsMetadataUpload({ metadata, onSuccess, onError, gatewayUrl: _
               href={`https://ipfs.io/ipfs/${cid}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-amber hover:underline flex items-center gap-1"
+              className="text-sm text-amber-400 hover:underline flex items-center gap-1"
             >
               <Link2 className="size-3.5" />
               View on IPFS

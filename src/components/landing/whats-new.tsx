@@ -6,7 +6,7 @@ import { WHATS_NEW } from "@/lib/content/whats-new";
 
 export function WhatsNew() {
   return (
-    <section className="mt-12 md:mt-16" aria-labelledby="whats-new-heading">
+    <section className="mt-10 md:mt-12" aria-labelledby="whats-new-heading">
       <div className="flex items-baseline justify-between gap-4">
         <h2
           id="whats-new-heading"

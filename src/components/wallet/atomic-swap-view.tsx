@@ -688,7 +688,7 @@ async function fundHtlcA() {
               )}
 
               {htlcB && (
-                <section className="rounded-xl border border-violet bg-violet/5 p-6">
+                <section className="rounded-xl border border-violet-500/40 bg-violet-500/10 p-6">
                   <h2 className="mb-4 text-lg font-medium text-fg">HTLC-B (Counterparty HTLC)</h2>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">

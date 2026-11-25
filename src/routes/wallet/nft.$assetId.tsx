@@ -3,7 +3,6 @@ import { AlertCircle, ArrowLeft, Copy, ExternalLink, Gem as GemIcon, Sparkles } 
 import { loadDetail } from "@/lib/api/detail-lookup";
 import { shortId } from "@/lib/ledger/hash";
 import { hexToKvnc } from "@/lib/wallet/address";
-import { Shell } from "@/components/layout/shell";
 import { RouteError } from "@/components/layout/route-error";
 import { Button } from "@/components/ui/button";
 
@@ -31,34 +30,30 @@ export const Route = createFileRoute("/wallet/nft/$assetId")({
 function NftNotFoundPage() {
   const { assetId } = Route.useParams();
   return (
-    <Shell>
-      <div className="mx-auto flex min-h-[40vh] max-w-md flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full bg-purple-500/10 text-purple-400">
-          <GemIcon className="size-6" aria-hidden="true" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="font-display text-lg font-medium text-fg">NFT Not Found</h2>
-          <p className="font-mono text-xs text-muted break-words">
-            No NFT was found with asset ID &ldquo;{assetId}&rdquo; on this network.
-          </p>
-        </div>
-        <Button asChild variant="outline" size="sm" className="mt-2">
-          <Link to="/wallet">Back to Wallet</Link>
-        </Button>
+    <div className="mx-auto flex min-h-[40vh] max-w-md flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex size-12 items-center justify-center rounded-full bg-purple-500/10 text-purple-400">
+        <GemIcon className="size-6" aria-hidden="true" />
       </div>
-    </Shell>
+      <div className="space-y-1">
+        <h2 className="font-display text-lg font-medium text-fg">NFT Not Found</h2>
+        <p className="font-mono text-xs text-muted break-words">
+          No NFT was found with asset ID &ldquo;{assetId}&rdquo; on this network.
+        </p>
+      </div>
+      <Button asChild variant="outline" size="sm" className="mt-2">
+        <Link to="/wallet">Back to Wallet</Link>
+      </Button>
+    </div>
   );
 }
 
 function NftErrorPage({ error, reset }: { error?: unknown; reset?: () => void }) {
   return (
-    <Shell>
-      <RouteError
-        title="NFT Endpoint Unavailable"
-        error={error}
-        reset={reset}
-      />
-    </Shell>
+    <RouteError
+      title="NFT Endpoint Unavailable"
+      error={error}
+      reset={reset}
+    />
   );
 }
 
@@ -75,8 +70,7 @@ function NftDetailPage() {
   };
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center gap-3">
         <Link
           to="/wallet"
@@ -97,10 +91,10 @@ function NftDetailPage() {
         {/* NFT Image / Visual */}
         <div className="relative aspect-square rounded-xl border border-border bg-surface overflow-hidden">
           <div className="flex h-full items-center justify-center">
-            <GemIcon className="size-16 text-purple/50" />
+            <GemIcon className="size-16 text-purple-400/50" />
           </div>
           <div className="absolute top-3 right-3 flex gap-1">
-            <span className="rounded-full bg-purple/90 px-2 py-0.5 font-mono text-[10px] text-white">
+            <span className="rounded-full bg-purple-600/90 px-2 py-0.5 font-mono text-[10px] text-white">
               NFT
             </span>
             {nft.collection_id && (
@@ -119,7 +113,7 @@ function NftDetailPage() {
         {/* Metadata */}
         {nft.metadata_hash && (
           <div className="rounded-lg border border-border bg-surface p-4 text-center">
-            <AlertCircle className="size-6 mx-auto text-amber" />
+            <AlertCircle className="size-6 mx-auto text-amber-400" />
             <p className="mt-2 text-sm text-muted">Metadata unavailable</p>
             <p className="mt-1 font-mono text-[10px] text-subtle">
               Hash: {nft.metadata_hash.slice(0, 16)}…
@@ -214,7 +208,6 @@ function NftDetailPage() {
           )}
         </div>
       </div>
-      </div>
-    </Shell>
+    </div>
   );
 }

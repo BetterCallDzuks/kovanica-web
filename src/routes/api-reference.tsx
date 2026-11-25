@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Check, Copy, Terminal } from "lucide-react";
 import { ApiReferenceView } from "@/components/api/api-reference-view";
 import { RpcMethodExplorer } from "@/components/api/rpc-method-explorer";
+import { Shell } from "@/components/layout/shell";
 import {
   DEFAULT_TESTNET_RPC_URL,
   RPC_IDENTITY_HEADERS,
@@ -28,7 +29,8 @@ function ApiReferencePage() {
   }
 
   return (
-    <div className="bg-bg text-fg">
+    <Shell>
+      <div className="bg-bg text-fg">
       <ApiReferenceView />
 
       <section className="mx-auto w-full max-w-4xl px-4 pb-8 md:px-6">
@@ -140,6 +142,7 @@ function ApiReferencePage() {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </Shell>
   );
 }

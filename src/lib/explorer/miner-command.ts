@@ -36,7 +36,7 @@ export const MINER_NETWORK_SPECS: Record<MinerNetwork, MinerNetworkSpec> = {
     label: "Mainnet (Chain 1)",
     chainId: 1,
     networkTag: "1-f35df34c92001436",
-    defaultStratumEndpoint: "stratum+tls://pool.kovanica.online:3333",
+    defaultStratumEndpoint: "stratum+tls://stratum.example.com:3333",
     defaultRpcEndpoint: "http://127.0.0.1:8545",
   },
   testnet: {
@@ -44,7 +44,7 @@ export const MINER_NETWORK_SPECS: Record<MinerNetwork, MinerNetworkSpec> = {
     label: "Testnet (Chain 2)",
     chainId: 2,
     networkTag: "2-24cdb5fadd98b207",
-    defaultStratumEndpoint: "stratum+tls://pool.kovanica.online:3333",
+    defaultStratumEndpoint: "stratum+tls://stratum.example.com:3333",
     defaultRpcEndpoint: "http://127.0.0.1:8545",
   },
   devnet: {
@@ -195,7 +195,7 @@ function validateStratumEndpoint(
   if (colonIdx <= 0 || colonIdx === hostPort.length - 1) {
     return {
       ok: false,
-      error: "Stratum endpoint must include both host and port (e.g. stratum+tls://pool.kovanica.online:3333).",
+      error: "Stratum endpoint must include both host and port (e.g. stratum+tls://stratum.example.com:3333).",
     };
   }
 

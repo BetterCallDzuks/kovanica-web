@@ -63,7 +63,7 @@ function EcosystemToolsPage() {
           <ArrowLeft className="size-5" />
         </Link>
         <div>
-          <p className="font-mono text-[10px] tracking-wide text-purple uppercase">
+          <p className="font-mono text-[10px] tracking-wide text-purple-400 uppercase">
             Waves C &amp; D Protocol Suite
           </p>
           <h1 className="font-display text-2xl tracking-tight text-fg">
@@ -310,7 +310,7 @@ function EcosystemToolsPage() {
       {tab === "sessions" && (
         <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="size-4 text-emerald" />
+            <ShieldCheck className="size-4 text-emerald-400" />
             <h2 className="font-medium text-fg">Passkeys (WebAuthn) &amp; Session Keys</h2>
           </div>
           <p className="text-xs text-muted">

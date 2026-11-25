@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { ApiError, apiPostJson } from "@/lib/api/client";
 import type { ApiSource } from "@/lib/api/contract";
+import { DEFAULT_TESTNET_RPC_URL } from "@/lib/api/rpc-spec";
 import { Button } from "@/components/ui/button";
 import {
   CONTRACT_PRESETS,
@@ -226,7 +227,7 @@ export function ContractInspectorPanel({
   const rpcUrlForSnippets =
     source === "local"
       ? "http://127.0.0.1:8545"
-      : "https://testnet.kovanica.online/rpc";
+      : DEFAULT_TESTNET_RPC_URL;
 
   const shareDeepLink = useMemo(() => {
     const baseUrl =

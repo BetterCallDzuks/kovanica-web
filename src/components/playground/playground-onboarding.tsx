@@ -37,7 +37,7 @@ const STEPS: Step[] = [
     title: "Send a transaction",
     description: "Prepare, sign, and submit your first transaction.",
     action: "Open Wallet",
-    href: SURFACE.testnet,
+    href: SURFACE.wallet,
   },
 ];
 
@@ -120,7 +120,7 @@ export function PlaygroundOnboarding() {
               key={step.id}
               className={cn(
                 "rounded-xl border p-5 transition-colors",
-                done ? "border-green-500/30 bg-green-500/5" : "border-border bg-surface-1",
+                done ? "border-green-500/30 bg-green-500/5" : "border-border bg-surface",
               )}
             >
               <div className="flex items-start justify-between gap-4">

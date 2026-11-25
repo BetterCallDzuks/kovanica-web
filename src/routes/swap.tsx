@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ArrowLeft, Layers, Settings2, Zap, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Shell } from "@/components/layout/shell";
 import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
@@ -121,14 +122,15 @@ function SwapPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-6 md:px-6 md:py-8 space-y-5">
+    <Shell>
+      <main className="mx-auto w-full max-w-xl px-4 py-6 md:px-6 md:py-8 space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link to="/wallet" className="text-muted hover:text-fg transition-colors">
             <ArrowLeft className="size-5" />
           </Link>
           <div>
-            <p className="font-mono text-[10px] tracking-wide text-emerald uppercase">
+            <p className="font-mono text-[10px] tracking-wide text-emerald-400 uppercase">
               Native AMM / DEX · Constant Product (0.30% LP Fee)
             </p>
             <h1 className="font-display text-2xl tracking-tight text-fg">Kovanica Swap</h1>
@@ -291,7 +293,7 @@ function SwapPage() {
                 className={
                   quote.priceImpactPct > 3
                     ? "font-mono text-amber-400"
-                    : "font-mono text-emerald"
+                    : "font-mono text-emerald-400"
                 }
               >
                 {quote.priceImpactPct.toFixed(3)}%
@@ -308,8 +310,8 @@ function SwapPage() {
 
         {/* Wave A Atomic Batch Preview */}
         {batchSteps.length > 0 && (
-          <div className="rounded-lg border border-purple/30 bg-purple/5 p-3 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-purple">
+          <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
               <Zap className="size-3.5" />
               <span>1-Tx Wave A Atomic Batch ({batchSteps.length} actions)</span>
             </div>
@@ -336,6 +338,7 @@ function SwapPage() {
               : `Approve & Swap ${tokenIn.symbol} → ${tokenOut.symbol} (1-Tx Batch)`}
         </Button>
       </div>
-    </div>
+      </main>
+    </Shell>
   );
 }

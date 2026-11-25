@@ -558,7 +558,7 @@ const HYDRATION_TIMEOUT = 30_000;
 async function waitForHydration(page: Page) {
   await page.waitForFunction(
     () => {
-      const el = document.querySelector('button[title="Mainnet"]') ?? document.body;
+      const el = document.querySelector('button[title^="Mainnet"]') ?? document.body;
       if (!el) return false;
       return Object.keys(el).some(
         (key) => key.startsWith("__reactFiber$") || key.startsWith("__reactProps$"),
@@ -716,7 +716,7 @@ test("Section B: mainnet-prelaunch does not fall back to testnet data in API and
     await gotoAndSettle(page, `${baseUrl}/explorer`, "BlockDAG Explorer");
 
     // Switch to Mainnet via header button
-    const mainnetBtn = page.locator("button[title=\"Mainnet\"], button:text(\"Mainnet\")").first();
+    const mainnetBtn = page.locator('button[title^="Mainnet"], button:text("Mainnet")').first();
     await mainnetBtn.click();
     await waitForBodyText(page, "Mainnet Explorer Unavailable");
 

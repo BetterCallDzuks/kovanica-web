@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/contract";
 import { shortId } from "@/lib/ledger/hash";
 import { errorStatusOf, healthLabel } from "@/lib/api/health";
+import { SURFACE } from "@/lib/surfaces";
 import { SourceSwitch } from "@/components/layout/source-switch";
 import { DagMark } from "@/components/brand/dag-mark";
 import { Button } from "@/components/ui/button";
@@ -387,10 +388,10 @@ function MainnetPlaceholder() {
         </ul>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild variant="gold" className="h-11 px-6">
-            <a href="https://testnet.kovanica.online/explorer">Open Testnet Explorer</a>
+            <a href={SURFACE.explorer}>Open Testnet Explorer</a>
           </Button>
           <Button asChild variant="outline" className="h-11 px-6">
-            <a href="https://testnet.kovanica.online">Open wallet</a>
+            <a href={SURFACE.wallet}>Open wallet</a>
           </Button>
         </div>
         <p className="mt-6 font-mono text-[10px] tracking-wide text-subtle uppercase">

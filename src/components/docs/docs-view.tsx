@@ -109,7 +109,7 @@ export function DocsView() {
               href={SURFACE.api}
               className="rounded-md px-2.5 py-1.5 font-mono text-[11px] tracking-wide text-amber-400 uppercase transition-colors hover:bg-surface-2 hover:text-fg"
             >
-              api.kovanica.online →
+              API Reference →
             </a>
           </div>
         </nav>
@@ -323,7 +323,7 @@ export function DocsView() {
           <h2 className="font-display text-2xl tracking-tight text-fg">Node operations</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             <li>
-              Live kovanica-testnet (chain ID 2, network tag <code>2-24cdb5fadd98b207</code>) node release tag is <code>v0.3.0-node</code> (commit <code>e3fce499</code>) on KovanicaDAG/kovanica-l1, with non-compounding LWMA DAA (<code>#259</code>, <code>9758ffe0</code>) active on <code>seed1.kovanica.online</code>. <code>/download/install.sh</code> and the Linux node archives redirect to <code>v0.3.0-node</code>. Official kovanica-mainnet (chain ID 1) network tag is <code>1-f35df34c92001436</code> (genesis ceremony <code>#290</code>).
+              Live kovanica-testnet (chain ID 2, network tag <code>2-24cdb5fadd98b207</code>) node source lives on <code>BetterCallDzuks/kovanica-l1</code> (reference tag <code>v0.3.0-node</code>, commit <code>e3fce499</code>), with non-compounding LWMA DAA (<code>#259</code>, <code>9758ffe0</code>) active on <code>seed1.kovanica.online</code>. <code>/download/install.sh</code> redirects to <code>BetterCallDzuks/kovanica-l1</code> (<code>main</code>) and the Linux node archive paths redirect to GitHub Releases. Official kovanica-mainnet (chain ID 1) network tag is <code>1-f35df34c92001436</code> (genesis ceremony <code>#290</code>).
             </li>
             <li>Testnet RPC is available on port 8545 and proxied via <code>https://rpc-testnet.kovanica.online</code>.</li>
             <li>Transactions require an Ed25519 signature over the BLAKE3 <code>sighash</code>. All nodes verify 64-byte signatures.</li>

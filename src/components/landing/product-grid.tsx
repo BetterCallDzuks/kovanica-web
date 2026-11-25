@@ -103,7 +103,7 @@ export function ProductGrid({
   variant?: "landing" | "app";
 }) {
   return (
-    <section className="mt-12 md:mt-16" aria-labelledby="products-heading">
+    <section className="mt-10 md:mt-12" aria-labelledby="products-heading">
       <h2
         id="products-heading"
         className="font-display text-2xl tracking-tight text-fg md:text-3xl"

@@ -23,7 +23,7 @@ export type RpcMethodSpec = {
   readonly fields: readonly RpcMethodField[];
 };
 
-export const DEFAULT_TESTNET_RPC_URL = "https://api.kovanica.online/rpc";
+export const DEFAULT_TESTNET_RPC_URL = "https://rpc-testnet.kovanica.online/rpc";
 
 /**
  * HTTP response headers attached to `/rpc` and `/health` and exposed via

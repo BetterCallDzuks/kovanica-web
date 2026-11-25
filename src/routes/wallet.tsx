@@ -25,12 +25,9 @@ export const Route = createFileRoute("/wallet")({
 function WalletPage() {
   const matches = useMatches();
   const isExact = matches[matches.length - 1]?.routeId === Route.id;
-  if (!isExact) {
-    return <Outlet />;
-  }
   return (
     <Shell>
-      <LazyWalletView />
+      {isExact ? <LazyWalletView /> : <Outlet />}
     </Shell>
   );
 }

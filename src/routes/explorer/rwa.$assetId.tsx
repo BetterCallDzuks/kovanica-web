@@ -93,7 +93,7 @@ function RwaDetailPage() {
           <ArrowLeft className="size-5" />
         </Link>
         <div>
-          <p className="font-mono text-[10px] tracking-wide text-amber uppercase">KVP-106 RWA</p>
+          <p className="font-mono text-[10px] tracking-wide text-amber-400 uppercase">KVP-106 RWA</p>
           <h1 className="font-display text-2xl tracking-tight text-fg">
             RWA {shortId(rwa.asset_id)}
           </h1>
@@ -104,10 +104,10 @@ function RwaDetailPage() {
         {/* RWA Visual */}
         <div className="relative aspect-square rounded-xl border border-border bg-surface overflow-hidden">
           <div className="flex h-full items-center justify-center">
-            <Landmark className="size-16 text-amber/50" />
+            <Landmark className="size-16 text-amber-400/50" />
           </div>
           <div className="absolute top-3 right-3 flex gap-1">
-            <span className="rounded-full bg-amber/90 px-2 py-0.5 font-mono text-[10px] text-white">
+            <span className="rounded-full bg-amber-600/90 px-2 py-0.5 font-mono text-[10px] text-white">
               RWA
             </span>
             {rwa.collection_id && (
@@ -126,7 +126,7 @@ function RwaDetailPage() {
         {/* Metadata */}
         {rwa.metadata_hash && (
           <div className="rounded-lg border border-border bg-surface p-4 text-center">
-            <AlertCircle className="size-6 mx-auto text-amber" />
+            <AlertCircle className="size-6 mx-auto text-amber-400" />
             <p className="mt-2 text-sm text-muted">Metadata unavailable</p>
             <p className="mt-1 font-mono text-[10px] text-subtle">
               Hash: {rwa.metadata_hash.slice(0, 16)}…
@@ -175,7 +175,7 @@ function RwaDetailPage() {
                 <Link
                   to="/wallet/collection/$collectionId"
                   params={{ collectionId: rwa.collection_id }}
-                  className="text-amber hover:underline text-sm"
+                  className="text-amber-400 hover:underline text-sm"
                 >
                   View Collection
                   <Tag className="size-3.5 ml-1" />
@@ -192,7 +192,7 @@ function RwaDetailPage() {
                   href={rwa.legal_uri.replace("ipfs://", "https://ipfs.io/ipfs/")}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="break-all font-mono text-xs text-amber hover:underline flex-1"
+                  className="break-all font-mono text-xs text-amber-400 hover:underline flex-1"
                 >
                   {rwa.legal_uri}
                 </a>
@@ -209,7 +209,7 @@ function RwaDetailPage() {
                   href={rwa.custody_uri.replace("ipfs://", "https://ipfs.io/ipfs/")}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="break-all font-mono text-xs text-amber hover:underline flex-1"
+                  className="break-all font-mono text-xs text-amber-400 hover:underline flex-1"
                 >
                   {rwa.custody_uri}
                 </a>

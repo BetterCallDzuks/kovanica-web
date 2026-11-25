@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
 import { Shell } from "@/components/layout/shell";
 import { PoolView } from "@/components/protocol/pool-view";
@@ -21,15 +21,23 @@ function PoolPage() {
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-2.5 text-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-mono text-[10px] tracking-brand text-gold uppercase">
-              Stratum TLS &amp; Frozen Emission Spec
+              Stratum Mining Pool · TLS &amp; Frozen Emission Spec
             </p>
-            <span
-              data-testid="pool-stratum-tls-badge"
-              className="inline-flex items-center gap-1.5 rounded-full border border-ok/40 bg-ok/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-ok"
-            >
-              <Lock className="size-3 shrink-0" aria-hidden="true" />
-              <span>{summary.protocol} · TLS required</span>
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                to="/pools"
+                className="font-mono text-[11px] text-teal hover:underline"
+              >
+                Looking for AMM Liquidity Pools? → /pools
+              </Link>
+              <span
+                data-testid="pool-stratum-tls-badge"
+                className="inline-flex items-center gap-1.5 rounded-full border border-ok/40 bg-ok/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-ok"
+              >
+                <Lock className="size-3 shrink-0" aria-hidden="true" />
+                <span>{summary.protocol} · TLS required</span>
+              </span>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

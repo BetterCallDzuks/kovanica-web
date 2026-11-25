@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowLeftRight, Plus, Minus, Zap, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Shell } from "@/components/layout/shell";
 import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
@@ -109,26 +110,32 @@ function PoolsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link to="/wallet" className="text-muted hover:text-fg transition-colors">
-            <ArrowLeft className="size-5" />
-          </Link>
-          <div>
-            <p className="font-mono text-[10px] tracking-wide text-emerald uppercase">
-              Native AMM Liquidity · x · y = k
-            </p>
-            <h1 className="font-display text-2xl tracking-tight text-fg">Liquidity Pools</h1>
+    <Shell>
+      <main className="mx-auto w-full max-w-4xl px-4 py-6 md:px-6 md:py-8 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link to="/wallet" className="text-muted hover:text-fg transition-colors">
+              <ArrowLeft className="size-5" />
+            </Link>
+            <div>
+              <p className="font-mono text-[10px] tracking-wide text-emerald-400 uppercase">
+                Native AMM Liquidity · x · y = k
+              </p>
+              <h1 className="font-display text-2xl tracking-tight text-fg">AMM Liquidity Pools</h1>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to="/pool" className="font-mono text-[11px] text-muted hover:text-fg hover:underline">
+              Mining Pool (Stratum) →
+            </Link>
+            <Link to="/swap">
+              <Button size="sm" className="text-xs">
+                <ArrowLeftRight className="size-3.5 mr-1.5" />
+                Open Swap
+              </Button>
+            </Link>
           </div>
         </div>
-        <Link to="/swap">
-          <Button size="sm" className="text-xs">
-            <ArrowLeftRight className="size-3.5 mr-1.5" />
-            Open Swap
-          </Button>
-        </Link>
-      </div>
 
       {/* Live Wave B Fee Banner */}
       <div className="rounded-lg border border-border bg-surface/60 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
@@ -142,7 +149,7 @@ function PoolsPage() {
           </strong>
         </span>
         <span>
-          LP Swap Fee: <strong className="font-mono text-emerald">0.30% (100% to LPs)</strong>
+          LP Swap Fee: <strong className="font-mono text-emerald-400">0.30% (100% to LPs)</strong>
         </span>
       </div>
 
@@ -167,7 +174,7 @@ function PoolsPage() {
                 return (
                   <tr
                     key={pool.id}
-                    className={active ? "bg-purple/5" : "hover:bg-bg/40 transition-colors"}
+                    className={active ? "bg-purple-500/10" : "hover:bg-bg/40 transition-colors"}
                   >
                     <td className="px-4 py-3 font-medium text-fg">
                       {pool.token0.symbol} / {pool.token1.symbol}
@@ -184,7 +191,7 @@ function PoolsPage() {
                     <td className="px-4 py-3 text-right font-mono text-muted">
                       ${pool.volume24hUsd.toLocaleString("en-US")}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-emerald">
+                    <td className="px-4 py-3 text-right font-mono text-emerald-400">
                       <span className="inline-flex items-center gap-1">
                         <TrendingUp className="size-3" />
                         {apr.toFixed(2)}%
@@ -262,8 +269,8 @@ function PoolsPage() {
             </div>
 
             {addBatchSteps.length > 0 && (
-              <div className="rounded-lg border border-purple/30 bg-purple/5 p-3 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-purple">
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
                   <Zap className="size-3.5" />
                   <span>1-Tx Wave A Atomic Batch ({addBatchSteps.length} actions)</span>
                 </div>
@@ -297,6 +304,7 @@ function PoolsPage() {
           </div>
         )}
       </div>
-    </div>
+      </main>
+    </Shell>
   );
 }

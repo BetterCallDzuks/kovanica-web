@@ -1179,7 +1179,7 @@ function escapeSingleQuotesForShell(input: string): string {
  * with the encoded Bincode payload for the current preset and arguments.
  */
 export function buildContractCurlSnippet(options: ContractSnippetOptions): string {
-  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://testnet.kovanica.online/rpc";
+  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://rpc-testnet.kovanica.online/rpc";
   const encoded = encodePresetArgs(options.presetId, options.fields);
   const toAddr =
     toCanonicalAddress(options.contractAddress.trim()) ||
@@ -1229,7 +1229,7 @@ export function buildContractCurlSnippet(options: ContractSnippetOptions): strin
  * and `estimateAndBuildCall`) matching the current preset and arguments.
  */
 export function buildContractSdkSnippet(options: ContractSnippetOptions): string {
-  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://testnet.kovanica.online/rpc";
+  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://rpc-testnet.kovanica.online/rpc";
   const encoded = encodePresetArgs(options.presetId, options.fields);
   const toAddr =
     toCanonicalAddress(options.contractAddress.trim()) ||
@@ -1469,7 +1469,7 @@ export type BuildContractBatchSdkSnippetOptions = {
 export function buildContractBatchSdkSnippet(
   options: BuildContractBatchSdkSnippetOptions,
 ): string {
-  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://testnet.kovanica.online/rpc";
+  const rpcUrl = (options.rpcUrl ?? "").trim() || "https://rpc-testnet.kovanica.online/rpc";
   const chainId = options.chainId ?? 2;
   const senderRaw =
     (options.sender ?? "").trim() ||

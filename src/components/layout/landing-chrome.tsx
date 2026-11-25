@@ -35,7 +35,7 @@ export function LandingChrome({ children }: { children: React.ReactNode }) {
             Roadmap
           </a>
           <a
-            href="https://github.com/KovanicaDAG"
+            href={SURFACE.github}
             target="_blank"
             rel="noopener noreferrer"
             className="hidden h-9 items-center rounded-md px-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg sm:inline-flex"
@@ -81,7 +81,7 @@ export function LandingChrome({ children }: { children: React.ReactNode }) {
               @BetterCallDzuks
             </a>
             <a
-              href="https://github.com/KovanicaDAG"
+              href={SURFACE.github}
               target="_blank"
               rel="noreferrer"
               className="transition-colors hover:text-fg"

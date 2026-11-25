@@ -1,7 +1,15 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { Shell } from "@/components/layout/shell";
+import { NftView } from "@/components/protocol/nft-view";
 
 export const Route = createFileRoute("/nft")({
-  beforeLoad: () => {
-    throw redirect({ to: "/explorer" });
-  },
+  component: NftPage,
 });
+
+function NftPage() {
+  return (
+    <Shell>
+      <NftView />
+    </Shell>
+  );
+}

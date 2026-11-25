@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { NetworkBadge } from "@/components/layout/network-badge";
 import { DagMark } from "@/components/brand/dag-mark";
-import { SURFACE } from "@/lib/surfaces";
+import { SURFACE, SURFACE_STATUS } from "@/lib/surfaces";
 
 /**
  * Designed "launching soon" shell for mainnet.kovanica.online — gold
@@ -36,7 +36,7 @@ export function MainnetLaunching() {
         />
         <div className="relative mx-auto w-full max-w-md text-center">
           <DagMark variant="gold" className="mx-auto size-12" />
-          <p className="eyebrow mt-6">kovanica-mainnet · KVNC</p>
+          <p className="eyebrow mt-6">{SURFACE_STATUS.mainnet} · kovanica-mainnet · KVNC</p>
           <h1 className="mt-2 font-display text-4xl tracking-tight text-fg italic md:text-5xl">
             Public launch: 1.1.2027
           </h1>
@@ -73,7 +73,7 @@ export function MainnetLaunching() {
               docs
             </a>
             <a className="transition-colors hover:text-fg" href={SURFACE.api}>
-              api
+              api reference
             </a>
             <a className="transition-colors hover:text-fg" href="https://x.com/KovanicaDAG" target="_blank" rel="noreferrer">
               @KovanicaDAG

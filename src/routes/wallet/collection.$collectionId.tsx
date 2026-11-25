@@ -3,7 +3,6 @@ import { AlertCircle, ArrowLeft as ArrowLeftIcon, Sparkles as SparklesIcon } fro
 import { loadDetail } from "@/lib/api/detail-lookup";
 import { shortId } from "@/lib/ledger/hash";
 import { hexToKvnc } from "@/lib/wallet/address";
-import { Shell } from "@/components/layout/shell";
 import { RouteError } from "@/components/layout/route-error";
 import { Button } from "@/components/ui/button";
 
@@ -27,34 +26,30 @@ export const Route = createFileRoute("/wallet/collection/$collectionId")({
 function CollectionNotFoundPage() {
   const { collectionId } = Route.useParams();
   return (
-    <Shell>
-      <div className="mx-auto flex min-h-[40vh] max-w-md flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full bg-purple-500/10 text-purple-400">
-          <SparklesIcon className="size-6" aria-hidden="true" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="font-display text-lg font-medium text-fg">Collection Not Found</h2>
-          <p className="font-mono text-xs text-muted break-words">
-            No collection was found with ID &ldquo;{collectionId}&rdquo; on this network.
-          </p>
-        </div>
-        <Button asChild variant="outline" size="sm" className="mt-2">
-          <Link to="/wallet">Back to Wallet</Link>
-        </Button>
+    <div className="mx-auto flex min-h-[40vh] max-w-md flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex size-12 items-center justify-center rounded-full bg-purple-500/10 text-purple-400">
+        <SparklesIcon className="size-6" aria-hidden="true" />
       </div>
-    </Shell>
+      <div className="space-y-1">
+        <h2 className="font-display text-lg font-medium text-fg">Collection Not Found</h2>
+        <p className="font-mono text-xs text-muted break-words">
+          No collection was found with ID &ldquo;{collectionId}&rdquo; on this network.
+        </p>
+      </div>
+      <Button asChild variant="outline" size="sm" className="mt-2">
+        <Link to="/wallet">Back to Wallet</Link>
+      </Button>
+    </div>
   );
 }
 
 function CollectionErrorPage({ error, reset }: { error?: unknown; reset?: () => void }) {
   return (
-    <Shell>
-      <RouteError
-        title="Collection Endpoint Unavailable"
-        error={error}
-        reset={reset}
-      />
-    </Shell>
+    <RouteError
+      title="Collection Endpoint Unavailable"
+      error={error}
+      reset={reset}
+    />
   );
 }
 
@@ -62,8 +57,7 @@ function CollectionDetailPage() {
   const collection = Route.useLoaderData();
 
   return (
-    <Shell>
-      <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center gap-3">
         <Link
           to="/wallet"
@@ -73,12 +67,12 @@ function CollectionDetailPage() {
           <ArrowLeftIcon className="size-5" />
         </Link>
         <div>
-          <p className="font-mono text-[10px] tracking-wide text-purple uppercase">
+          <p className="font-mono text-[10px] tracking-wide text-purple-400 uppercase">
             KVP-106 Collection
           </p>
           <h1 className="font-display text-2xl tracking-tight text-fg">
             Collection {shortId(collection.collection_id)}
-            <span className="ml-2 rounded-full bg-purple/20 px-2 py-0.5 font-mono text-[10px] text-purple">
+            <span className="ml-2 rounded-full bg-purple-500/20 px-2 py-0.5 font-mono text-[10px] text-purple-400">
               {collection.assets.length} NFTs
             </span>
           </h1>
@@ -87,7 +81,7 @@ function CollectionDetailPage() {
 
       {collection.assets.length === 0 ? (
         <div className="rounded-xl border border-border bg-surface p-8 text-center">
-          <AlertCircle className="size-12 mx-auto text-amber" />
+          <AlertCircle className="size-12 mx-auto text-amber-400" />
           <p className="mt-4 text-sm text-muted">No NFTs found in this collection</p>
         </div>
       ) : (
@@ -97,11 +91,11 @@ function CollectionDetailPage() {
               key={asset.asset_id}
               to="/wallet/nft/$assetId"
               params={{ assetId: asset.asset_id }}
-              className="group rounded-xl border border-border bg-surface overflow-hidden transition-all hover:border-purple/50 hover:shadow-lg"
+              className="group rounded-xl border border-border bg-surface overflow-hidden transition-all hover:border-purple-500/50 hover:shadow-lg"
             >
               <div className="aspect-square relative bg-surface overflow-hidden">
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <SparklesIcon className="size-12 text-purple/30 group-hover:text-purple/50 transition-colors" />
+                  <SparklesIcon className="size-12 text-purple-400/30 group-hover:text-purple-400/50 transition-colors" />
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
                   <p className="font-mono text-xs text-white truncate">{shortId(asset.asset_id)}</p>
@@ -124,7 +118,6 @@ function CollectionDetailPage() {
           ))}
         </div>
       )}
-      </div>
-    </Shell>
+    </div>
   );
 }

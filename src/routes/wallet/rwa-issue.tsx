@@ -66,6 +66,7 @@ function RwaIssuePage() {
         "POST",
       );
       setDerivedAssetId(res.asset_id);
+      if (!to) setTo(issuer);
       setStep("mint");
       toast.success("Asset ID derived successfully");
     } catch (err) {
@@ -139,7 +140,7 @@ function RwaIssuePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 md:py-8">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center gap-3">
         <Link
           to="/wallet"
@@ -149,7 +150,7 @@ function RwaIssuePage() {
           <ArrowLeft className="size-5" />
         </Link>
         <div>
-          <p className="font-mono text-[10px] tracking-wide text-purple uppercase">KVP-106 RWA</p>
+          <p className="font-mono text-[10px] tracking-wide text-purple-400 uppercase">KVP-106 RWA</p>
           <h1 className="font-display text-2xl tracking-tight text-fg">Issue RWA Asset</h1>
         </div>
       </div>
@@ -160,13 +161,13 @@ function RwaIssuePage() {
           <div
             className={cn(
               "flex items-center gap-2",
-              step === "derive" ? "text-purple" : "text-muted",
+              step === "derive" ? "text-purple-400" : "text-muted",
             )}
           >
             <span
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
-                step === "derive" ? "bg-purple text-white" : "bg-border text-muted",
+                step === "derive" ? "bg-purple-600 text-white" : "bg-border text-muted",
               )}
             >
               1
@@ -177,13 +178,13 @@ function RwaIssuePage() {
           <div
             className={cn(
               "flex items-center gap-2",
-              step === "mint" ? "text-purple" : "text-muted",
+              step === "mint" ? "text-purple-400" : "text-muted",
             )}
           >
             <span
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
-                step === "mint" ? "bg-purple text-white" : "bg-border text-muted",
+                step === "mint" ? "bg-purple-600 text-white" : "bg-border text-muted",
               )}
             >
               2
@@ -194,13 +195,13 @@ function RwaIssuePage() {
           <div
             className={cn(
               "flex items-center gap-2",
-              step === "success" ? "text-emerald" : "text-muted",
+              step === "success" ? "text-emerald-400" : "text-muted",
             )}
           >
             <span
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium",
-                step === "success" ? "bg-emerald text-white" : "bg-border text-muted",
+                step === "success" ? "bg-emerald-600 text-white" : "bg-border text-muted",
               )}
             >
               3
@@ -213,7 +214,7 @@ function RwaIssuePage() {
         {step === "derive" && (
           <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
             <div className="flex items-center gap-2">
-              <Gem className="size-5 text-purple" />
+              <Gem className="size-5 text-purple-400" />
               <h2 className="font-medium text-fg">Derive Asset ID</h2>
             </div>
             <p className="text-sm text-muted">
@@ -300,15 +301,15 @@ function RwaIssuePage() {
         {step === "mint" && derivedAssetId && (
           <div className="rounded-xl border border-border bg-surface p-6 space-y-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-5 text-purple" />
+              <Sparkles className="size-5 text-purple-400" />
               <h2 className="font-medium text-fg">Mint RWA Asset</h2>
             </div>
 
-            <div className="rounded-lg border border-purple/30 bg-purple/5 p-4">
+            <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-4">
               <div className="flex items-center gap-2">
-                <Gem className="size-4 text-purple" />
+                <Gem className="size-4 text-purple-400" />
                 <div>
-                  <p className="font-mono text-sm text-purple">
+                  <p className="font-mono text-sm text-purple-400">
                     Asset ID: {derivedAssetId.slice(0, 16)}…
                   </p>
                   <p className="text-[10px] text-subtle">
@@ -429,9 +430,9 @@ function RwaIssuePage() {
 
         {/* Step 3: Success */}
         {step === "success" && (
-          <div className="rounded-xl border border-emerald/30 bg-emerald/5 p-6 space-y-4 text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-emerald/10 flex items-center justify-center">
-              <Sparkles className="size-8 text-emerald" />
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-6 space-y-4 text-center">
+            <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center">
+              <Sparkles className="size-8 text-emerald-400" />
             </div>
             <h2 className="font-display text-xl text-fg">RWA Asset Issued!</h2>
             {successTxId && (
@@ -443,11 +444,13 @@ function RwaIssuePage() {
               <Button variant="outline" onClick={() => setStep("derive")}>
                 Issue Another
               </Button>
-              <Button onClick={() => (window.location.href = "/wallet")}>Back to Wallet</Button>
+              <Button asChild>
+                <Link to="/wallet">Back to Wallet</Link>
+              </Button>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

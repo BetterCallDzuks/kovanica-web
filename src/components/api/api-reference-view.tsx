@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Play, RefreshCw, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MinimalHeader } from "@/components/layout/minimal-header";
-import { SURFACE } from "@/lib/surfaces";
 import { ENDPOINTS, PLAYGROUND_ENDPOINTS } from "@/lib/api/endpoints";
 import { healthFromPayload, healthLabel, healthTone, type HealthState } from "@/lib/api/health";
 import { cn } from "@/lib/utils";
@@ -86,12 +84,10 @@ export function ApiReferenceView() {
   const writeEndpoints = useMemo(() => ENDPOINTS.filter((e) => !e.read), []);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-fg">
-      <MinimalHeader backTo={SURFACE.docs} backLabel="Docs" />
-
+    <div className="flex flex-1 flex-col bg-bg text-fg">
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-4 py-8 md:px-6">
         <header>
-          <p className="eyebrow">api.kovanica.online</p>
+          <p className="eyebrow">API Reference · kovanica-testnet</p>
           <h1 className="mt-1 font-display text-3xl tracking-tight text-fg md:text-4xl">
             API reference
           </h1>

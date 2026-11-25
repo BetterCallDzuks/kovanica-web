@@ -3,8 +3,8 @@
  *
  * Primary hosts:
  *   testnet.kovanica.online  → testnet
- *   mainnet.kovanica.online  → mainnet
- *   api.kovanica.online      → shared API (source still selected by UI)
+ *   mainnet.kovanica.online  → mainnet (launching)
+ *   testnet.kovanica.online/api-reference → shared API reference
  *   docs.kovanica.online     → docs (no live chain)
  *
  * Fallback: hostname containing "mainnet" → mainnet; otherwise testnet.
@@ -48,8 +48,8 @@ export function switchNetworkHost(target: NetworkId): void {
   window.location.href = `${protocol}//${host}${pathname}${search}${hash}`;
 }
 
-/** Public API base — shared entry until network-scoped API hosts exist. */
-export const API_PUBLIC = "https://api.kovanica.online";
+/** Public API reference — hosted on the testnet portal. */
+export const API_PUBLIC = "https://testnet.kovanica.online/api-reference";
 
 /** Docs host. */
 export const DOCS_PUBLIC = "https://docs.kovanica.online";

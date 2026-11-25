@@ -3,7 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { DagMark } from "@/components/brand/dag-mark";
 import { ATOM, MIN_FEE, MAINNET_ID, NETWORK_LABEL } from "@/lib/networkConstants";
 import { SURFACE } from "@/lib/surfaces";
-import { Compass, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
+import { Compass, RefreshCw, AlertCircle, ShieldAlert, ChevronDown, ChevronUp } from "lucide-react";
 import { DagCanvas, DagLegend } from "@/components/explorer/dag-canvas";
 import { createDagBlocksCache } from "@/lib/api/map-blocks";
 import { useLiveStream } from "@/lib/api/use-live-stream";
@@ -58,6 +58,7 @@ export function ExplorerView() {
   const [inspectFields, setInspectFields] = useState<Record<string, string> | null>(null);
   const [inspectedAddress, setInspectedAddress] = useState<string | null>(null);
   const [inspectedCodeBytes, setInspectedCodeBytes] = useState<number | null>(null);
+  const [telemetryExpanded, setTelemetryExpanded] = useState(true);
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
@@ -345,58 +346,73 @@ export function ExplorerView() {
         />
       </dl>
 
-      {/* Static protocol specification banner */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border bg-surface-2/60 px-4 py-2 text-[11px] text-muted md:px-6">
-        <span className="font-mono text-subtle uppercase tracking-wider">Protocol Target / Config:</span>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-fg">
-          <span>Target Interval: <strong className="text-gold">4 s</strong></span>
-          <span>GHOSTDAG: <strong className="text-gold">K=5</strong></span>
-          <span>PoW: <strong>KovanicaHash</strong> (audit required)</span>
-          <span>Initial Reward: <strong>2.5 KVNC</strong></span>
-          <span>Max Supply: <strong>90.2M KVNC</strong></span>
+      {/* Compact collapsible telemetry & diagnostics strip above DagCanvas */}
+      <div className="border-b border-border bg-surface-2/60 px-4 py-2 text-[11px] text-muted md:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-fg">
+            <span className="text-subtle uppercase tracking-wider">Spec:</span>
+            <span>Target <strong className="text-gold">4 s</strong></span>
+            <span>GHOSTDAG <strong className="text-gold">K=5</strong></span>
+            <span>PoW <strong>KovanicaHash</strong></span>
+            <span>Reward <strong>2.5 KVNC</strong></span>
+            <span>Max <strong>90.2M KVNC</strong></span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTelemetryExpanded((v) => !v)}
+            aria-expanded={telemetryExpanded}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 font-mono text-[11px] text-fg transition-colors hover:border-gold/40 hover:bg-surface-2"
+          >
+            <span>{telemetryExpanded ? "Hide Telemetry & Drawers" : "Telemetry & Drawers"}</span>
+            {telemetryExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          </button>
         </div>
       </div>
 
-      {/* Live Mining & DAG Telemetry Dashboard */}
-      <MiningDagPanel
-        state={state}
-        blocks={blocks}
-        error={error}
-        errorStatus={errorStatus}
-        selectedBlockId={selectedBlock}
-        transport={transport}
-        paused={paused}
-        onTogglePause={togglePause}
-        onSelectTip={(tipHash) => {
-          setSearchedId(tipHash);
-          setSelectedBlock(tipHash);
-          setTab("Graph");
-        }}
-        onRefresh={() => void refresh()}
-      />
+      {telemetryExpanded && (
+        <>
+          {/* Live Mining & DAG Telemetry Dashboard */}
+          <MiningDagPanel
+            state={state}
+            blocks={blocks}
+            error={error}
+            errorStatus={errorStatus}
+            selectedBlockId={selectedBlock}
+            transport={transport}
+            paused={paused}
+            onTogglePause={togglePause}
+            onSelectTip={(tipHash) => {
+              setSearchedId(tipHash);
+              setSelectedBlock(tipHash);
+              setTab("Graph");
+            }}
+            onRefresh={() => void refresh()}
+          />
 
-      {/* Collapsible Live DAG & Mempool Stream Drawer */}
-      <LiveDagDrawer
-        state={state}
-        transport={transport}
-        paused={paused}
-        onTogglePause={togglePause}
-        onSelectBlock={(blockHash) => {
-          setSearchedId(blockHash);
-          setSelectedBlock(blockHash);
-          setTab("Graph");
-        }}
-      />
+          {/* Collapsible Live DAG & Mempool Stream Drawer */}
+          <LiveDagDrawer
+            state={state}
+            transport={transport}
+            paused={paused}
+            onTogglePause={togglePause}
+            onSelectBlock={(blockHash) => {
+              setSearchedId(blockHash);
+              setSelectedBlock(blockHash);
+              setTab("Graph");
+            }}
+          />
 
-      {/* Collapsible Node & Network Diagnostics Drawer */}
-      <ExplorerDiagnosticsDrawer
-        source={source}
-        transport={transport}
-        paused={paused}
-        state={state}
-        error={error}
-        errorStatus={errorStatus}
-      />
+          {/* Collapsible Node & Network Diagnostics Drawer */}
+          <ExplorerDiagnosticsDrawer
+            source={source}
+            transport={transport}
+            paused={paused}
+            state={state}
+            error={error}
+            errorStatus={errorStatus}
+          />
+        </>
+      )}
 
       {/* Main DAG Graph canvas section with distinct state handling */}
       <section className="border-b border-border bg-surface px-4 py-4 md:px-6">
