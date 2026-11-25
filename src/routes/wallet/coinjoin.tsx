@@ -1,5 +1,4 @@
 import { createFileRoute, lazyRouteComponent } from "@tanstack/react-router";
-import { Shell } from "@/components/layout/shell";
 import { RouteLoading } from "@/components/layout/route-loading";
 import { RouteError } from "@/components/layout/route-error";
 
@@ -10,22 +9,12 @@ const LazyCoinJoinView = lazyRouteComponent(
 
 export const Route = createFileRoute("/wallet/coinjoin")({
   component: CoinJoinPage,
-  pendingComponent: () => (
-    <Shell>
-      <RouteLoading message="Loading CoinJoin..." />
-    </Shell>
-  ),
+  pendingComponent: () => <RouteLoading message="Loading CoinJoin..." />,
   errorComponent: ({ error, reset }) => (
-    <Shell>
-      <RouteError error={error} reset={reset} title="CoinJoin unavailable" />
-    </Shell>
+    <RouteError error={error} reset={reset} title="CoinJoin unavailable" />
   ),
 });
 
 function CoinJoinPage() {
-  return (
-    <Shell>
-      <LazyCoinJoinView />
-    </Shell>
-  );
+  return <LazyCoinJoinView />;
 }

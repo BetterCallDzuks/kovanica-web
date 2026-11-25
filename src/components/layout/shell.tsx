@@ -12,7 +12,7 @@
  * - Persistent Wallet & DeFi Sub-Nav Strip on /wallet*, /swap, /pools, /rwa, /multi-asset
  * - Mobile bottom bar (5 slots >= 44px) + Radix Dialog More sheet exposing all 4 buckets in <= 2 taps
  */
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -136,10 +136,17 @@ function shouldShowWalletDefiSubNav(pathname: string): boolean {
   );
 }
 
+const ShellContext = createContext(false);
+
 export function Shell({ children }: { children: React.ReactNode }) {
+  const insideShell = useContext(ShellContext);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  if (insideShell) {
+    return <>{children}</>;
+  }
 
   const isItemActive = (to: string, exact = false) => {
     if (to === "/" || exact) return pathname === to;
@@ -159,7 +166,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     pathname === "/swap" || pathname === "/pools" || pathname === "/rwa";
 
   return (
-    <div className="flex min-h-dvh flex-col overflow-x-clip bg-bg text-fg">
+    <ShellContext.Provider value={true}>
+      <div className="flex min-h-dvh flex-col overflow-x-clip bg-bg text-fg">
       <header
         className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-bg/95 px-3 backdrop-blur-sm md:h-16 md:px-5"
         style={{ borderTop: `1px solid ${getBadgeColor()}` }}
@@ -794,6 +802,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </li>
         </ul>
       </nav>
-    </div>
+      </div>
+    </ShellContext.Provider>
   );
 }

@@ -125,3 +125,20 @@ test("kovanica-web design tokens and typography are preserved in src/styles.css"
   assert.ok(styles.includes("IBM Plex Sans"), "IBM Plex Sans font must be preserved");
   assert.ok(styles.includes("IBM Plex Mono"), "IBM Plex Mono font must be preserved");
 });
+
+test("wallet child routes do not double-wrap <Shell> and Shell guards against nesting", () => {
+  const shellSource = readFileSync(join(SRC_DIR, "components/layout/shell.tsx"), "utf8");
+  assert.ok(
+    shellSource.includes("ShellContext"),
+    "shell.tsx must guard against nested <Shell> renders via ShellContext",
+  );
+
+  const walletChildDir = join(SRC_DIR, "routes/wallet");
+  for (const abs of walk(walletChildDir, new Set([".ts", ".tsx"]))) {
+    const content = readFileSync(abs, "utf8");
+    assert.ok(
+      !/<Shell[\s>]/.test(content),
+      `Child wallet route ${abs} must not wrap itself in <Shell> (parent routes/wallet.tsx already renders <Shell>)`,
+    );
+  }
+});
