@@ -25,6 +25,7 @@ import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as PoolRouteImport } from './routes/pool'
 import { Route as PoolsRouteImport } from './routes/pools'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as RwaRouteImport } from './routes/rwa'
 import { Route as StealthRouteImport } from './routes/stealth'
 import { Route as SwapRouteImport } from './routes/swap'
 import { Route as VaultsRouteImport } from './routes/vaults'
@@ -39,6 +40,7 @@ import { Route as WalletCoinjoinRouteImport } from './routes/wallet/coinjoin'
 import { Route as WalletDexRouteImport } from './routes/wallet/dex'
 import { Route as WalletEcosystemToolsRouteImport } from './routes/wallet/ecosystem-tools'
 import { Route as WalletRwaIssueRouteImport } from './routes/wallet/rwa-issue'
+import { Route as WalletRwaManageRouteImport } from './routes/wallet/rwa-manage'
 import { Route as WalletTokenListingsRouteImport } from './routes/wallet/token-listings'
 import { Route as ExplorerRwaAssetIdRouteImport } from './routes/explorer/rwa.$assetId'
 import { Route as WalletCollectionCollectionIdRouteImport } from './routes/wallet/collection.$collectionId'
@@ -124,6 +126,11 @@ const RoadmapRoute = RoadmapRouteImport.update({
   path: '/roadmap',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RwaRoute = RwaRouteImport.update({
+  id: '/rwa',
+  path: '/rwa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StealthRoute = StealthRouteImport.update({
   id: '/stealth',
   path: '/stealth',
@@ -194,6 +201,11 @@ const WalletRwaIssueRoute = WalletRwaIssueRouteImport.update({
   path: '/rwa-issue',
   getParentRoute: () => WalletRoute,
 } as any)
+const WalletRwaManageRoute = WalletRwaManageRouteImport.update({
+  id: '/rwa-manage',
+  path: '/rwa-manage',
+  getParentRoute: () => WalletRoute,
+} as any)
 const WalletTokenListingsRoute = WalletTokenListingsRouteImport.update({
   id: '/token-listings',
   path: '/token-listings',
@@ -233,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
   '/roadmap': typeof RoadmapRoute
+  '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
   '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
@@ -247,6 +260,7 @@ export interface FileRoutesByFullPath {
   '/wallet/dex': typeof WalletDexRoute
   '/wallet/ecosystem-tools': typeof WalletEcosystemToolsRoute
   '/wallet/rwa-issue': typeof WalletRwaIssueRoute
+  '/wallet/rwa-manage': typeof WalletRwaManageRoute
   '/wallet/token-listings': typeof WalletTokenListingsRoute
   '/explorer/rwa/$assetId': typeof ExplorerRwaAssetIdRoute
   '/wallet/collection/$collectionId': typeof WalletCollectionCollectionIdRoute
@@ -269,6 +283,7 @@ export interface FileRoutesByTo {
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
   '/roadmap': typeof RoadmapRoute
+  '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
   '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
@@ -283,6 +298,7 @@ export interface FileRoutesByTo {
   '/wallet/dex': typeof WalletDexRoute
   '/wallet/ecosystem-tools': typeof WalletEcosystemToolsRoute
   '/wallet/rwa-issue': typeof WalletRwaIssueRoute
+  '/wallet/rwa-manage': typeof WalletRwaManageRoute
   '/wallet/token-listings': typeof WalletTokenListingsRoute
   '/explorer/rwa/$assetId': typeof ExplorerRwaAssetIdRoute
   '/wallet/collection/$collectionId': typeof WalletCollectionCollectionIdRoute
@@ -306,6 +322,7 @@ export interface FileRoutesById {
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
   '/roadmap': typeof RoadmapRoute
+  '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
   '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
@@ -320,6 +337,7 @@ export interface FileRoutesById {
   '/wallet/dex': typeof WalletDexRoute
   '/wallet/ecosystem-tools': typeof WalletEcosystemToolsRoute
   '/wallet/rwa-issue': typeof WalletRwaIssueRoute
+  '/wallet/rwa-manage': typeof WalletRwaManageRoute
   '/wallet/token-listings': typeof WalletTokenListingsRoute
   '/explorer/rwa/$assetId': typeof ExplorerRwaAssetIdRoute
   '/wallet/collection/$collectionId': typeof WalletCollectionCollectionIdRoute
@@ -344,6 +362,7 @@ export interface FileRouteTypes {
     | '/pool'
     | '/pools'
     | '/roadmap'
+    | '/rwa'
     | '/stealth'
     | '/swap'
     | '/vaults'
@@ -358,6 +377,7 @@ export interface FileRouteTypes {
     | '/wallet/dex'
     | '/wallet/ecosystem-tools'
     | '/wallet/rwa-issue'
+    | '/wallet/rwa-manage'
     | '/wallet/token-listings'
     | '/explorer/rwa/$assetId'
     | '/wallet/collection/$collectionId'
@@ -380,6 +400,7 @@ export interface FileRouteTypes {
     | '/pool'
     | '/pools'
     | '/roadmap'
+    | '/rwa'
     | '/stealth'
     | '/swap'
     | '/vaults'
@@ -394,6 +415,7 @@ export interface FileRouteTypes {
     | '/wallet/dex'
     | '/wallet/ecosystem-tools'
     | '/wallet/rwa-issue'
+    | '/wallet/rwa-manage'
     | '/wallet/token-listings'
     | '/explorer/rwa/$assetId'
     | '/wallet/collection/$collectionId'
@@ -416,6 +438,7 @@ export interface FileRouteTypes {
     | '/pool'
     | '/pools'
     | '/roadmap'
+    | '/rwa'
     | '/stealth'
     | '/swap'
     | '/vaults'
@@ -430,6 +453,7 @@ export interface FileRouteTypes {
     | '/wallet/dex'
     | '/wallet/ecosystem-tools'
     | '/wallet/rwa-issue'
+    | '/wallet/rwa-manage'
     | '/wallet/token-listings'
     | '/explorer/rwa/$assetId'
     | '/wallet/collection/$collectionId'
@@ -453,6 +477,7 @@ export interface RootRouteChildren {
   PoolRoute: typeof PoolRoute
   PoolsRoute: typeof PoolsRoute
   RoadmapRoute: typeof RoadmapRoute
+  RwaRoute: typeof RwaRoute
   StealthRoute: typeof StealthRoute
   SwapRoute: typeof SwapRoute
   VaultsRoute: typeof VaultsRoute
@@ -575,6 +600,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoadmapRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rwa': {
+      id: '/rwa'
+      path: '/rwa'
+      fullPath: '/rwa'
+      preLoaderRoute: typeof RwaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/stealth': {
       id: '/stealth'
       path: '/stealth'
@@ -673,6 +705,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WalletRwaIssueRouteImport
       parentRoute: typeof WalletRoute
     }
+    '/wallet/rwa-manage': {
+      id: '/wallet/rwa-manage'
+      path: '/rwa-manage'
+      fullPath: '/wallet/rwa-manage'
+      preLoaderRoute: typeof WalletRwaManageRouteImport
+      parentRoute: typeof WalletRoute
+    }
     '/wallet/token-listings': {
       id: '/wallet/token-listings'
       path: '/token-listings'
@@ -737,6 +776,7 @@ interface WalletRouteChildren {
   WalletDexRoute: typeof WalletDexRoute
   WalletEcosystemToolsRoute: typeof WalletEcosystemToolsRoute
   WalletRwaIssueRoute: typeof WalletRwaIssueRoute
+  WalletRwaManageRoute: typeof WalletRwaManageRoute
   WalletTokenListingsRoute: typeof WalletTokenListingsRoute
   WalletCollectionCollectionIdRoute: typeof WalletCollectionCollectionIdRoute
   WalletNftAssetIdRoute: typeof WalletNftAssetIdRoute
@@ -749,6 +789,7 @@ const WalletRouteChildren: WalletRouteChildren = {
   WalletDexRoute: WalletDexRoute,
   WalletEcosystemToolsRoute: WalletEcosystemToolsRoute,
   WalletRwaIssueRoute: WalletRwaIssueRoute,
+  WalletRwaManageRoute: WalletRwaManageRoute,
   WalletTokenListingsRoute: WalletTokenListingsRoute,
   WalletCollectionCollectionIdRoute: WalletCollectionCollectionIdRoute,
   WalletNftAssetIdRoute: WalletNftAssetIdRoute,
@@ -774,6 +815,7 @@ const rootRouteChildren: RootRouteChildren = {
   PoolRoute: PoolRoute,
   PoolsRoute: PoolsRoute,
   RoadmapRoute: RoadmapRoute,
+  RwaRoute: RwaRoute,
   StealthRoute: StealthRoute,
   SwapRoute: SwapRoute,
   VaultsRoute: VaultsRoute,
