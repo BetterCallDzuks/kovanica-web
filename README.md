@@ -22,19 +22,25 @@ All app surfaces share the unified `<Shell>` (`src/components/layout/shell.tsx`)
 | **Wallet** | `/wallet`, `/faucet`, `/wallet/airdrops`, `/wallet/coinjoin`, `/wallet/ecosystem-tools` | PRO-21 browser vault (`@kovanica/sdk-wasm`), hardware signing, Testnet Faucet (with PRO-21 pre-flight guard), Airdrops, CoinJoin, Ecosystem Tools (scheduler, bridge, passkeys) |
 | **Build** | `/multisig`, `/htlc`, `/vaults`, `/stealth`, `/docs`, `/api-reference`, `/playground`, `/pricing` | Smart contract consoles, Documentation (`docs.kovanica.online`), JSON-RPC 2.0 API Reference, Built-in Playground (`playground.kovanica.online`), and **Pricing & Services** (`/pricing`) |
 
-Full domain, subdomain, route, and API inventory: **[`docs/domain-and-link-map.md`](docs/domain-and-link-map.md)**.
+Full domain, subdomain, route, and API inventory: **[`docs/domain-and-link-map.md`](docs/domain-and-link-map.md)** · Pre-Mainnet `1.1.2027` infrastructure audit & 3-node dress rehearsal runbook: **[`docs/pre-mainnet-2027-infra-prep.md`](docs/pre-mainnet-2027-infra-prep.md)**.
 
 ---
 
-## Ecosystem Services & Runtime Configuration
+## Ecosystem Services, Billing, API Keys & Runtime Configuration
 
-`/pricing` (`src/routes/pricing.tsx`) and `POST /api/inquiries` (`src/lib/api/inquiries.server.ts`) provide the non-token services and monetization foundation (Managed RPC/Indexer tiers, RWA Issuer SaaS, Swap interface fee disclosure, Official Mining Pool fee, Verified Listings & zero-cookie Sponsorships, and Enterprise Support).
+`/pricing` (`src/routes/pricing.tsx`) wires all 6 non-token revenue streams (Managed RPC/Indexer tiers, RWA Issuer SaaS, Swap interface fee disclosure, Official Mining Pool fee, Verified Listings & zero-cookie Sponsorships, and Enterprise Support) to:
+- **Self-Serve Billing (`src/lib/api/billing.server.ts`):** `POST /api/billing/checkout` (Stripe Checkout via native `fetch` when `STRIPE_SECRET_KEY` is configured, or deterministic on-chain `USDC`/`KVNC` invoices persisted to `data/invoices.jsonl`), `POST /api/billing/webhook` (HMAC-SHA256 `timingSafeEqual` + 300s replay guard, auto-provisions/revokes API keys), and `GET /api/billing/invoice/:id`.
+- **API Key Provisioning & Tiered Rate-Limiting (`src/lib/api/api-keys.server.ts`):** SHA-256 hashed key store (`data/api-keys.jsonl`), admin CRUD (`POST/GET/DELETE /api/keys` gated by `BILLING_ADMIN_TOKEN`), and sliding-window middleware (`X-API-Key` / `Authorization: Bearer kvnc_...`) emitting `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and `X-RateLimit-Tier` headers with a graceful `300` RPM public fallback.
+- **Lead Intake & Admin Digest:** `POST /api/inquiries` (`src/lib/api/inquiries.server.ts`) persists to `data/inquiries.jsonl`; summarize leads via `npm run inquiries:digest` (`scripts/inquiries-digest.mjs` with `--since`, `--format markdown|json`, and default PII redaction).
 
 | Env Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `KOVANICA_RPC_URL` | `https://rpc-testnet.kovanica.online` | Upstream Testnet JSON-RPC origin |
 | `KOVANICA_FAUCET_URL` | unset | Upstream Testnet faucet dispense endpoint |
 | `KOVANICA_INQUIRIES_FILE` | `data/inquiries.jsonl` | Append-only JSONL file storing validated `POST /api/inquiries` leads |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_*` | unset (on-chain fallback) | Optional Stripe Checkout & HMAC-SHA256 webhook verification |
+| `BILLING_TREASURY_ADDRESS` | unset | PRO-21 / treasury address for on-chain `USDC`/`KVNC` invoices (`data/invoices.jsonl`) |
+| `BILLING_ADMIN_TOKEN` | unset (fail-closed `503`) | Bearer token gating `POST/GET/DELETE /api/keys` (constant-time comparison) |
 | `VITE_SWAP_INTERFACE_FEE_BPS` | `0` (testnet) | Optional front-end swap interface fee in basis points (`0..100` = `0.00%..1.00%`) |
 | `VITE_SWAP_FEE_RECIPIENT` | unset | Optional fee recipient address when `VITE_SWAP_INTERFACE_FEE_BPS > 0` |
 | `VITE_MINING_POOL_FEE_PCT` | `1.0` | Planned mainnet Stratum mining pool fee percentage (`0%` on testnet) |
