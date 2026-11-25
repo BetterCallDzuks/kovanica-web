@@ -35,6 +35,7 @@ import { Route as WalletAirdropsRouteImport } from './routes/wallet/airdrops'
 import { Route as WalletAtomicSwapRouteImport } from './routes/wallet/atomic-swap'
 import { Route as WalletCoinjoinRouteImport } from './routes/wallet/coinjoin'
 import { Route as WalletDexRouteImport } from './routes/wallet/dex'
+import { Route as WalletEcosystemToolsRouteImport } from './routes/wallet/ecosystem-tools'
 import { Route as WalletRwaIssueRouteImport } from './routes/wallet/rwa-issue'
 import { Route as WalletTokenListingsRouteImport } from './routes/wallet/token-listings'
 import { Route as ExplorerRwaAssetIdRouteImport } from './routes/explorer/rwa.$assetId'
@@ -171,6 +172,11 @@ const WalletDexRoute = WalletDexRouteImport.update({
   path: '/dex',
   getParentRoute: () => WalletRoute,
 } as any)
+const WalletEcosystemToolsRoute = WalletEcosystemToolsRouteImport.update({
+  id: '/ecosystem-tools',
+  path: '/ecosystem-tools',
+  getParentRoute: () => WalletRoute,
+} as any)
 const WalletRwaIssueRoute = WalletRwaIssueRouteImport.update({
   id: '/rwa-issue',
   path: '/rwa-issue',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/wallet/atomic-swap': typeof WalletAtomicSwapRoute
   '/wallet/coinjoin': typeof WalletCoinjoinRoute
   '/wallet/dex': typeof WalletDexRoute
+  '/wallet/ecosystem-tools': typeof WalletEcosystemToolsRoute
   '/wallet/rwa-issue': typeof WalletRwaIssueRoute
   '/wallet/token-listings': typeof WalletTokenListingsRoute
   '/explorer/rwa/$assetId': typeof ExplorerRwaAssetIdRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/wallet/atomic-swap': typeof WalletAtomicSwapRoute
   '/wallet/coinjoin': typeof WalletCoinjoinRoute
   '/wallet/dex': typeof WalletDexRoute
+  '/wallet/ecosystem-tools': typeof WalletEcosystemToolsRoute
   '/wallet/rwa-issue': typeof WalletRwaIssueRoute
   '/wallet/token-listings': typeof WalletTokenListingsRoute
   '/explorer/rwa/$assetId': typeof ExplorerRwaAssetIdRoute
@@ -292,6 +300,7 @@ export interface FileRoutesById {
   '/wallet/atomic-swap': typeof WalletAtomicSwapRoute
   '/wallet/coinjoin': typeof WalletCoinjoinRoute
   '/wallet/dex': typeof WalletDexRoute
+  '/wallet/ecosystem-tools': typeof WalletEcosystemToolsRoute
   '/wallet/rwa-issue': typeof WalletRwaIssueRoute
   '/wallet/token-listings': typeof WalletTokenListingsRoute
   '/explorer/rwa/$assetId': typeof ExplorerRwaAssetIdRoute
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/wallet/atomic-swap'
     | '/wallet/coinjoin'
     | '/wallet/dex'
+    | '/wallet/ecosystem-tools'
     | '/wallet/rwa-issue'
     | '/wallet/token-listings'
     | '/explorer/rwa/$assetId'
@@ -360,6 +370,7 @@ export interface FileRouteTypes {
     | '/wallet/atomic-swap'
     | '/wallet/coinjoin'
     | '/wallet/dex'
+    | '/wallet/ecosystem-tools'
     | '/wallet/rwa-issue'
     | '/wallet/token-listings'
     | '/explorer/rwa/$assetId'
@@ -393,6 +404,7 @@ export interface FileRouteTypes {
     | '/wallet/atomic-swap'
     | '/wallet/coinjoin'
     | '/wallet/dex'
+    | '/wallet/ecosystem-tools'
     | '/wallet/rwa-issue'
     | '/wallet/token-listings'
     | '/explorer/rwa/$assetId'
@@ -607,6 +619,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WalletDexRouteImport
       parentRoute: typeof WalletRoute
     }
+    '/wallet/ecosystem-tools': {
+      id: '/wallet/ecosystem-tools'
+      path: '/ecosystem-tools'
+      fullPath: '/wallet/ecosystem-tools'
+      preLoaderRoute: typeof WalletEcosystemToolsRouteImport
+      parentRoute: typeof WalletRoute
+    }
     '/wallet/rwa-issue': {
       id: '/wallet/rwa-issue'
       path: '/rwa-issue'
@@ -676,6 +695,7 @@ interface WalletRouteChildren {
   WalletAtomicSwapRoute: typeof WalletAtomicSwapRoute
   WalletCoinjoinRoute: typeof WalletCoinjoinRoute
   WalletDexRoute: typeof WalletDexRoute
+  WalletEcosystemToolsRoute: typeof WalletEcosystemToolsRoute
   WalletRwaIssueRoute: typeof WalletRwaIssueRoute
   WalletTokenListingsRoute: typeof WalletTokenListingsRoute
   WalletCollectionCollectionIdRoute: typeof WalletCollectionCollectionIdRoute
@@ -687,6 +707,7 @@ const WalletRouteChildren: WalletRouteChildren = {
   WalletAtomicSwapRoute: WalletAtomicSwapRoute,
   WalletCoinjoinRoute: WalletCoinjoinRoute,
   WalletDexRoute: WalletDexRoute,
+  WalletEcosystemToolsRoute: WalletEcosystemToolsRoute,
   WalletRwaIssueRoute: WalletRwaIssueRoute,
   WalletTokenListingsRoute: WalletTokenListingsRoute,
   WalletCollectionCollectionIdRoute: WalletCollectionCollectionIdRoute,
