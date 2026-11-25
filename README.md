@@ -16,11 +16,11 @@ All app surfaces share the unified `<Shell>` (`src/components/layout/shell.tsx`)
 
 | Tab | Routes | Purpose |
 | :--- | :--- | :--- |
-| **Explore** | `/explorer`, `/network`, `/pool`, `/map`, `/dash`, `/roadmap` | Live BlockDAG Explorer (8 tabs + drawers), peer/sync telemetry, **Stratum V1 TLS Mining Pool** (`MinerCommandBuilder`), Origins Map, Dashboard, Roadmap |
+| **Explore** | `/explorer`, `/network`, `/pool`, `/map`, `/dash`, `/roadmap` | Live BlockDAG Explorer (left-to-right multi-lane card graph with plain-English legend/tooltips + 8 tabs & drawers), peer/sync telemetry, **Stratum V1 TLS Mining Pool** (`MinerCommandBuilder`), Origins Map, Dashboard, Roadmap |
 | **Trade** | `/swap`, `/pools`, `/wallet/dex`, `/wallet/atomic-swap` | Native AMM Swap (Wave A 1-tx batch + Wave B fee telemetry), **AMM Liquidity Pools** (add/remove liquidity + on-chain KVP-102 `PoolView` quote calculator), Orderbook DEX, Atomic Swaps |
 | **Assets** | `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`, `/multi-asset`, `/nft`, `/wallet/token-listings` | Public KVP-106 RWA Registry (`/explorer/rwa/$assetId`), deterministic RWA issuance (`/api/rwa/derive`), institutional RWA compliance portal, Multi-Asset balances, Native NFTs, Token Listings |
 | **Wallet** | `/wallet`, `/faucet`, `/wallet/airdrops`, `/wallet/coinjoin`, `/wallet/ecosystem-tools` | PRO-21 browser vault (`@kovanica/sdk-wasm`), hardware signing, Testnet Faucet (with PRO-21 pre-flight guard), Airdrops, CoinJoin, Ecosystem Tools (scheduler, bridge, passkeys) |
-| **Build** | `/multisig`, `/htlc`, `/vaults`, `/stealth`, `/docs`, `/api-reference`, `/playground`, `/pricing` | Smart contract consoles, Documentation (`docs.kovanica.online`), JSON-RPC 2.0 API Reference, Built-in Playground (`playground.kovanica.online`), and **Pricing & Services** (`/pricing`) |
+| **Build** | `/multisig`, `/htlc`, `/vaults`, `/stealth`, `/docs`, `/api-reference`, `/playground`, `/pricing`, `/privacy` | Smart contract consoles, Documentation (`docs.kovanica.online`), JSON-RPC 2.0 API Reference, Built-in Playground (`playground.kovanica.online`), **Pricing & Services** (`/pricing`), and **Privacy Policy** (`/privacy`) |
 
 Full domain, subdomain, route, and API inventory: **[`docs/domain-and-link-map.md`](docs/domain-and-link-map.md)** · Pre-Mainnet `1.1.2027` infrastructure audit & 3-node dress rehearsal runbook: **[`docs/pre-mainnet-2027-infra-prep.md`](docs/pre-mainnet-2027-infra-prep.md)**.
 

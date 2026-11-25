@@ -9,6 +9,11 @@
 
 ## 1. Executive Summary
 
+> [!NOTE] Remediation Update (`2026-11-25`)
+> - **Blocker #1 (`mainnet.kovanica.online` TLS SAN): RESOLVED** — Let's Encrypt webroot cert (`CN=mainnet.kovanica.online`, valid until `2027-02-23`) and Nginx `443 ssl` + `http2` vhost provisioned on `seed1`; `curl -fsSI https://mainnet.kovanica.online/` now returns `HTTP/2 200`.
+> - **Blocker #4 (`kovanica-chain2-faucet` & Disk): RESOLVED / IMPROVED** — `kovanica-chain2-faucet` recreated with `KOVANICA_FAUCET_PASSPHRASE` and now reports `Up (healthy)` (`http://127.0.0.1:3000/health` → `OK`); reclaimed ~7.5 GB of build/npm/sccache/Playwright caches & journals, lowering root disk `/` from **75% → 70.4%** (`58G` free).
+> - **Remaining Gates:** Blocker #2 (Cloudflare DNS for `pool`, `rpc-mainnet`, `seed2`, `seed3`, apex `CAA`), Blocker #3 (`rpc.kovanica.online` Chain-1 wiring at `1.1.2027`), and Blocker #5 (provisioning/bringing online `seed2` & `seed3` VPS hosts + external TCP `:8000` P2P for full-mesh 3-node dress rehearsal).
+
 A live, read-only audit of Kovanica's public DNS records, edge/origin TLS certificates, and primary VPS (`seed1`, `145.223.116.178`) identified **five concrete pre-mainnet blockers** that must be resolved before the `1.1.2027` Mainnet cutover:
 
 1. **Critical TLS SAN Mismatch on `mainnet.kovanica.online`**: `mainnet.kovanica.online` resolves directly to `145.223.116.178` (bypassing Cloudflare proxy). `/etc/nginx/sites-enabled/mainnet.kovanica.online` currently defines an HTTP-only `server_name mainnet.kovanica.online;` block with no `443 ssl` block or certificate, so HTTPS falls back to the alphabetically-first SSL vhost (`CN=dash.kovanica.online`), causing `curl (60)` / `ERR_CERT_COMMON_NAME_INVALID`.
