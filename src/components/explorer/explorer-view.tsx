@@ -461,7 +461,12 @@ export function ExplorerView() {
               </Button>
             </div>
           ) : (
-            <DagCanvas blocks={blocks} selectedId={selectedBlock} onSelect={setSelectedBlock} />
+            <DagCanvas
+              blocks={blocks}
+              selectedId={selectedBlock}
+              selectedTipId={n?.selected_tip ?? null}
+              onSelect={setSelectedBlock}
+            />
           )}
         </div>
       </section>
