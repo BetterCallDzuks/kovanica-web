@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   Building2,
   Check,
+  CreditCard,
   ExternalLink,
   Megaphone,
   Pickaxe,
@@ -16,6 +17,10 @@ import { toast } from "sonner";
 import { Shell } from "@/components/layout/shell";
 import { Button } from "@/components/ui/button";
 import { SponsorSlot } from "@/components/monetization/sponsor-slot";
+import {
+  BillingCheckoutModal,
+  type CheckoutTargetPlan,
+} from "@/components/monetization/billing-checkout-modal";
 import {
   ENTERPRISE_OFFERS,
   INQUIRY_TOPIC_LABELS,
@@ -38,21 +43,42 @@ const VALID_TOPICS = new Set<InquiryTopic>([
   "pool",
 ]);
 
+const SELF_SERVE_PLAN_IDS = new Set([
+  "rpc-builder",
+  "rpc-scale",
+  "rwa-launch",
+  "rwa-institutional",
+  "verified-token",
+  "verified-rwa",
+  "surface-sponsor",
+]);
+
 export const Route = createFileRoute("/pricing")({
-  validateSearch: (search: Record<string, unknown>): { topic?: InquiryTopic } => {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { topic?: InquiryTopic; checkout?: "success" | "cancelled"; invoice?: string } => {
     const raw = typeof search.topic === "string" ? search.topic : undefined;
-    if (raw && VALID_TOPICS.has(raw as InquiryTopic)) {
-      return { topic: raw as InquiryTopic };
-    }
-    return {};
+    const checkout =
+      search.checkout === "success" || search.checkout === "cancelled"
+        ? search.checkout
+        : undefined;
+    const invoice = typeof search.invoice === "string" ? search.invoice : undefined;
+    return {
+      ...(raw && VALID_TOPICS.has(raw as InquiryTopic) ? { topic: raw as InquiryTopic } : {}),
+      ...(checkout ? { checkout } : {}),
+      ...(invoice ? { invoice } : {}),
+    };
   },
   component: PricingPage,
 });
 
 function PricingPage() {
-  const { topic: initialTopic } = Route.useSearch();
+  const { topic: initialTopic, checkout: checkoutStatus, invoice: checkoutInvoice } =
+    Route.useSearch();
   const [topic, setTopic] = useState<InquiryTopic>(initialTopic ?? "rpc");
   const [selectedPlan, setSelectedPlan] = useState<string>("");
+  const [checkoutPlan, setCheckoutPlan] = useState<CheckoutTargetPlan | null>(null);
+  const [checkoutTopic, setCheckoutTopic] = useState<InquiryTopic>("rpc");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");
@@ -64,6 +90,11 @@ function PricingPage() {
   const swapFee = getSwapInterfaceFeeConfig();
   const poolFee = getMiningPoolFeeConfig();
   const partnerLinks = getPartnerLinks();
+
+  function openCheckout(target: CheckoutTargetPlan, nextTopic: InquiryTopic) {
+    setCheckoutPlan(target);
+    setCheckoutTopic(nextTopic);
+  }
 
   function jumpToInquiry(nextTopic: InquiryTopic, planName: string) {
     setTopic(nextTopic);
@@ -115,6 +146,36 @@ function PricingPage() {
   return (
     <Shell>
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-4 py-8 md:px-8 md:py-12">
+        {checkoutStatus && (
+          <div
+            className={cn(
+              "rounded-xl border px-4 py-3 text-xs",
+              checkoutStatus === "success"
+                ? "border-teal/40 bg-teal/10 text-fg"
+                : "border-gold/40 bg-gold/10 text-fg",
+            )}
+          >
+            {checkoutStatus === "success" ? (
+              <span>
+                Checkout completed
+                {checkoutInvoice ? (
+                  <>
+                    {" "}
+                    for invoice <code className="font-mono text-teal">{checkoutInvoice}</code>
+                  </>
+                ) : null}
+                . Your API key and receipt will be provisioned automatically once Stripe confirms
+                payment.
+              </span>
+            ) : (
+              <span>
+                Checkout was cancelled — no charge was made. You can retry with card or generate an
+                on-chain USDC/KVNC invoice below.
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Hero */}
         <header className="space-y-3 border-b border-border pb-8">
           <p className="font-mono text-[11px] tracking-brand text-gold uppercase">
@@ -205,11 +266,40 @@ function PricingPage() {
                     ))}
                   </ul>
                 </div>
-                <div className="pt-5">
+                <div className="space-y-1.5 pt-5">
                   {tier.id === "rpc-free" ? (
                     <Button asChild variant="outline" size="sm" className="w-full">
                       <Link to="/docs">{tier.ctaLabel}</Link>
                     </Button>
+                  ) : SELF_SERVE_PLAN_IDS.has(tier.id) ? (
+                    <>
+                      <Button
+                        variant={tier.badge ? "gold" : "outline"}
+                        size="sm"
+                        className="w-full"
+                        onClick={() =>
+                          openCheckout(
+                            {
+                              id: tier.id,
+                              name: tier.name,
+                              price: tier.price,
+                              cadence: tier.cadence,
+                            },
+                            tier.topic,
+                          )
+                        }
+                      >
+                        <CreditCard className="mr-1.5 size-3.5" />
+                        Pay with Card / Crypto
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => jumpToInquiry(tier.topic, `${tier.name} (${tier.price})`)}
+                        className="w-full text-center font-mono text-[10px] text-muted hover:text-gold"
+                      >
+                        Or submit custom inquiry →
+                      </button>
+                    </>
                   ) : (
                     <Button
                       variant={tier.badge ? "gold" : "outline"}
@@ -280,15 +370,46 @@ function PricingPage() {
                     ))}
                   </ul>
                 </div>
-                <div className="pt-5">
-                  <Button
-                    variant={plan.badge ? "gold" : "outline"}
-                    size="sm"
-                    className="w-full"
-                    onClick={() => jumpToInquiry(plan.topic, `${plan.name} (${plan.price})`)}
-                  >
-                    {plan.ctaLabel}
-                  </Button>
+                <div className="space-y-1.5 pt-5">
+                  {SELF_SERVE_PLAN_IDS.has(plan.id) ? (
+                    <>
+                      <Button
+                        variant={plan.badge ? "gold" : "outline"}
+                        size="sm"
+                        className="w-full"
+                        onClick={() =>
+                          openCheckout(
+                            {
+                              id: plan.id,
+                              name: plan.name,
+                              price: plan.price,
+                              cadence: plan.cadence,
+                            },
+                            plan.topic,
+                          )
+                        }
+                      >
+                        <CreditCard className="mr-1.5 size-3.5" />
+                        Subscribe / On-Chain Invoice
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => jumpToInquiry(plan.topic, `${plan.name} (${plan.price})`)}
+                        className="w-full text-center font-mono text-[10px] text-muted hover:text-gold"
+                      >
+                        Or request onboarding call →
+                      </button>
+                    </>
+                  ) : (
+                    <Button
+                      variant={plan.badge ? "gold" : "outline"}
+                      size="sm"
+                      className="w-full"
+                      onClick={() => jumpToInquiry(plan.topic, `${plan.name} (${plan.price})`)}
+                    >
+                      {plan.ctaLabel}
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -395,15 +516,46 @@ function PricingPage() {
                     ))}
                   </ul>
                 </div>
-                <div className="pt-5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => jumpToInquiry(offer.topic, `${offer.name} (${offer.price})`)}
-                  >
-                    {offer.ctaLabel}
-                  </Button>
+                <div className="space-y-1.5 pt-5">
+                  {SELF_SERVE_PLAN_IDS.has(offer.id) ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() =>
+                          openCheckout(
+                            {
+                              id: offer.id,
+                              name: offer.name,
+                              price: offer.price,
+                              cadence: offer.cadence,
+                            },
+                            offer.topic,
+                          )
+                        }
+                      >
+                        <CreditCard className="mr-1.5 size-3.5" />
+                        Pay with Card / Crypto
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => jumpToInquiry(offer.topic, `${offer.name} (${offer.price})`)}
+                        className="w-full text-center font-mono text-[10px] text-muted hover:text-gold"
+                      >
+                        Or submit inquiry first →
+                      </button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => jumpToInquiry(offer.topic, `${offer.name} (${offer.price})`)}
+                    >
+                      {offer.ctaLabel}
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -632,6 +784,15 @@ function PricingPage() {
           )}
         </section>
       </main>
+      <BillingCheckoutModal
+        plan={checkoutPlan}
+        onClose={() => setCheckoutPlan(null)}
+        onFallbackInquiry={() => {
+          if (checkoutPlan) {
+            jumpToInquiry(checkoutTopic, `${checkoutPlan.name} (${checkoutPlan.price})`);
+          }
+        }}
+      />
     </Shell>
   );
 }
