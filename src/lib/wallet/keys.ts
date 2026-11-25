@@ -1,26 +1,52 @@
+import { hmac } from "@noble/hashes/hmac.js";
+import { sha512 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 
-import { normalizePhrase, phraseToSeed } from "./bip39";
+import { normalizePhrase } from "./bip39";
 import { ensureWasmReady, wasm } from "./wasm";
 
 export { loadWordlist } from "./bip39";
 
 /**
- * Wallet key facade.
+ * Wallet key facade — canonical SLIP-0010 / BIP-44 Ed25519 derivation.
  *
- * The recovery rule is fixed by ADR-0002: a 24-word English BIP-39 phrase
- * encodes 32 bytes of entropy and those bytes *are* the Ed25519 seed. There is
- * no PBKDF2 passphrase and no HD derivation, so **one phrase is exactly one
- * wallet** — the same address Android (`kovanica-light-ffi`) and the CLI show.
+ * Uses PBKDF2-HMAC-SHA512 (BIP-39 64-byte seed) followed by SLIP-0010 Ed25519
+ * hardened derivation at `m/44'/3007'/<account>'/0'/0'` — matching Android
+ * Wallet, Android Node, Browser Extension, and `kovanica-sdk` (`deriveBip44`).
  *
- * Public keys, addresses and signatures still go through the Rust
- * `@kovanica/sdk-wasm` package, so the browser has no independent Ed25519 code.
- *
- * The `index` parameters are kept only so existing call sites keep compiling;
- * they are ignored, because the chain has no accounts per phrase.
- *
- * All functions are async: the wasm module is initialised on first use.
+ * Public keys, addresses, and signatures go through `@kovanica/sdk-wasm`.
  */
+
+const ED25519_SLIP10_KEY = new TextEncoder().encode("ed25519 seed");
+const HARDENED_OFFSET = 0x80000000;
+const BIP44_PURPOSE = 44;
+const KOVANICA_COIN_TYPE = 3007;
+
+function deriveSlip10Bip44Key(seed64: Uint8Array, accountIndex = 0): Uint8Array {
+  const safeIndex =
+    Number.isInteger(accountIndex) && accountIndex >= 0 && accountIndex < HARDENED_OFFSET
+      ? accountIndex
+      : 0;
+  let digest = hmac(sha512, ED25519_SLIP10_KEY, seed64);
+  let key = digest.slice(0, 32);
+  let chainCode = digest.slice(32, 64);
+
+  const steps = [BIP44_PURPOSE, KOVANICA_COIN_TYPE, safeIndex, 0, 0];
+  for (const step of steps) {
+    const data = new Uint8Array(37);
+    data[0] = 0x00;
+    data.set(key, 1);
+    new DataView(data.buffer).setUint32(33, step + HARDENED_OFFSET, false);
+    digest = hmac(sha512, chainCode, data);
+    data.fill(0);
+    key.fill(0);
+    chainCode.fill(0);
+    key = digest.slice(0, 32);
+    chainCode = digest.slice(32, 64);
+  }
+  chainCode.fill(0);
+  return key;
+}
 
 /** Lowercase / NFKD-normalise / collapse whitespace, without touching crypto. */
 export function normalizeMnemonic(phrase: string): string {
@@ -38,8 +64,7 @@ export async function entropyToMnemonic(entropy: Uint8Array): Promise<string> {
 }
 
 /**
- * Generate a fresh recovery phrase. Always 24 words: a shorter phrase encodes
- * 128 bits and cannot seed Ed25519 under the chain rule.
+ * Generate a fresh 24-word recovery phrase.
  */
 export async function createMnemonic(): Promise<string> {
   await ensureWasmReady();
@@ -47,41 +72,53 @@ export async function createMnemonic(): Promise<string> {
 }
 
 /**
- * 64-byte BIP-39 seed (PBKDF2-HMAC-SHA512). Kept as a utility; the wallet does
- * **not** use it — {@link seedFromMnemonic} is the chain rule.
+ * 64-byte BIP-39 seed (PBKDF2-HMAC-SHA512).
  */
 export async function mnemonicToSeed(mnemonic: string, passphrase = ""): Promise<Uint8Array> {
   await ensureWasmReady();
-  return wasm.mnemonic_to_seed(mnemonic, passphrase);
+  return wasm.mnemonic_to_seed(normalizePhrase(mnemonic), passphrase);
 }
 
 /**
- * The one and only 32-byte Ed25519 signing seed for a recovery phrase: its
- * BIP-39 entropy. Secret material — never log or transmit it.
+ * 32-byte Ed25519 signing seed derived at canonical BIP-44 path
+ * `m/44'/3007'/<index>'/0'/0'`. Secret material — never log or transmit it.
  */
-export async function seedFromMnemonic(mnemonic: string, _index = 0): Promise<Uint8Array> {
-  return phraseToSeed(mnemonic);
+export async function seedFromMnemonic(mnemonic: string, index = 0): Promise<Uint8Array> {
+  const seed64 = await mnemonicToSeed(mnemonic, "");
+  try {
+    return deriveSlip10Bip44Key(seed64, index);
+  } finally {
+    seed64.fill(0);
+  }
 }
 
 /**
- * Public key (64 hex chars) for a recovery phrase. The wallet shows the
- * `kvnc…dag` form of this value; see `hexToKvnc`.
+ * Public key (64 hex chars) for a recovery phrase at `m/44'/3007'/<index>'/0'/0'`.
+ * The wallet shows the `kvnc…dag` form of this value; see `hexToKvnc`.
  */
-export async function addressFromMnemonic(mnemonic: string, _index = 0): Promise<string> {
-  const seed = await phraseToSeed(mnemonic);
-  await ensureWasmReady();
-  return wasm.public_key_from_secret_bytes(bytesToHex(seed));
+export async function addressFromMnemonic(mnemonic: string, index = 0): Promise<string> {
+  const seed = await seedFromMnemonic(mnemonic, index);
+  try {
+    await ensureWasmReady();
+    return wasm.public_key_from_secret_bytes(bytesToHex(seed));
+  } finally {
+    seed.fill(0);
+  }
 }
 
-/** Sign a prepare sighash (hex) with the phrase's single key; 128 hex chars. */
+/** Sign a prepare sighash (hex) with the derived key at `m/44'/3007'/<index>'/0'/0'`; 128 hex chars. */
 export async function signSighash(
   mnemonic: string,
-  _index: number,
+  index: number,
   sighashHex: string,
 ): Promise<string> {
-  const seed = await phraseToSeed(mnemonic);
-  await ensureWasmReady();
-  return wasm.sign_sighash_with_seed_hex(bytesToHex(seed), sighashHex);
+  const seed = await seedFromMnemonic(mnemonic, index);
+  try {
+    await ensureWasmReady();
+    return wasm.sign_sighash_with_seed_hex(bytesToHex(seed), sighashHex);
+  } finally {
+    seed.fill(0);
+  }
 }
 
 /** Sign a prepare sighash with a raw 32-byte Ed25519 seed (64 hex chars). */
@@ -94,16 +131,15 @@ export async function signSighashWithSeedHex(
 }
 
 /**
- * Validate and normalise an imported phrase: exactly 24 words, wordlist
- * membership (so a typo gets its own message) and the checksum. Rejects
- * anything the node would reject.
+ * Validate and normalise an imported phrase: 12 or 24 words, wordlist
+ * membership (so a typo gets its own message) and valid BIP-39 checksum.
  */
 export async function importMnemonic(phrase: string): Promise<string> {
   await ensureWasmReady();
   const normalized = wasm.normalize_mnemonic(phrase);
   const words = normalized.length > 0 ? normalized.split(" ") : [];
-  if (words.length !== 24) {
-    throw new Error("Your recovery phrase needs exactly 24 words.");
+  if (words.length !== 12 && words.length !== 24) {
+    throw new Error("Your recovery phrase needs 12 or 24 words.");
   }
   const unknown = wasm.mnemonic_unknown_words(normalized);
   if (unknown.length > 0) {
@@ -114,7 +150,5 @@ export async function importMnemonic(phrase: string): Promise<string> {
       "That recovery phrase doesn't look valid — please check for a typo or a wrong word.",
     );
   }
-  // Decode once so the wallet seed is known to exist before we store the phrase.
-  await phraseToSeed(normalized);
   return normalized;
 }
