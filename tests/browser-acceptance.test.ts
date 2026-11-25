@@ -588,6 +588,47 @@ async function waitForHeaderBalance(page: Page, expected: string, timeout = HYDR
   );
 }
 
+/** Wait until a specific `[data-testid]` element is mounted AND React-hydrated. */
+async function waitForTestIdHydrated(page: Page, testId: string, timeout = HYDRATION_TIMEOUT) {
+  await page.waitForFunction(
+    (id: string) => {
+      const el = document.querySelector(`[data-testid="${id}"]`);
+      if (!el) return false;
+      return Object.keys(el).some(
+        (key) => key.startsWith("__reactFiber$") || key.startsWith("__reactProps$"),
+      );
+    },
+    testId,
+    { timeout, polling: 100 },
+  );
+}
+
+/** Click a collapsible `[data-testid]` toggle and wait deterministically for `aria-expanded="true"`. */
+async function expandCollapsibleToggle(page: Page, testId: string, timeout = HYDRATION_TIMEOUT) {
+  await waitForTestIdHydrated(page, testId, timeout);
+  const toggle = page.getByTestId(testId);
+  await toggle.waitFor({ state: "visible", timeout });
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if ((await toggle.getAttribute("aria-expanded")) === "true") {
+      return;
+    }
+    await toggle.click();
+    try {
+      await page.waitForFunction(
+        (id: string) =>
+          document.querySelector(`[data-testid="${id}"]`)?.getAttribute("aria-expanded") === "true",
+        testId,
+        { timeout: 2500, polling: 50 },
+      );
+      return;
+    } catch {
+      // Retry if the initial click raced route-level hydration or re-render
+    }
+  }
+  throw new Error(`Timed out waiting for [data-testid="${testId}"] to reach aria-expanded="true"`);
+}
+
 /** Navigate, wait for hydration, then optionally wait for a route-specific marker. */
 async function gotoAndSettle(page: Page, url: string, marker?: string) {
   await page.goto(url, { waitUntil: "domcontentloaded" });
@@ -1288,10 +1329,29 @@ test("Section E: Explorer Contract Inspector (?tab=contracts & tab click) runs n
   });
 
   try {
-    // 1. Navigate to /explorer and open Contracts tab via tab click
+    // 1. Navigate to /explorer and open Contracts tab via tab click (retry if SSR hydration races)
     await gotoAndSettle(page, `${baseUrl}/explorer`, "BlockDAG Explorer");
     const contractsTab = page.locator('button[role="tab"]', { hasText: "Contracts" });
-    await contractsTab.click();
+    await contractsTab.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    const tabDeadline = Date.now() + HYDRATION_TIMEOUT;
+    while (Date.now() < tabDeadline) {
+      if ((await contractsTab.getAttribute("aria-selected")) === "true") break;
+      await contractsTab.click();
+      try {
+        await page.waitForFunction(
+          () => {
+            const tabs = Array.from(document.querySelectorAll('button[role="tab"]'));
+            const ct = tabs.find((el) => el.textContent?.includes("Contracts"));
+            return ct?.getAttribute("aria-selected") === "true";
+          },
+          undefined,
+          { timeout: 2500, polling: 50 },
+        );
+        break;
+      } catch {
+        // Retry if initial click raced route-level hydration
+      }
+    }
     await waitForBodyText(page, "Contract Read & Dry-Run Inspector");
     assert.equal(
       await contractsTab.getAttribute("aria-selected"),
@@ -2143,9 +2203,7 @@ test("Section E: Explorer Diagnostics Drawer renders RPC latency sparkline and s
   try {
     await gotoAndSettle(page, `${baseUrl}/explorer`, "Node & Network Diagnostics");
 
-    const toggle = page.getByTestId("explorer-diagnostics-toggle");
-    await toggle.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
-    await toggle.click();
+    await expandCollapsibleToggle(page, "explorer-diagnostics-toggle");
 
     const sparkline = page.getByTestId("diagnostics-latency-sparkline");
     await sparkline.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
@@ -2165,7 +2223,17 @@ test("Section E: Explorer Diagnostics Drawer renders RPC latency sparkline and s
     assert.ok(sparklineText.includes("p95"), "Sparkline card must display p95 metric");
     assert.ok(sparklineText.includes("max"), "Sparkline card must display max metric");
 
-    // Manual probe refresh appends a sample without errors
+    // Wait for any in-flight mount probe to settle before triggering manual refresh
+    await page.waitForFunction(
+      () => {
+        const btn = document.querySelector(
+          '[data-testid="diagnostics-probe-refresh-btn"]',
+        ) as HTMLButtonElement | null;
+        return Boolean(btn && !btn.disabled);
+      },
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
     const probeBtn = page.getByTestId("diagnostics-probe-refresh-btn");
     await probeBtn.click();
     await page.waitForFunction(
@@ -2230,6 +2298,7 @@ test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expan
 
     const builder = page.getByTestId("miner-command-builder");
     await builder.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
+    await waitForTestIdHydrated(page, "miner-command-builder-toggle");
 
     const toggle = page.getByTestId("miner-command-builder-toggle");
     assert.equal(
@@ -2238,8 +2307,8 @@ test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expan
       "Miner Command Builder must start collapsed by default",
     );
 
-    // Expand the builder
-    await toggle.click();
+    // Expand the builder deterministically
+    await expandCollapsibleToggle(page, "miner-command-builder-toggle");
     assert.equal(
       await toggle.getAttribute("aria-expanded"),
       "true",
@@ -2270,6 +2339,14 @@ test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expan
 
     // Switch to Solo RPC mode and verify preview updates cleanly
     await page.getByTestId("miner-mode-solo").click();
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('[data-testid="miner-command-preview"]');
+        return Boolean(el && el.textContent && el.textContent.includes("--rpc-url "));
+      },
+      undefined,
+      { timeout: HYDRATION_TIMEOUT },
+    );
     const soloCmd = (await preview.innerText()).trim();
     assert.ok(soloCmd.startsWith("kovanica mine "), "Solo preview must start with 'kovanica mine '");
     assert.ok(soloCmd.includes("--rpc-url "), "Solo mode must include --rpc-url");
