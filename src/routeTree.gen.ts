@@ -25,6 +25,7 @@ import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as PoolRouteImport } from './routes/pool'
 import { Route as PoolsRouteImport } from './routes/pools'
 import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as RwaRouteImport } from './routes/rwa'
 import { Route as StealthRouteImport } from './routes/stealth'
@@ -125,6 +126,11 @@ const PoolsRoute = PoolsRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RoadmapRoute = RoadmapRouteImport.update({
@@ -251,6 +257,7 @@ export interface FileRoutesByFullPath {
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/roadmap': typeof RoadmapRoute
   '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
@@ -290,6 +297,7 @@ export interface FileRoutesByTo {
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/roadmap': typeof RoadmapRoute
   '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
@@ -330,6 +338,7 @@ export interface FileRoutesById {
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
   '/pricing': typeof PricingRoute
+  '/privacy': typeof PrivacyRoute
   '/roadmap': typeof RoadmapRoute
   '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
@@ -371,6 +380,7 @@ export interface FileRouteTypes {
     | '/pool'
     | '/pools'
     | '/pricing'
+    | '/privacy'
     | '/roadmap'
     | '/rwa'
     | '/stealth'
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/pool'
     | '/pools'
     | '/pricing'
+    | '/privacy'
     | '/roadmap'
     | '/rwa'
     | '/stealth'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '/pool'
     | '/pools'
     | '/pricing'
+    | '/privacy'
     | '/roadmap'
     | '/rwa'
     | '/stealth'
@@ -489,6 +501,7 @@ export interface RootRouteChildren {
   PoolRoute: typeof PoolRoute
   PoolsRoute: typeof PoolsRoute
   PricingRoute: typeof PricingRoute
+  PrivacyRoute: typeof PrivacyRoute
   RoadmapRoute: typeof RoadmapRoute
   RwaRoute: typeof RwaRoute
   StealthRoute: typeof StealthRoute
@@ -611,6 +624,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/roadmap': {
@@ -835,6 +855,7 @@ const rootRouteChildren: RootRouteChildren = {
   PoolRoute: PoolRoute,
   PoolsRoute: PoolsRoute,
   PricingRoute: PricingRoute,
+  PrivacyRoute: PrivacyRoute,
   RoadmapRoute: RoadmapRoute,
   RwaRoute: RwaRoute,
   StealthRoute: StealthRoute,

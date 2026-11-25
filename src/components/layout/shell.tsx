@@ -134,6 +134,7 @@ export const NAV_GROUPS = [
       { to: "/api-reference" as const, label: "API Reference", icon: Terminal, desc: "JSON-RPC 2.0 & HTTP contract", exact: false },
       { to: "/playground" as const, label: "Playground", icon: Code2, desc: "Onboarding, API console & snippets", exact: false },
       { to: "/pricing" as const, label: "Pricing & Services", icon: Briefcase, desc: "RPC tiers, RWA SaaS, listings & sponsorships", exact: false },
+      { to: "/privacy" as const, label: "Privacy Policy", icon: Shield, desc: "Zero-telemetry & local custody policy", exact: false },
     ],
   },
 ] as const;
