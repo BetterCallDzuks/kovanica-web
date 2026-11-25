@@ -22,7 +22,7 @@
 | `https://kovanica.online/` | `200` (`HomeLanding`) | Apex Domain | `OK` | **M1-C**: Streamline `HomeLanding` hierarchy while preserving `#09090b`, `#F2A900`, `Fraunces`. |
 | `https://www.kovanica.online/` | `301` → `https://kovanica.online/` | Subdomain Redirect | `OK` | Edge redirect to apex works. |
 | `https://testnet.kovanica.online/` | `200` (`HomeTestnet`) | Primary Testnet Portal | `OK` | **M1-C**: Categorize `QUICK` grid to surface DeFi/RWA/Tools in 1 click. |
-| `https://mainnet.kovanica.online/` | `curl (60)` TLS SAN mismatch | Mainnet Launching Gate | `BROKEN` (live TLS) / `PLACEHOLDER` (1.1.2027) | `FIXED_IN_M1A` (UI clarity): Added `SURFACE_STATUS.mainnet` (`"Mainnet (Launching)"`) in `surfaces.ts`, updated `mainnet-launching.tsx`, `network.ts`, `source-switch.tsx`. **Out-of-Scope (DNS/TLS)**: Edge TLS SAN provisioning. |
+| `https://mainnet.kovanica.online/` | `200` (Let's Encrypt TLS `CN=mainnet.kovanica.online`, valid until `2027-02-23`) | Mainnet Launching Gate | `OK` (TLS fixed `2026-11-25`) / `PLACEHOLDER` (`1.1.2027`) | Origin Certbot webroot cert + Nginx `443 ssl` vhost provisioned on `seed1`; serves `Mainnet (Launching)` gate cleanly over HTTPS. |
 | `https://explorer.kovanica.online/` | `200` serves `/` `HomeTestnet` instead of `/explorer` | Subdomain Host | `INCONSISTENT` → `FIXED_IN_M1A` (app routing) | `FIXED_IN_M1A`: Added `"explorer"` role in `host.ts` + `/` → `/explorer` redirect in `__root.tsx`; added `SURFACE.explorer = "https://testnet.kovanica.online/explorer"` (kept `LIVE_EXPLORER = "https://explorer.kovanica.online"` in `networkConstants.ts` / `upstream.server.ts` as server proxy origin). |
 | `https://wallet.kovanica.online/` | `302` → `https://testnet.kovanica.online/wallet/` | Subdomain Host | `OK` (redirect) / `INCONSISTENT` (vs `wallet-web`) | `FIXED_IN_M1A`: Added `"wallet"` role in `host.ts` + `/` → `/wallet` redirect in `__root.tsx`; added `SURFACE.wallet = "https://testnet.kovanica.online/wallet"`. **M2**: Cross-link `kovanica-apps/wallet-web`. |
 | `https://map.kovanica.online/` | `200` serves `/` `HomeTestnet` instead of `/map` | Subdomain Host | `INCONSISTENT` → `FIXED_IN_M1A` (app routing) | `FIXED_IN_M1A`: Added `"map"` role in `host.ts` + `/` → `/map` redirect in `__root.tsx`. |
@@ -74,14 +74,14 @@
 
 ---
 
-## 3. `kovanica-web` Internal Routes (37 Routes)
+## 3. `kovanica-web` Internal Routes (38 Routes)
 
 All app, DeFi, RWA, wallet, mining, docs, and pricing routes now wrap in the unified `<Shell>` (`src/components/layout/shell.tsx`) with **5 pure function tabs** (`Explore · Trade · Assets · Wallet · Build`), contextual sub-navigation on Trade/Assets/Wallet routes, and zero orphaned routes (`tests/m1bc-shell-and-routes.test.ts`).
 
 | Route Path | File | Chrome | Nav Group & Status | Notes |
 |---|---|---|---|---|
 | `/` | `routes/index.tsx` | Role-based (`LandingChrome` / `PlaygroundChrome` / `Shell`) | `DEPLOYED` | `HomeLanding` (apex) & `HomeTestnet` (reuses `NAV_GROUPS`). |
-| `/explorer` | `routes/explorer.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Collapsible telemetry strip + all 8 tabs & drawers. |
+| `/explorer` | `routes/explorer.tsx` | `Shell` | **Explore** (`DEPLOYED` — PR #43) | Left-to-right multi-lane BlockDAG card graph (plain-English legend/tooltips) + collapsible telemetry strip & 8 tabs. |
 | `/explorer/rwa/$assetId` | `routes/explorer/rwa.$assetId.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Deep-linked from `/rwa`. |
 | `/network` | `routes/network.tsx` | `Shell` | **Explore** (`DEPLOYED`) | Peers, seeds & sync telemetry. |
 | `/pool` | `routes/pool.tsx` | `Shell` | **Explore** (`DEPLOYED` — PR #34) | **Stratum V1 TLS Mining Pool** (`MinerCommandBuilder` + Stratum TLS spec + pool fee badge). |
@@ -113,6 +113,7 @@ All app, DeFi, RWA, wallet, mining, docs, and pricing routes now wrap in the uni
 | `/api-reference` | `routes/api-reference.tsx` | `Shell` | **Build** (`DEPLOYED`) | JSON-RPC 2.0 & HTTP contract. |
 | `/playground`, `/playground/api-console`, `/playground/snippets` | `routes/playground*.tsx` | `PlaygroundChrome` | **Build** (`DEPLOYED`) | Onboarding, API console, snippets + Ecosystem Switcher. |
 | `/pricing` | `routes/pricing.tsx` | `Shell` | **Build** (`DEPLOYED` — PR #35, #39) | Services & Pricing hub (6 non-token revenue streams), self-serve Stripe & on-chain `USDC`/`KVNC` checkout modal, `POST /api/inquiries` intake & `<SponsorSlot>`. |
+| `/privacy` | `routes/privacy.tsx` | `Shell` | **Build** (`DEPLOYED` — PR #42) | Zero-telemetry & local-custody Privacy Policy (`https://kovanica.online/privacy`, Chrome Web Store & Firefox AMO compliant). |
 | `/api/$` | `routes/api/$.ts` | Server handler | `DEPLOYED` | Includes `/api/rwa/derive`, `/api/supply`, `/api/submit_tx`, `/api/inquiries`, `/api/billing/*`, `/api/keys`, and tiered `X-RateLimit-*` middleware. |
 | `/download/$` | `routes/download/$.ts` | Server handler | `DEPLOYED` | `BetterCallDzuks/kovanica-l1` + `Object.hasOwn` prototype guard. |
 
