@@ -808,6 +808,36 @@ export async function dispatchApi(req: Request): Promise<Response> {
         });
       }
     }
+    if (name === "base_fee") {
+      try {
+        const res = await callRpc<Record<string, unknown>>("kovanica_getBaseFee", []);
+        return json(res);
+      } catch {
+        return json({
+          base_fee_per_byte: "0x1",
+          min_base_fee_per_byte: "0x1",
+          max_base_fee_per_byte: "0x186a0",
+          target_block_bytes: "0x40000",
+          storage_deposit_per_byte: "0x186a0",
+          default_gas_price_atoms: "0x1",
+        });
+      }
+    }
+    if (name === "storage_deposit") {
+      const contract = q.get("contract") ?? "";
+      if (!contract) return text("missing contract query parameter", 400);
+      try {
+        const res = await callRpc<Record<string, unknown>>("kovanica_getStorageDeposit", [contract]);
+        return json(res);
+      } catch {
+        return json({
+          contract,
+          bytes: "0x0",
+          deposit_atoms: "0x0",
+          deposit_per_byte: "0x186a0",
+        });
+      }
+    }
     if (name === "contract_call") {
       if (method !== "POST") return text("method not allowed", 405);
       return executeLiveContractCall(req);
