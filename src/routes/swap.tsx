@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, ArrowLeft, Layers, Settings2, Zap, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Shell } from "@/components/layout/shell";
 import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
@@ -121,7 +122,8 @@ function SwapPage() {
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-6 md:px-6 md:py-8 space-y-5">
+    <Shell>
+      <main className="mx-auto w-full max-w-xl px-4 py-6 md:px-6 md:py-8 space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link to="/wallet" className="text-muted hover:text-fg transition-colors">
@@ -336,6 +338,7 @@ function SwapPage() {
               : `Approve & Swap ${tokenIn.symbol} → ${tokenOut.symbol} (1-Tx Batch)`}
         </Button>
       </div>
-    </div>
+      </main>
+    </Shell>
   );
 }

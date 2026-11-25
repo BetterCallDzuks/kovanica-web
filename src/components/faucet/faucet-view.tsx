@@ -3,7 +3,6 @@ import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FaucetStatusBar } from "@/components/faucet/faucet-status-bar";
 import { NetworkBadge } from "@/components/layout/network-badge";
-import { MinimalHeader } from "@/components/layout/minimal-header";
 import { SURFACE } from "@/lib/surfaces";
 import {
   formatCooldownRemaining,
@@ -130,7 +129,7 @@ export function FaucetView({ initialTelemetry = null }: FaucetViewProps = {}) {
     return parseFaucetTelemetrySummary(null);
   }, [initialTelemetry, head, headError, errorKind]);
 
-  const faucetClosed = head !== null && !head.faucet;
+  const faucetClosed = head !== null && head.faucet === false;
   const disabledReason =
     phase === "submitting"
       ? null
@@ -210,8 +209,7 @@ export function FaucetView({ initialTelemetry = null }: FaucetViewProps = {}) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-fg">
-      <MinimalHeader backTo={`${SURFACE.testnet}/explorer`} backLabel="Back to explorer" />
+    <div className="flex flex-1 flex-col bg-bg text-fg">
       <main className="flex flex-1 justify-center px-4 py-10 md:py-16">
         <div className="w-full max-w-md">
           <div className="flex items-center justify-between gap-2">

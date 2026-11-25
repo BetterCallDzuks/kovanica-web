@@ -113,7 +113,7 @@ export function MinerCommandBuilder({
       setMode(nextMode);
       const spec = MINER_NETWORK_SPECS[network];
       if (nextMode === "stratum") {
-        setEndpoint(tls ? spec.defaultStratumEndpoint : "stratum+tcp://pool.kovanica.online:3333");
+        setEndpoint(tls ? spec.defaultStratumEndpoint : "stratum+tcp://stratum.example.com:3333");
       } else {
         setEndpoint(spec.defaultRpcEndpoint);
       }
@@ -293,7 +293,7 @@ export function MinerCommandBuilder({
                 onChange={(e) => setEndpoint(e.target.value)}
                 placeholder={
                   mode === "stratum"
-                    ? "stratum+tls://pool.kovanica.online:3333"
+                    ? "stratum+tls://stratum.example.com:3333"
                     : "http://127.0.0.1:8545"
                 }
                 spellCheck={false}
@@ -301,7 +301,7 @@ export function MinerCommandBuilder({
               />
               {mode === "stratum" && (
                 <p className="mt-1 text-[11px] text-subtle">
-                  Placeholder endpoint: <code className="font-mono">pool.kovanica.online:3333</code> is an example Stratum host (no public pool DNS is hosted at <code className="font-mono">pool.kovanica.online</code>) — replace with your pool host and port.
+                  Placeholder endpoint: <code className="font-mono">stratum.example.com:3333</code> is an example Stratum host — replace with your pool operator&apos;s host and port.
                 </p>
               )}
             </div>
@@ -387,7 +387,7 @@ export function MinerCommandBuilder({
                   type="text"
                   value={tlsServerName}
                   onChange={(e) => setTlsServerName(e.target.value)}
-                  placeholder="pool.kovanica.online"
+                  placeholder="stratum.example.com"
                   spellCheck={false}
                   className="h-9 w-full rounded-md border border-border bg-surface/60 px-2.5 font-mono text-xs text-fg placeholder:text-subtle focus:border-gold focus:outline-none"
                 />

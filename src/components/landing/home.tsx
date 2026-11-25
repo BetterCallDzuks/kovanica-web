@@ -27,7 +27,7 @@ export function HomeLanding() {
         </p>
       )}
 
-      <WalletDownloads className="mt-8" variant="card" />
+      <WalletDownloads className="mt-6" variant="strip" />
 
       <WhatsNew />
 

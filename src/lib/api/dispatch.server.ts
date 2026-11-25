@@ -822,6 +822,21 @@ async function parseSubmitTxHex(
   return { ok: true, hex: cleanHex };
 }
 
+const LEGACY_UNIMPLEMENTED_ACTIONS = new Set([
+  "airdrop",
+  "auth",
+  "block",
+  "coinjoin",
+  "dex",
+  "htlc",
+  "light_proof",
+  "light_sync",
+  "multisig",
+  "rtc",
+  "stealth",
+  "vault",
+]);
+
 export async function dispatchApi(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
 
@@ -846,6 +861,16 @@ export async function dispatchApi(req: Request): Promise<Response> {
       return text("mainnet transactions disabled prior to 1.1.2027 launch", 403);
     }
     return text("mainnet launching soon", 503);
+  }
+
+  if (LEGACY_UNIMPLEMENTED_ACTIONS.has(name)) {
+    return json(
+      {
+        error: `Endpoint '/api/${name}' is not implemented on this node surface; use Wasmi contract calls or JSON-RPC instead.`,
+        code: "NOT_IMPLEMENTED",
+      },
+      501,
+    );
   }
 
   // When querying testnet (or public by default)

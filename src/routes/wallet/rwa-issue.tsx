@@ -66,6 +66,7 @@ function RwaIssuePage() {
         "POST",
       );
       setDerivedAssetId(res.asset_id);
+      if (!to) setTo(issuer);
       setStep("mint");
       toast.success("Asset ID derived successfully");
     } catch (err) {
@@ -139,7 +140,7 @@ function RwaIssuePage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 md:px-6 md:py-8">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center gap-3">
         <Link
           to="/wallet"
@@ -443,11 +444,13 @@ function RwaIssuePage() {
               <Button variant="outline" onClick={() => setStep("derive")}>
                 Issue Another
               </Button>
-              <Button onClick={() => (window.location.href = "/wallet")}>Back to Wallet</Button>
+              <Button asChild>
+                <Link to="/wallet">Back to Wallet</Link>
+              </Button>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

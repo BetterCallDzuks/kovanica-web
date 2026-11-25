@@ -1,7 +1,15 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { Shell } from "@/components/layout/shell";
+import { MultiAssetView } from "@/components/protocol/multi-asset-view";
 
 export const Route = createFileRoute("/multi-asset")({
-  beforeLoad: () => {
-    throw redirect({ to: "/explorer" });
-  },
+  component: MultiAssetPage,
 });
+
+function MultiAssetPage() {
+  return (
+    <Shell>
+      <MultiAssetView />
+    </Shell>
+  );
+}

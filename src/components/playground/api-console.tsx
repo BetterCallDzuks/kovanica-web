@@ -11,7 +11,7 @@ const PRESETS = [
   { label: "Bootstrap info", path: "/api/bootstrap" },
   { label: "Chain state", path: "/api/state" },
   { label: "Health", path: "/api/health" },
-  { label: "Supply", path: "/api/supply" },
+  { label: "Base fee", path: "/api/base_fee" },
 ] as const;
 
 export function ApiConsole() {

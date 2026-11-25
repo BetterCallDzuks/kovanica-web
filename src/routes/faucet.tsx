@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ShieldAlert, ShieldCheck, Shield } from "lucide-react";
 import { FaucetView } from "@/components/faucet/faucet-view";
+import { Shell } from "@/components/layout/shell";
 import {
   FAUCET_CANONICAL_NETWORK_TAG,
   FAUCET_CHAIN_ID,
@@ -31,7 +32,8 @@ function FaucetPage() {
   }
 
   return (
-    <div onInput={handleContainerInput} className="min-h-dvh bg-bg text-fg">
+    <Shell>
+      <div onInput={handleContainerInput} className="flex flex-1 flex-col bg-bg text-fg">
       <section
         aria-label="Faucet pre-flight guard"
         className="border-b border-border bg-surface/80 px-4 py-2.5 backdrop-blur-sm"
@@ -83,6 +85,7 @@ function FaucetPage() {
       </section>
 
       <FaucetView />
-    </div>
+      </div>
+    </Shell>
   );
 }

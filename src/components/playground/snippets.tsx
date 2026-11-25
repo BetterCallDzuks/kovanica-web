@@ -16,8 +16,8 @@ curl -s https://testnet.kovanica.online/api/head | jq
 # Get bootstrap info
 curl -s https://testnet.kovanica.online/api/bootstrap | jq
 
-# Get supply
-curl -s https://testnet.kovanica.online/api/supply | jq`,
+# Get dynamic base fee
+curl -s https://testnet.kovanica.online/api/base_fee | jq`,
   },
   javascript: {
     label: "JavaScript",
@@ -141,7 +141,7 @@ export function Snippets() {
                 { method: "GET", path: "/api/head", desc: "Current chain tip" },
                 { method: "GET", path: "/api/bootstrap", desc: "Network bootstrap info" },
                 { method: "GET", path: "/api/state", desc: "Full DAG, mempool, and node telemetry" },
-                { method: "GET", path: "/api/supply", desc: "Supply constants and live block height" },
+                { method: "GET", path: "/api/base_fee", desc: "Wave B dynamic base fee & storage deposit" },
                 { method: "GET", path: "/api/utxos?address=", desc: "Address balance and spendable outputs" },
                 { method: "GET", path: "/api/history?address=", desc: "Transaction deltas for an address" },
                 { method: "GET", path: "/api/tokens", desc: "KVP-102 tokens on chain" },
