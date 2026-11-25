@@ -1023,6 +1023,55 @@ async function dispatchMeteredApi(
     if (name === "fee_estimate") {
       return json(await fetchLiveFeeEstimate());
     }
+    if (name === "account_nonce") {
+      const addr = q.get("address") ?? "";
+      const hex = parseAddr(addr);
+      if (!hex) return text("invalid address: expected 64-hex or kvnc…dag", 400);
+      try {
+        const canonical = toCanonicalAddress(hex)!;
+        const [nonceHex, balHex, feeRaw] = await Promise.all([
+          callRpc<string>("kovanica_getNonce", [canonical]),
+          callRpc<string>("kovanica_getBalance", [canonical]).catch(() => "0x0"),
+          callRpc<string | number>("kovanica_estimateFee", []).catch(() => MIN_FEE),
+        ]);
+        const nonce = BigInt(nonceHex || "0x0").toString();
+        const balance = BigInt(balHex || "0x0").toString();
+        const feeRate =
+          typeof feeRaw === "string"
+            ? BigInt(feeRaw || "0x1").toString()
+            : typeof feeRaw === "number" && Number.isFinite(feeRaw)
+              ? String(Math.max(1, Math.trunc(feeRaw)))
+              : String(MIN_FEE);
+        return json({
+          address: hex,
+          canonical,
+          nonce,
+          balance,
+          fee_rate: feeRate,
+          chain_id: 2,
+        });
+      } catch (e) {
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
+      }
+    }
+    if (name === "contract_code") {
+      const contract = q.get("contract") ?? "";
+      const hex = parseAddr(contract);
+      if (!hex) return text("invalid contract address: expected 64-hex or kvnc…dag", 400);
+      try {
+        const canonical = toCanonicalAddress(hex)!;
+        const codeHex = await callRpc<string>("kovanica_getCode", [canonical]).catch(() => "0x");
+        const codeBytes = hexByteLength(codeHex) ?? 0;
+        return json({
+          contract: hex,
+          canonical,
+          deployed: codeBytes > 0,
+          code_bytes: codeBytes,
+        });
+      } catch (e) {
+        return text(`testnet node error: ${e instanceof Error ? e.message : e}`, rpcFailureStatus(e));
+      }
+    }
     if (name === "fee_schedule") {
       try {
         const res = await callRpc<Record<string, unknown>>("kovanica_getFeeSchedule", []);
@@ -1432,6 +1481,49 @@ async function dispatchMeteredApi(
         return json(localUtxos(q.get("address") ?? ""));
       case "history":
         return json(localHistory(q.get("address") ?? ""));
+      case "account_nonce": {
+        const addr = q.get("address") ?? "";
+        const hex = parseAddr(addr);
+        if (!hex) return text("invalid address: expected 64-hex or kvnc…dag", 400);
+        const utxos = localUtxos(hex);
+        const balance = typeof utxos === "string" ? 0 : (utxos.balance ?? 0);
+        return json({
+          address: hex,
+          canonical: toCanonicalAddress(hex) ?? hex,
+          nonce: "0",
+          balance: String(balance),
+          fee_rate: String(MIN_FEE),
+          chain_id: 2,
+        });
+      }
+      case "contract_code": {
+        const contract = q.get("contract") ?? "";
+        const hex = parseAddr(contract);
+        if (!hex) return text("invalid contract address: expected 64-hex or kvnc…dag", 400);
+        return json({
+          contract: hex,
+          canonical: toCanonicalAddress(hex) ?? hex,
+          deployed: true,
+          code_bytes: 363,
+        });
+      }
+      case "fee_schedule": {
+        const { FIXED_FEES } = await import("../networkConstants");
+        return json({
+          active: false,
+          chain_id: "0x2",
+          fee_split_burn_bps: 7500,
+          fee_split_miner_bps: 2500,
+          fixed_fees: {
+            deploy: `0x${FIXED_FEES.deploy.toString(16)}`,
+            token_create: `0x${FIXED_FEES.token_create.toString(16)}`,
+            nft_create_collection: `0x${FIXED_FEES.nft_create_collection.toString(16)}`,
+            nft_mint: `0x${FIXED_FEES.nft_mint.toString(16)}`,
+            rwa_create: `0x${FIXED_FEES.rwa_create.toString(16)}`,
+            rwa_mint: `0x${FIXED_FEES.rwa_mint.toString(16)}`,
+          },
+        });
+      }
       case "origins":
         return json(localOrigins());
       case "p2p":
