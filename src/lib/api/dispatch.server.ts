@@ -44,6 +44,7 @@ import { faucetEndpoint, probeHealth, rpcCall, rpcEndpoint, RpcError, type Healt
 import { fetchLiveDagBlocks } from "./live-dag.server";
 import { dispenseFromFaucet, FaucetError, faucetHttpStatus } from "./faucet.server";
 import { isAssetId } from "../asset-id";
+import { DEFAULT_RWA_REGISTRY } from "../rwa/compliance";
 import {
   buildContractCallRequest,
   buildContractReceiptRequest,
@@ -852,6 +853,34 @@ export async function dispatchApi(req: Request): Promise<Response> {
     }
     if (name === "rwa") {
       const sub = url.pathname.replace(/^\/api\/rwa\/?/, "");
+      if (sub === "registry" || sub === "list" || sub === "") {
+        try {
+          const live = await callRpc<unknown[]>("kovanica_listRwaAssets", []);
+          if (Array.isArray(live) && live.length > 0) {
+            return json({ source: "rpc", standard: "KVP-106", assets: live });
+          }
+        } catch {
+          // Node may not expose kovanica_listRwaAssets yet; fall back to institutional registry
+        }
+        return json({
+          source: "registry",
+          standard: "KVP-106",
+          assets: DEFAULT_RWA_REGISTRY,
+        });
+      }
+      if (sub.startsWith("compliance/")) {
+        const assetId = sub.slice("compliance/".length).trim();
+        const found = DEFAULT_RWA_REGISTRY.find(
+          (a) => a.assetId === assetId || a.contractAddress === assetId,
+        );
+        if (!found) {
+          return detailLookup("kovanica_getRwaAsset", assetId);
+        }
+        return json({
+          standard: "KVP-106",
+          asset: found,
+        });
+      }
       if (sub === "mint" && method === "POST") {
         const assetId = q.get("asset_id") ?? "";
         const to = q.get("to") ?? "";
