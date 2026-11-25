@@ -228,3 +228,22 @@ All 21 legacy protocol endpoints below (plus `/api/rtc` and unimplemented `endpo
 | **M3** (`kovanica-playground`, merged in PR #24) | `App.tsx` GitHub org fix, public RPC preset, `.org` → `.online` relays, `WalletContractConsole.tsx` sub-tabs, `WaveARwaStudio.tsx` dark tokens, `README.md` SDK version sync. |
 | **Follow-up PRs (#33–#35, merged & deployed)** | PR #33: Standardized 5 pure function tabs (`Explore · Trade · Assets · Wallet · Build`) shared by `Shell` and `HomeTestnet`. PR #34: `/pool` renders Stratum Mining Pool (`MinerCommandBuilder`) and `/pools` hosts AMM Liquidity Pools + on-chain KVP-102 `PoolView`. PR #35: `/pricing` Services & Pricing hub, `POST /api/inquiries` intake, configurable Swap/Pool fees, and zero-cookie `<SponsorSlot>`. |
 | **Out-of-Scope (DNS/TLS/L1/Vendor)** | Edge TLS SAN for `mainnet.kovanica.online`, DNS provisioning (`api.`, `apps.`, `pool.`, `seed2.`, `relay*.`, `indexer.`), nginx static `/download/install.sh`, `kovanica-l1/node/scripts/install.sh:50` (`KovanicaDAG`), `kovanica-l1` `v*-node` release tags, `vendor/kovanica-sdk-wasm/package.json`. |
+
+---
+
+## 8. KVP & RFC Standards Reference (`KVP-20`, `KVP-101`..`KVP-106`, `RFC-001`..`RFC-008`)
+
+> Kovanica uses **`KVP-101`..`KVP-106`** (plus **`KVP-20`** for fungible contract token pairs). There are no `KVP-001`..`KVP-009` IDs; `001`..`008` are the companion **`RFC-001`..`RFC-008`** specification documents.
+
+| Standard | RFC | Name | Routes / Surfaces |
+|---|---|---|---|
+| `KVP-20` | — | Fungible Contract Token Interface | `/swap`, `/pools` (`kovanica-amm` pairs & wrapped bridge tokens) |
+| `KVP-101` | `RFC-001` | Multisig Wallets | `/multisig` |
+| `KVP-102` | `RFC-002` | Native Multi-Asset Tokens | `/multi-asset`, `/pools`, `/swap`, `/wallet` |
+| `KVP-103` | `RFC-003` | Stealth Addresses | `/stealth` |
+| `KVP-104` | `RFC-004` | HTLC Atomic Swaps | `/htlc`, `/wallet/atomic-swap` |
+| `KVP-105` | `RFC-005` | Time-Lock Vaults | `/vaults` |
+| `KVP-106` | `RFC-007` | Real-World Assets (RWA) & Native NFTs | `/rwa`, `/wallet/rwa-issue`, `/wallet/rwa-manage`, `/explorer/rwa/$assetId`, `/nft` |
+| `PRO-21` | — | Canonical 64-char Address Format (`kvnc…dag`) | All Mainnet (Chain `1`) & Testnet (Chain `2`) surfaces |
+| `RFC-006` | `RFC-006` | Fee Floor & Wave B Base Fee | `/api/fee_estimate`, `/api/base_fee` |
+| `RFC-008` | `RFC-008` | On-Chain Name Registry (no KVP #) | `kovanica-sdk`, `wallet-web`, `kovanica-playground` |
