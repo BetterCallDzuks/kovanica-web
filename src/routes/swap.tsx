@@ -128,7 +128,7 @@ function SwapPage() {
             <ArrowLeft className="size-5" />
           </Link>
           <div>
-            <p className="font-mono text-[10px] tracking-wide text-emerald uppercase">
+            <p className="font-mono text-[10px] tracking-wide text-emerald-400 uppercase">
               Native AMM / DEX · Constant Product (0.30% LP Fee)
             </p>
             <h1 className="font-display text-2xl tracking-tight text-fg">Kovanica Swap</h1>
@@ -291,7 +291,7 @@ function SwapPage() {
                 className={
                   quote.priceImpactPct > 3
                     ? "font-mono text-amber-400"
-                    : "font-mono text-emerald"
+                    : "font-mono text-emerald-400"
                 }
               >
                 {quote.priceImpactPct.toFixed(3)}%
@@ -308,8 +308,8 @@ function SwapPage() {
 
         {/* Wave A Atomic Batch Preview */}
         {batchSteps.length > 0 && (
-          <div className="rounded-lg border border-purple/30 bg-purple/5 p-3 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-purple">
+          <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
               <Zap className="size-3.5" />
               <span>1-Tx Wave A Atomic Batch ({batchSteps.length} actions)</span>
             </div>

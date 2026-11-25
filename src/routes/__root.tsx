@@ -26,7 +26,7 @@ export const Route = createRootRoute({
     const path = location.pathname || "/";
 
     // Specialized hosts: send bare `/` to their native surface so they never
-    // render the apex marketing page.
+    // render the apex marketing page or generic testnet home.
     if (path === "/" || path === "") {
       if (role === "docs") {
         throw redirect({ to: "/docs", replace: true });
@@ -39,6 +39,18 @@ export const Route = createRootRoute({
       }
       if (role === "dash") {
         throw redirect({ to: "/dash", replace: true });
+      }
+      if (role === "explorer") {
+        throw redirect({ to: "/explorer", replace: true });
+      }
+      if (role === "wallet") {
+        throw redirect({ to: "/wallet", replace: true });
+      }
+      if (role === "map") {
+        throw redirect({ to: "/map", replace: true });
+      }
+      if (role === "faucet") {
+        throw redirect({ to: "/faucet", replace: true });
       }
     }
 

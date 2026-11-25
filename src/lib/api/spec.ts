@@ -73,7 +73,7 @@ GET /api/p2p
 GET /api/blocks
   octet-stream dump of every block (same bytes a clone pulls on :8000)
 
-GET /api/download/install.sh
+GET /download/install.sh
   node installer script (Linux x64/arm64)
 
 GET /download/kovanica-node-linux-x64
@@ -161,5 +161,5 @@ the seed has served its blocks).
 GET /download/kovanica-node-linux-x64
 GET /download/kovanica-node-linux-arm64
 GET /download/install.sh
-  Node binaries and install.sh for tag v0.3.0-node (commit e3fce499afe6637b2a594b60306aef6312ef4bbf) on KovanicaDAG/kovanica-l1.
+  Node binaries and install.sh for BetterCallDzuks/kovanica-l1 (main install.sh + GitHub Releases; reference tag v0.3.0-node, commit e3fce499afe6637b2a594b60306aef6312ef4bbf).
 `;

@@ -11,23 +11,23 @@ const SNIPPETS: Record<Lang, { label: string; code: string }> = {
   curl: {
     label: "curl",
     code: `# Get chain head
-curl -s https://explorer.kovanica.online/api/head | jq
+curl -s https://testnet.kovanica.online/api/head | jq
 
 # Get bootstrap info
-curl -s https://explorer.kovanica.online/api/bootstrap | jq
+curl -s https://testnet.kovanica.online/api/bootstrap | jq
 
 # Get supply
-curl -s https://explorer.kovanica.online/api/supply | jq`,
+curl -s https://testnet.kovanica.online/api/supply | jq`,
   },
   javascript: {
     label: "JavaScript",
     code: `// Fetch chain head
-const res = await fetch("https://explorer.kovanica.online/api/head");
+const res = await fetch("https://testnet.kovanica.online/api/head");
 const head = await res.json();
 console.log(head);
 
 // Fetch bootstrap info
-const boot = await fetch("https://explorer.kovanica.online/api/bootstrap");
+const boot = await fetch("https://testnet.kovanica.online/api/bootstrap");
 const info = await boot.json();
 console.log(info);`,
   },
@@ -40,7 +40,7 @@ use serde_json::Value;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get chain head
     let head: Value = reqwest::get(
-        "https://explorer.kovanica.online/api/head"
+        "https://testnet.kovanica.online/api/head"
     )
     .await?
     .json()
@@ -49,7 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Get bootstrap info
     let boot: Value = reqwest::get(
-        "https://explorer.kovanica.online/api/bootstrap"
+        "https://testnet.kovanica.online/api/bootstrap"
     )
     .await?
     .json()
@@ -130,7 +130,7 @@ export function Snippets() {
         <div className="overflow-hidden rounded-xl border border-border">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-border bg-surface-1">
+              <tr className="border-b border-border bg-surface">
                 <th className="px-3 py-2 font-medium text-muted">Method</th>
                 <th className="px-3 py-2 font-medium text-muted">Path</th>
                 <th className="px-3 py-2 font-medium text-muted">Description</th>
@@ -140,10 +140,12 @@ export function Snippets() {
               {[
                 { method: "GET", path: "/api/head", desc: "Current chain tip" },
                 { method: "GET", path: "/api/bootstrap", desc: "Network bootstrap info" },
-                { method: "GET", path: "/api/network", desc: "Network configuration" },
-                { method: "GET", path: "/api/supply", desc: "Supply stats" },
-                { method: "GET", path: "/api/tx/:id", desc: "Transaction by ID" },
-                { method: "GET", path: "/api/block/:id", desc: "Block by hash" },
+                { method: "GET", path: "/api/state", desc: "Full DAG, mempool, and node telemetry" },
+                { method: "GET", path: "/api/supply", desc: "Supply constants and live block height" },
+                { method: "GET", path: "/api/utxos?address=", desc: "Address balance and spendable outputs" },
+                { method: "GET", path: "/api/history?address=", desc: "Transaction deltas for an address" },
+                { method: "GET", path: "/api/tokens", desc: "KVP-102 tokens on chain" },
+                { method: "GET", path: "/api/pools", desc: "KVP-102 AMM liquidity pools" },
                 { method: "POST", path: "/api/prepare", desc: "Build unsigned tx" },
                 { method: "POST", path: "/api/submit", desc: "Submit signed tx" },
               ].map((row) => (

@@ -116,7 +116,7 @@ function PoolsPage() {
             <ArrowLeft className="size-5" />
           </Link>
           <div>
-            <p className="font-mono text-[10px] tracking-wide text-emerald uppercase">
+            <p className="font-mono text-[10px] tracking-wide text-emerald-400 uppercase">
               Native AMM Liquidity · x · y = k
             </p>
             <h1 className="font-display text-2xl tracking-tight text-fg">Liquidity Pools</h1>
@@ -142,7 +142,7 @@ function PoolsPage() {
           </strong>
         </span>
         <span>
-          LP Swap Fee: <strong className="font-mono text-emerald">0.30% (100% to LPs)</strong>
+          LP Swap Fee: <strong className="font-mono text-emerald-400">0.30% (100% to LPs)</strong>
         </span>
       </div>
 
@@ -167,7 +167,7 @@ function PoolsPage() {
                 return (
                   <tr
                     key={pool.id}
-                    className={active ? "bg-purple/5" : "hover:bg-bg/40 transition-colors"}
+                    className={active ? "bg-purple-500/10" : "hover:bg-bg/40 transition-colors"}
                   >
                     <td className="px-4 py-3 font-medium text-fg">
                       {pool.token0.symbol} / {pool.token1.symbol}
@@ -184,7 +184,7 @@ function PoolsPage() {
                     <td className="px-4 py-3 text-right font-mono text-muted">
                       ${pool.volume24hUsd.toLocaleString("en-US")}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-emerald">
+                    <td className="px-4 py-3 text-right font-mono text-emerald-400">
                       <span className="inline-flex items-center gap-1">
                         <TrendingUp className="size-3" />
                         {apr.toFixed(2)}%
@@ -262,8 +262,8 @@ function PoolsPage() {
             </div>
 
             {addBatchSteps.length > 0 && (
-              <div className="rounded-lg border border-purple/30 bg-purple/5 p-3 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-purple">
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
                   <Zap className="size-3.5" />
                   <span>1-Tx Wave A Atomic Batch ({addBatchSteps.length} actions)</span>
                 </div>

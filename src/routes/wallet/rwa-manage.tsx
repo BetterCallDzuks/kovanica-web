@@ -195,7 +195,7 @@ function RwaIssuerManagePage() {
             <ArrowLeft className="size-5" />
           </Link>
           <div>
-            <p className="font-mono text-[10px] tracking-wide text-purple uppercase">
+            <p className="font-mono text-[10px] tracking-wide text-purple-400 uppercase">
               KVP-106 Issuer &amp; Compliance Portal · RwaClient v0.8.1
             </p>
             <h1 className="font-display text-2xl tracking-tight text-fg">
@@ -236,7 +236,7 @@ function RwaIssuerManagePage() {
           </div>
           <div>
             <div className="text-[10px] text-muted">Transfer State</div>
-            <div className={paused ? "text-amber-400" : "text-emerald"}>
+            <div className={paused ? "text-amber-400" : "text-emerald-400"}>
               {paused ? "PAUSED" : "ACTIVE"}
             </div>
           </div>
@@ -342,7 +342,7 @@ function RwaIssuerManagePage() {
                   </span>
                   <div className="flex items-center gap-3">
                     <span className="text-muted">Tier {h.kycTier}</span>
-                    <span className={h.allowlisted ? "text-emerald" : "text-muted"}>
+                    <span className={h.allowlisted ? "text-emerald-400" : "text-muted"}>
                       {h.allowlisted ? "KYC VERIFIED" : "REVOKED"}
                     </span>
                     <span className={h.frozen ? "text-amber-400" : "text-muted"}>
@@ -578,7 +578,7 @@ function RwaIssuerManagePage() {
                 <span className="text-muted">
                   {row.address.slice(0, 14)}…{row.address.slice(-6)} ({row.sharePct.toFixed(2)}%)
                 </span>
-                <span className="text-emerald">
+                <span className="text-emerald-400">
                   {(Number(row.payoutAtoms) / ATOM).toFixed(4)} {TOKEN}
                 </span>
               </div>

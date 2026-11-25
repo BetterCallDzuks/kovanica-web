@@ -82,7 +82,7 @@ function RwaExplorerRegistryPage() {
             <ArrowLeft className="size-5" />
           </Link>
           <div>
-            <p className="font-mono text-[10px] tracking-wide text-purple uppercase">
+            <p className="font-mono text-[10px] tracking-wide text-purple-400 uppercase">
               KVP-106 Institutional Registry · Source: {source}
             </p>
             <h1 className="font-display text-2xl tracking-tight text-fg">
@@ -110,23 +110,23 @@ function RwaExplorerRegistryPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-xs text-muted">
-            <Building2 className="size-3.5 text-purple" />
+            <Building2 className="size-3.5 text-purple-400" />
             <span>Registered KVP-106 Assets</span>
           </div>
           <p className="mt-1 font-mono text-2xl text-fg">{assets.length}</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-xs text-muted">
-            <ShieldCheck className="size-3.5 text-emerald" />
+            <ShieldCheck className="size-3.5 text-emerald-400" />
             <span>Active / Compliant</span>
           </div>
-          <p className="mt-1 font-mono text-2xl text-emerald">
+          <p className="mt-1 font-mono text-2xl text-emerald-400">
             {activeCount} / {assets.length}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-xs text-muted">
-            <Users className="size-3.5 text-purple" />
+            <Users className="size-3.5 text-purple-400" />
             <span>Verified Holders</span>
           </div>
           <p className="mt-1 font-mono text-2xl text-fg">{totalHolders.toLocaleString("en-US")}</p>
@@ -200,7 +200,7 @@ function RwaExplorerRegistryPage() {
                         PAUSED
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald/15 px-2.5 py-0.5 text-[10px] font-mono text-emerald">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-mono text-emerald-400">
                         <CheckCircle2 className="size-3" />
                         COMPLIANT
                       </span>

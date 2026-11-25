@@ -68,14 +68,14 @@ const isNft = (opt: AssetOption) => opt.kind === "nft";
                 "inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors relative",
                 selected
                   ? nft
-                    ? "border-purple/50 bg-purple/10 text-purple"
+                    ? "border-purple-500/50 bg-purple-500/10 text-purple-400"
                     : rwa
-                      ? "border-amber/50 bg-amber/10 text-amber"
+                      ? "border-amber-500/50 bg-amber-500/10 text-amber-400"
                       : "border-gold/50 bg-gold/10 text-gold"
                   : nft
-                    ? "border-purple/20 bg-purple/5 text-purple/80 hover:border-purple/40 hover:bg-purple/10"
+                    ? "border-purple-500/20 bg-purple-500/5 text-purple-400/80 hover:border-purple-500/40 hover:bg-purple-500/10"
                     : rwa
-                      ? "border-amber/20 bg-amber/5 text-amber/80 hover:border-amber/40 hover:bg-amber/10"
+                      ? "border-amber-500/20 bg-amber-500/5 text-amber-400/80 hover:border-amber-500/40 hover:bg-amber-500/10"
                       : "border-border bg-surface text-muted hover:text-fg",
                 disabled && "opacity-50",
               )}
@@ -84,13 +84,13 @@ const isNft = (opt: AssetOption) => opt.kind === "nft";
                 <>
                   <Gem className="size-3.5" />
                   <span className="font-mono text-xs">{label}</span>
-                  <span className="absolute -top-1 -right-1 bg-purple text-[8px] font-medium px-1 rounded">NFT</span>
+                  <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-[8px] font-medium px-1 rounded">NFT</span>
                 </>
               ) : rwa ? (
                 <>
                   <Landmark className="size-3.5" />
                   <span className="font-mono text-xs">{label}</span>
-                  <span className="absolute -top-1 -right-1 bg-amber text-[8px] font-medium px-1 rounded">RWA</span>
+                  <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[8px] font-medium px-1 rounded">RWA</span>
                 </>
               ) : (
                 <>

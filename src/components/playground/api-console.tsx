@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 const PRESETS = [
   { label: "Chain head", path: "/api/head" },
   { label: "Bootstrap info", path: "/api/bootstrap" },
-  { label: "Network info", path: "/api/network" },
+  { label: "Chain state", path: "/api/state" },
+  { label: "Health", path: "/api/health" },
   { label: "Supply", path: "/api/supply" },
 ] as const;
 
@@ -129,7 +130,7 @@ export function ApiConsole() {
           </div>
         )}
         {!response && !error && !loading && (
-          <div className="rounded-lg border border-dashed border-border bg-surface-1 p-8 text-center">
+          <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
             <p className="text-sm text-muted">
               Enter a path and hit Send to see the API response.
             </p>

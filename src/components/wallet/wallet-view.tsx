@@ -948,10 +948,10 @@ export function WalletView() {
             />
 
             {isNftSelected && (
-              <div className="rounded-lg border border-purple/30 bg-purple/5 p-3 flex items-center gap-2">
-                <Gem className="size-4 text-purple" />
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 flex items-center gap-2">
+                <Gem className="size-4 text-purple-400" />
                 <div>
-                  <p className="text-sm font-medium text-purple">NFT Transfer</p>
+                  <p className="text-sm font-medium text-purple-400">NFT Transfer</p>
                   <p className="text-[11px] text-muted">
                     Entire token (1 unit) will be sent. Cannot be split.
                   </p>

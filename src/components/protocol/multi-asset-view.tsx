@@ -133,7 +133,7 @@ export function MultiAssetView() {
           to="/swap"
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
-          <ArrowRightLeft className="size-3.5 text-emerald" />
+          <ArrowRightLeft className="size-3.5 text-emerald-400" />
           AMM Swap
         </Link>
         <Link
@@ -154,7 +154,7 @@ export function MultiAssetView() {
           to="/wallet/rwa-manage"
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
-          <Landmark className="size-3.5 text-purple" />
+          <Landmark className="size-3.5 text-purple-400" />
           RWA Compliance
         </Link>
         <Link
@@ -169,7 +169,7 @@ export function MultiAssetView() {
           hash="tokens"
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
         >
-          <Gem className="size-3.5 text-purple" />
+          <Gem className="size-3.5 text-purple-400" />
           NFT (KVP-106)
         </Link>
         <Link

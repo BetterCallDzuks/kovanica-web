@@ -6,7 +6,7 @@ import { createIsomorphicFn } from "@tanstack/react-start";
  * window is unavailable) from the request host.
  */
 export function networkFromHost(host: string): "testnet" | "mainnet" {
-  const h = (host || "").toLowerCase();
+  const h = (host || "").toLowerCase().replace(/:\d+\.?$/, "").replace(/\.$/, "");
   if (h === "mainnet.kovanica.online" || h.startsWith("mainnet.")) return "mainnet";
   return "testnet";
 }
@@ -23,10 +23,14 @@ export type HostRole =
   | "api"
   | "playground"
   | "dash"
+  | "explorer"
+  | "wallet"
+  | "map"
+  | "faucet"
   | "shared";
 
 export function hostRoleFromHost(host: string): HostRole {
-  const h = (host || "").toLowerCase().replace(/\.$/, "");
+  const h = (host || "").toLowerCase().replace(/:\d+\.?$/, "").replace(/\.$/, "");
   if (h === "kovanica.online" || h === "www.kovanica.online") return "landing";
   if (h === "mainnet.kovanica.online" || h.startsWith("mainnet.")) return "mainnet";
   if (h === "docs.kovanica.online" || h.startsWith("docs.")) return "docs";
@@ -34,7 +38,11 @@ export function hostRoleFromHost(host: string): HostRole {
   if (h === "playground.kovanica.online" || h.startsWith("playground.")) return "playground";
   if (h === "testnet.kovanica.online" || h.startsWith("testnet.")) return "testnet";
   if (h === "dash.kovanica.online" || h.startsWith("dash.")) return "dash";
-  // explorer., wallet., pool., status. — share the app surface
+  if (h === "explorer.kovanica.online" || h.startsWith("explorer.")) return "explorer";
+  if (h === "wallet.kovanica.online" || h.startsWith("wallet.")) return "wallet";
+  if (h === "map.kovanica.online" || h.startsWith("map.")) return "map";
+  if (h === "faucet.kovanica.online" || h.startsWith("faucet.")) return "faucet";
+  // pool., status., localhost — share the app surface
   return "shared";
 }
 

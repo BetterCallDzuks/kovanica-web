@@ -104,7 +104,7 @@ export class TrezorHardwareProvider extends AbstractHardwareProvider {
           lazyLoad: true,
           manifest: {
             appName: "Kovanica Web Wallet",
-            email: "dev@kovanica.org",
+            email: "dev@kovanica.online",
             appUrl: "https://kovanica.online",
           },
         });

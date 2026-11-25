@@ -63,7 +63,7 @@ export function SourceSwitch({ compact = false }: { compact?: boolean }) {
         type="button"
         aria-pressed={active === "mainnet"}
         onClick={() => select("mainnet")}
-        title="Mainnet"
+        title="Mainnet (Launching — 1.1.2027)"
         className={
           active === "mainnet"
             ? "h-8 cursor-pointer rounded-sm bg-bg px-2.5 font-mono text-[10px] tracking-wide text-fg uppercase transition-colors duration-150"

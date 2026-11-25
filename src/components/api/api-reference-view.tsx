@@ -91,7 +91,7 @@ export function ApiReferenceView() {
 
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-8 px-4 py-8 md:px-6">
         <header>
-          <p className="eyebrow">api.kovanica.online</p>
+          <p className="eyebrow">API Reference · kovanica-testnet</p>
           <h1 className="mt-1 font-display text-3xl tracking-tight text-fg md:text-4xl">
             API reference
           </h1>

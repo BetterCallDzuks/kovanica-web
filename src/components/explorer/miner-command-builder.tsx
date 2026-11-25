@@ -299,6 +299,11 @@ export function MinerCommandBuilder({
                 spellCheck={false}
                 className="h-9 w-full rounded-md border border-border bg-surface/60 px-2.5 font-mono text-xs text-fg placeholder:text-subtle focus:border-gold focus:outline-none"
               />
+              {mode === "stratum" && (
+                <p className="mt-1 text-[11px] text-subtle">
+                  Placeholder endpoint: <code className="font-mono">pool.kovanica.online:3333</code> is an example Stratum host (no public pool DNS is hosted at <code className="font-mono">pool.kovanica.online</code>) — replace with your pool host and port.
+                </p>
+              )}
             </div>
           </div>
 

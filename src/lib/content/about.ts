@@ -22,7 +22,7 @@ export const ABOUT = {
 
   links: [
     { label: "Docs", href: "https://docs.kovanica.online" },
-    { label: "GitHub", href: "https://github.com/KovanicaDAG" },
+    { label: "GitHub", href: "https://github.com/BetterCallDzuks" },
     { label: "Explorer", href: "https://testnet.kovanica.online/explorer" },
     { label: "Roadmap", href: "https://testnet.kovanica.online/roadmap" },
     { label: "Testnet", href: "https://testnet.kovanica.online" },

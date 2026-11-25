@@ -70,8 +70,8 @@ export function seedDag(): Block[] {
         method: "name_register",
         args: bytesToHex(
           buildNameRegisterCall("alice", new Uint8Array(32).fill(0x11), [
-            "https://relay1.kovanica.org",
-            "https://relay2.kovanica.org",
+            "https://relay1.kovanica.online",
+            "https://relay2.kovanica.online",
           ]),
         ),
         amount: 0,

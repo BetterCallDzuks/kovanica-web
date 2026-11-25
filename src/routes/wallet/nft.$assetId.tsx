@@ -97,10 +97,10 @@ function NftDetailPage() {
         {/* NFT Image / Visual */}
         <div className="relative aspect-square rounded-xl border border-border bg-surface overflow-hidden">
           <div className="flex h-full items-center justify-center">
-            <GemIcon className="size-16 text-purple/50" />
+            <GemIcon className="size-16 text-purple-400/50" />
           </div>
           <div className="absolute top-3 right-3 flex gap-1">
-            <span className="rounded-full bg-purple/90 px-2 py-0.5 font-mono text-[10px] text-white">
+            <span className="rounded-full bg-purple-600/90 px-2 py-0.5 font-mono text-[10px] text-white">
               NFT
             </span>
             {nft.collection_id && (
@@ -119,7 +119,7 @@ function NftDetailPage() {
         {/* Metadata */}
         {nft.metadata_hash && (
           <div className="rounded-lg border border-border bg-surface p-4 text-center">
-            <AlertCircle className="size-6 mx-auto text-amber" />
+            <AlertCircle className="size-6 mx-auto text-amber-400" />
             <p className="mt-2 text-sm text-muted">Metadata unavailable</p>
             <p className="mt-1 font-mono text-[10px] text-subtle">
               Hash: {nft.metadata_hash.slice(0, 16)}…
