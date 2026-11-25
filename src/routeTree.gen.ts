@@ -23,8 +23,10 @@ import { Route as NetworkRouteImport } from './routes/network'
 import { Route as NftRouteImport } from './routes/nft'
 import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as PoolRouteImport } from './routes/pool'
+import { Route as PoolsRouteImport } from './routes/pools'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as StealthRouteImport } from './routes/stealth'
+import { Route as SwapRouteImport } from './routes/swap'
 import { Route as VaultsRouteImport } from './routes/vaults'
 import { Route as WalletRouteImport } from './routes/wallet'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
@@ -112,6 +114,11 @@ const PoolRoute = PoolRouteImport.update({
   path: '/pool',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PoolsRoute = PoolsRouteImport.update({
+  id: '/pools',
+  path: '/pools',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoadmapRoute = RoadmapRouteImport.update({
   id: '/roadmap',
   path: '/roadmap',
@@ -120,6 +127,11 @@ const RoadmapRoute = RoadmapRouteImport.update({
 const StealthRoute = StealthRouteImport.update({
   id: '/stealth',
   path: '/stealth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SwapRoute = SwapRouteImport.update({
+  id: '/swap',
+  path: '/swap',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VaultsRoute = VaultsRouteImport.update({
@@ -219,8 +231,10 @@ export interface FileRoutesByFullPath {
   '/nft': typeof NftRoute
   '/playground': typeof PlaygroundRouteWithChildren
   '/pool': typeof PoolRoute
+  '/pools': typeof PoolsRoute
   '/roadmap': typeof RoadmapRoute
   '/stealth': typeof StealthRoute
+  '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
   '/wallet': typeof WalletRouteWithChildren
   '/api/$': typeof ApiSplatRoute
@@ -253,8 +267,10 @@ export interface FileRoutesByTo {
   '/nft': typeof NftRoute
   '/playground': typeof PlaygroundRouteWithChildren
   '/pool': typeof PoolRoute
+  '/pools': typeof PoolsRoute
   '/roadmap': typeof RoadmapRoute
   '/stealth': typeof StealthRoute
+  '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
   '/wallet': typeof WalletRouteWithChildren
   '/api/$': typeof ApiSplatRoute
@@ -288,8 +304,10 @@ export interface FileRoutesById {
   '/nft': typeof NftRoute
   '/playground': typeof PlaygroundRouteWithChildren
   '/pool': typeof PoolRoute
+  '/pools': typeof PoolsRoute
   '/roadmap': typeof RoadmapRoute
   '/stealth': typeof StealthRoute
+  '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
   '/wallet': typeof WalletRouteWithChildren
   '/api/$': typeof ApiSplatRoute
@@ -324,8 +342,10 @@ export interface FileRouteTypes {
     | '/nft'
     | '/playground'
     | '/pool'
+    | '/pools'
     | '/roadmap'
     | '/stealth'
+    | '/swap'
     | '/vaults'
     | '/wallet'
     | '/api/$'
@@ -358,8 +378,10 @@ export interface FileRouteTypes {
     | '/nft'
     | '/playground'
     | '/pool'
+    | '/pools'
     | '/roadmap'
     | '/stealth'
+    | '/swap'
     | '/vaults'
     | '/wallet'
     | '/api/$'
@@ -392,8 +414,10 @@ export interface FileRouteTypes {
     | '/nft'
     | '/playground'
     | '/pool'
+    | '/pools'
     | '/roadmap'
     | '/stealth'
+    | '/swap'
     | '/vaults'
     | '/wallet'
     | '/api/$'
@@ -427,8 +451,10 @@ export interface RootRouteChildren {
   NftRoute: typeof NftRoute
   PlaygroundRoute: typeof PlaygroundRouteWithChildren
   PoolRoute: typeof PoolRoute
+  PoolsRoute: typeof PoolsRoute
   RoadmapRoute: typeof RoadmapRoute
   StealthRoute: typeof StealthRoute
+  SwapRoute: typeof SwapRoute
   VaultsRoute: typeof VaultsRoute
   WalletRoute: typeof WalletRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
@@ -535,6 +561,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PoolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pools': {
+      id: '/pools'
+      path: '/pools'
+      fullPath: '/pools'
+      preLoaderRoute: typeof PoolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/roadmap': {
       id: '/roadmap'
       path: '/roadmap'
@@ -547,6 +580,13 @@ declare module '@tanstack/react-router' {
       path: '/stealth'
       fullPath: '/stealth'
       preLoaderRoute: typeof StealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/swap': {
+      id: '/swap'
+      path: '/swap'
+      fullPath: '/swap'
+      preLoaderRoute: typeof SwapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vaults': {
@@ -732,8 +772,10 @@ const rootRouteChildren: RootRouteChildren = {
   NftRoute: NftRoute,
   PlaygroundRoute: PlaygroundRouteWithChildren,
   PoolRoute: PoolRoute,
+  PoolsRoute: PoolsRoute,
   RoadmapRoute: RoadmapRoute,
   StealthRoute: StealthRoute,
+  SwapRoute: SwapRoute,
   VaultsRoute: VaultsRoute,
   WalletRoute: WalletRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
