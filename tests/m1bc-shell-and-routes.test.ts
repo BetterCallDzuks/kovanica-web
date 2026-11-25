@@ -142,3 +142,32 @@ test("wallet child routes do not double-wrap <Shell> and Shell guards against ne
     );
   }
 });
+
+test("Shell defines 5 canonical function tabs with unique routes and HomeTestnet reuses NAV_GROUPS", () => {
+  const shellSource = readFileSync(join(SRC_DIR, "components/layout/shell.tsx"), "utf8");
+  const testnetHomeSource = readFileSync(
+    join(SRC_DIR, "components/landing/testnet-home.tsx"),
+    "utf8",
+  );
+
+  for (const id of ["explore", "trade", "assets", "wallet", "build"]) {
+    assert.ok(
+      shellSource.includes(`id: "${id}"`),
+      `Shell NAV_GROUPS must include canonical function group "${id}"`,
+    );
+  }
+
+  const navBlockMatch = shellSource.match(/export const NAV_GROUPS = \[([\s\S]*?)\] as const;/);
+  assert.ok(navBlockMatch, "NAV_GROUPS export must exist in shell.tsx");
+  const routes = [...navBlockMatch[1].matchAll(/to:\s*"([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(
+    new Set(routes).size,
+    routes.length,
+    `Duplicate route found across Shell NAV_GROUPS: ${routes.join(", ")}`,
+  );
+  assert.ok(
+    testnetHomeSource.includes('from "@/components/layout/shell"') &&
+      testnetHomeSource.includes("NAV_GROUPS"),
+    "HomeTestnet must reuse NAV_GROUPS from shell.tsx so tab names and groupings stay 100% consistent",
+  );
+});

@@ -1,73 +1,15 @@
 /**
  * HomeTestnet — app home for testnet.kovanica.online (and shared protocol hosts).
- * Categorized quick-launch grid surfacing Explore, DeFi & RWA, Wallet & Tools,
- * and Contracts in 1 click.
+ * Shares the canonical 5-tab NAV_GROUPS (Explore · Trade · Assets · Wallet · Build)
+ * from Shell so labels and functional groupings are 100% consistent everywhere.
  */
 import { Link } from "@tanstack/react-router";
-import {
-  Activity,
-  ArrowLeftRight,
-  Building2,
-  Compass,
-  Droplets,
-  FileText,
-  Layers,
-  LayoutDashboard,
-  Lock,
-  Map,
-  Pickaxe,
-  PlusCircle,
-  Settings,
-  Users,
-  Vault,
-  Wallet,
-  Waves,
-  Wrench,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NAV_GROUPS } from "@/components/layout/shell";
 import { WalletDownloads } from "@/components/wallet/wallet-downloads";
 import { useLedger } from "@/lib/ledger/store";
 import { useHydrated } from "@/lib/use-hydrated";
 import { LiveStats } from "./live-stats";
-
-const QUICK_GROUPS = [
-  {
-    title: "DeFi & RWA",
-    accent: "text-gold",
-    items: [
-      { to: "/swap" as const, label: "AMM Swap", desc: "KVP-102 token swaps", icon: ArrowLeftRight },
-      { to: "/pools" as const, label: "AMM Pools", desc: "DEX liquidity (x·y=k)", icon: Waves },
-      { to: "/rwa" as const, label: "RWA Registry", desc: "KVP-106 asset directory", icon: Building2 },
-      { to: "/wallet/rwa-issue" as const, label: "Issue RWA", desc: "Derive & mint assets", icon: PlusCircle },
-      { to: "/wallet/rwa-manage" as const, label: "Manage RWA", desc: "Allowlist & coupons", icon: Settings },
-      { to: "/multi-asset" as const, label: "Multi-Asset", desc: "Token UTXOs & sends", icon: Layers },
-    ],
-  },
-  {
-    title: "Wallet, Faucet & Tools",
-    accent: "text-teal",
-    items: [
-      { to: "/wallet" as const, label: "Web Wallet", desc: "PRO-21 vault & sends", icon: Wallet },
-      { to: "/wallet/ecosystem-tools" as const, label: "Ecosystem Tools", desc: "Scheduler, bridge & passkeys", icon: Wrench },
-      { to: "/faucet" as const, label: "Faucet", desc: "Claim testnet KVNC", icon: Droplets },
-      { to: "/docs" as const, label: "Docs", desc: "Specs & CLI reference", icon: FileText },
-    ],
-  },
-  {
-    title: "Explore & Contracts",
-    accent: "text-blue",
-    items: [
-      { to: "/explorer" as const, label: "Explorer", desc: "Live BlockDAG & txs", icon: Compass },
-      { to: "/network" as const, label: "Network", desc: "Peers & sync status", icon: Activity },
-      { to: "/pool" as const, label: "Mining Pool", desc: "Stratum V1 TLS mining", icon: Pickaxe },
-      { to: "/multisig" as const, label: "Multisig", desc: "M-of-N shared custody", icon: Users },
-      { to: "/htlc" as const, label: "HTLC", desc: "Atomic swap contracts", icon: Lock },
-      { to: "/vaults" as const, label: "Vaults", desc: "CLTV / CSV time-locks", icon: Vault },
-      { to: "/map" as const, label: "Origins Map", desc: "Global origin pulses", icon: Map },
-      { to: "/dash" as const, label: "Dashboard", desc: "Network overview", icon: LayoutDashboard },
-    ],
-  },
-] as const;
 
 export function HomeTestnet() {
   const hydrated = useHydrated();
@@ -92,13 +34,16 @@ export function HomeTestnet() {
 
       <div className="mt-5 flex flex-col items-stretch justify-center gap-2.5 sm:flex-row sm:items-center sm:justify-center">
         <Button asChild variant="gold" className="h-10 px-5">
-          <Link to="/explorer">Open explorer</Link>
+          <Link to="/explorer">Explorer</Link>
         </Button>
         <Button asChild variant="outline" className="h-10 px-5">
-          <Link to="/wallet">Open wallet</Link>
+          <Link to="/swap">Swap</Link>
         </Button>
         <Button asChild variant="outline" className="h-10 px-5">
-          <Link to="/swap">Swap &amp; DeFi</Link>
+          <Link to="/rwa">RWA Registry</Link>
+        </Button>
+        <Button asChild variant="outline" className="h-10 px-5">
+          <Link to="/wallet">Wallet</Link>
         </Button>
         <Button asChild variant="outline" className="h-10 px-5">
           <Link to="/faucet">Faucet</Link>
@@ -124,10 +69,10 @@ export function HomeTestnet() {
           </span>
         </div>
 
-        {QUICK_GROUPS.map((group) => (
-          <div key={group.title} className="space-y-2.5">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.id} className="space-y-2.5">
             <h3 className="font-mono text-[11px] uppercase tracking-wider text-muted">
-              {group.title}
+              {group.label}
             </h3>
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {group.items.map((item) => {
