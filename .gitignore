@@ -18,5 +18,6 @@ attachments/
 .DS_Store
 *.local
 .project_id
+data/
 AGENTS.md
 AGENTS.project.md

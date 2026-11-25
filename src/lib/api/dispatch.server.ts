@@ -39,6 +39,9 @@ import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap } from "
 import { encodeAddress, parseAddr, toCanonicalAddress } from "../wallet/address";
 import { listPools, listTokens, getTokenState } from "./tokens.server";
 import { handleInquirySubmission } from "./inquiries.server";
+import { handleBillingRequest } from "./billing.server";
+import { checkApiRateLimit, handleApiKeysRequest } from "./api-keys.server";
+import { clientIpFromHeaders } from "./client-ip.server";
 import { balanceOf } from "../tokens/codec";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { classifyHealth, type HealthSummary } from "./health";
@@ -62,13 +65,20 @@ import {
 
 const CORS: Record<string, string> = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-  "access-control-allow-headers": "content-type, x-kovanica-source",
+  "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+  "access-control-allow-headers":
+    "content-type, authorization, x-api-key, x-kovanica-source, stripe-signature",
 };
 
 function withCors(res: Response): Response {
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(CORS)) headers.set(k, v);
+  return new Response(res.body, { status: res.status, headers });
+}
+
+function withExtraHeaders(res: Response, extra: Record<string, string>): Response {
+  const headers = new Headers(res.headers);
+  for (const [k, v] of Object.entries(extra)) headers.set(k, v);
   return new Response(res.body, { status: res.status, headers });
 }
 
@@ -859,11 +869,60 @@ export async function dispatchApi(req: Request): Promise<Response> {
     if (method !== "POST") return text("method not allowed", 405);
     const clientKey =
       req.headers.get("cf-connecting-ip") ??
+      clientIpFromHeaders(req.headers) ??
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       "local";
     const result = await handleInquirySubmission(req, clientKey);
     return json(result.body, result.status);
   }
+
+  if (name === "billing") {
+    const result = await handleBillingRequest(req, url.pathname);
+    return json(result.body, result.status);
+  }
+
+  if (name === "keys") {
+    const result = await handleApiKeysRequest(req, url.pathname);
+    return json(result.body, result.status);
+  }
+
+  // Liveness probe stays exempt from rate limiting so health monitors never trip.
+  if (source === "testnet" && name === "health") {
+    const probe = await probeHealth();
+    return json({
+      state: classifyHealth({ healthStatus: probe.status, failed: probe.failed }),
+      status: probe.status,
+      checkedAt: probe.checkedAt,
+    });
+  }
+
+  // Enforce per-tier API key rate limiting on metered RPC/API routes with
+  // graceful public fallback for unauthenticated explorer/wallet calls.
+  const clientIp =
+    req.headers.get("cf-connecting-ip") ??
+    clientIpFromHeaders(req.headers) ??
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "local";
+  const rateLimit = await checkApiRateLimit(req, clientIp);
+  if (!rateLimit.allowed) {
+    return withExtraHeaders(
+      json(rateLimit.body ?? { ok: false, error: "Rate limit exceeded." }, rateLimit.status ?? 429),
+      rateLimit.headers,
+    );
+  }
+
+  const response = await dispatchMeteredApi(req, url, name, q, method, source);
+  return withExtraHeaders(response, rateLimit.headers);
+}
+
+async function dispatchMeteredApi(
+  req: Request,
+  url: URL,
+  name: string,
+  q: URLSearchParams,
+  method: string,
+  source: ApiSource,
+): Promise<Response> {
 
   // Mainnet has no public RPC endpoint prior to 1.1.2027 genesis launch
   // Network isolation: mainnet must not silently query testnet node or submit transactions.
