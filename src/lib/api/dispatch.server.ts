@@ -32,6 +32,7 @@ import {
   localReset,
   localState,
   localSubmit,
+  localSubmitTx,
   localUtxos,
 } from "./node.server";
 import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap } from "./contract";
@@ -725,11 +726,14 @@ async function handleRwaDerive(
   if (method !== "POST") return text("method not allowed", 405);
 
   let body: Record<string, unknown> = {};
-  if (!q.has("issuer") && req.body !== null) {
+  if (req.body !== null) {
     try {
-      const parsed = (await req.json()) as unknown;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        body = parsed as Record<string, unknown>;
+      const rawBody = await req.text();
+      if (rawBody.trim().length > 0) {
+        const parsed = JSON.parse(rawBody) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          body = parsed as Record<string, unknown>;
+        }
       }
     } catch {
       return text("invalid JSON body", 400);
@@ -772,9 +776,8 @@ async function handleRwaDerive(
       400,
     );
   }
-  const uniqueId = rawUniqueId.trim();
   const enc = new TextEncoder();
-  const uniqueIdBytes = enc.encode(uniqueId);
+  const uniqueIdBytes = enc.encode(rawUniqueId);
   if (uniqueIdBytes.length === 0 || uniqueIdBytes.length > MAX_RWA_UNIQUE_ID_BYTES) {
     return text("invalid unique_id: must be 1..128 UTF-8 bytes", 400);
   }
@@ -800,6 +803,23 @@ async function handleRwaDerive(
     asset_id: bytesToHex(digest),
     asset_id_kvnc: encodeAddress(digest),
   });
+}
+
+async function parseSubmitTxHex(
+  req: Request,
+): Promise<{ ok: true; hex: string } | { ok: false; res: Response }> {
+  let body: { tx_hex?: unknown };
+  try {
+    body = (await req.json()) as { tx_hex?: unknown };
+  } catch {
+    return { ok: false, res: text("invalid JSON body", 400) };
+  }
+  const raw = typeof body?.tx_hex === "string" ? body.tx_hex.trim() : "";
+  const cleanHex = raw.replace(/^0x/i, "").toLowerCase();
+  if (!cleanHex || cleanHex.length % 2 !== 0 || !/^[0-9a-f]+$/.test(cleanHex)) {
+    return { ok: false, res: text("invalid tx_hex: expected non-empty even-length hex", 400) };
+  }
+  return { ok: true, hex: cleanHex };
 }
 
 export async function dispatchApi(req: Request): Promise<Response> {
@@ -1218,19 +1238,10 @@ export async function dispatchApi(req: Request): Promise<Response> {
     }
     if (name === "submit_tx") {
       if (method !== "POST") return text("method not allowed", 405);
-      let body: { tx_hex?: unknown };
+      const parsed = await parseSubmitTxHex(req);
+      if (!parsed.ok) return parsed.res;
       try {
-        body = (await req.json()) as { tx_hex?: unknown };
-      } catch {
-        return text("invalid JSON body", 400);
-      }
-      const raw = typeof body?.tx_hex === "string" ? body.tx_hex.trim() : "";
-      const cleanHex = raw.replace(/^0x/i, "").toLowerCase();
-      if (!cleanHex || cleanHex.length % 2 !== 0 || !/^[0-9a-f]+$/.test(cleanHex)) {
-        return text("invalid tx_hex: expected non-empty even-length hex", 400);
-      }
-      try {
-        const txHash = await callRpc("kovanica_sendRawTransaction", [cleanHex]);
+        const txHash = await callRpc("kovanica_sendRawTransaction", [parsed.hex]);
         return json({ ok: true, tx: txHash });
       } catch (e) {
         if (e instanceof RpcError && e.status === 401) {
@@ -1290,6 +1301,9 @@ export async function dispatchApi(req: Request): Promise<Response> {
   if (name === "supply" && method !== "GET") {
     return text("method not allowed", 405);
   }
+  if (name === "submit_tx" && method !== "POST") {
+    return text("method not allowed", 405);
+  }
 
   if (method === "GET") {
     switch (name) {
@@ -1343,6 +1357,13 @@ export async function dispatchApi(req: Request): Promise<Response> {
     switch (name) {
       case "prepare":
         return json(localPrepare(q.get("from"), q.get("to"), q.get("amount")));
+      case "submit_tx": {
+        const parsed = await parseSubmitTxHex(req);
+        if (!parsed.ok) return parsed.res;
+        const res = localSubmitTx(parsed.hex);
+        if (typeof res === "string") return text(res, 400);
+        return json(res);
+      }
       case "submit":
         return json(localSubmit(q.get("from"), q.get("to"), q.get("amount"), q.get("sig")));
       case "produce":

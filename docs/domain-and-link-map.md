@@ -111,7 +111,7 @@
 | `/api-reference` | `routes/api-reference.tsx` | `MinimalHeader` | `OK` (`FIXED_IN_M1A` eyebrow & `/docs` sidebar link) | Done for M1-A. |
 | `/playground`, `/playground/api-console`, `/playground/snippets` | `routes/playground*.tsx` | `PlaygroundChrome` | `OK` (`FIXED_IN_M1A` `snippets.tsx`, `api-console.tsx`, `playground-onboarding.tsx`) | **M1-B**: Ecosystem links in `PlaygroundChrome`. |
 | `/api/$` | `routes/api/$.ts` | Server handler | `FIXED_IN_M1A` (added `/api/rwa/derive`, `/api/supply`, `/api/submit_tx`) | See §4 audit table. |
-| `/download/$` | `routes/download/$.ts` | Server handler | `FIXED_IN_M1A` (`BetterCallDzuks/kovanica-l1`) | Verified in `tests/m1a-links-and-hosts.test.ts`. |
+| `/download/$` | `routes/download/$.ts` | Server handler | `FIXED_IN_M1A` (`BetterCallDzuks/kovanica-l1`, `Object.hasOwn` prototype-property `404` guard) | Verified in `tests/m1a-links-and-hosts.test.ts`. |
 
 ---
 
@@ -124,15 +124,15 @@
 | `/api/spec` | `GET` | `testnet`, `mainnet`, `local` | Returns plain-text protocol spec (`GET /download/install.sh` + `BetterCallDzuks/kovanica-l1` fixed). | `OK` (`FIXED_IN_M1A`) |
 | `/api/health` | `GET` | `testnet` | Liveness probe against `rpcOrigin()/health`. | `OK` |
 | `/api/head`, `/api/bootstrap`, `/api/state`, `/api/utxos`, `/api/history`, `/api/fee_estimate` | `GET` | `testnet`, `local` | Live JSON-RPC proxy (`testnet`) or in-memory node (`local`); `mainnet` returns `503`. | `OK` |
-| `/api/supply` | `GET` | `testnet`, `local` | **Added in M1-A**: Queries `kovanica_syncStatus` + `probeHealth()` on `testnet` (returns live `blocks` + canonical supply constants with `null` for unexposed `circulating`/`burned`/`native_minted`; `502`/`503` on RPC failure/stalled; `405` on non-GET) and `localState().node` on `local`. `mainnet` returns `503`. | `FIXED_IN_M1A` |
+| `/api/supply` | `GET` | `testnet`, `local` | **Added in M1-A**: Queries `kovanica_syncStatus` + `probeHealth()` on `testnet` (returns live `blocks` + canonical supply constants with `null` for unexposed `circulating`/`burned`/`native_minted`; `502`/`503` when `kovanica_syncStatus` RPC itself fails or returns `503`, and `200` with `health.state: "stalled"` / `health.status: 503` when `/health` is `503` while `kovanica_syncStatus` returns `200`, matching `/api/head`, `/api/bootstrap`, and `/api/state`; `405` on non-GET) and `localState().node` on `local`. `mainnet` returns `503`. | `FIXED_IN_M1A` |
 | `/api/fee_schedule`, `/api/base_fee`, `/api/storage_deposit` | `GET` | `testnet` | Proxies `kovanica_getFeeSchedule`, `kovanica_getBaseFee`, `kovanica_getStorageDeposit` with canonical constant fallback. | `OK` |
 | `/api/contract_call`, `/api/contract_storage`, `/api/contract_receipt` | `POST` | `testnet`, `local` | Read-only Wasmi contract simulation / storage / receipt inspection (`405` on non-POST). | `OK` |
-| `/api/rwa/derive` | `POST` | `testnet`, `local` | **Added in M1-A**: Exact KVP-106 `blake3("kvp106:rwa:v1" \|\| issuer32 \|\| 0x00 \|\| asset_class \|\| 0x00 \|\| unique_id \|\| u32_le(version))` matching `kovanica-l1/crates/kovanica-rwa/src/lib.rs:39-54`. Returns `{ asset_id, asset_id_kvnc }`; validates inputs (`400`), `405` on non-POST, `403` on `mainnet`. | `FIXED_IN_M1A` |
+| `/api/rwa/derive` | `POST` | `testnet`, `local` | **Added in M1-A**: Exact KVP-106 `blake3("kvp106:rwa:v1" \|\| issuer32 \|\| 0x00 \|\| asset_class \|\| 0x00 \|\| unique_id \|\| u32_le(version))` matching `kovanica-l1/crates/kovanica-rwa/src/lib.rs:39-54` (untrimmed `unique_id` bytes and mixed query + JSON body support). Returns `{ asset_id, asset_id_kvnc }`; validates inputs (`400`), `405` on non-POST, `403` on `mainnet`. | `FIXED_IN_M1A` |
 | `/api/rwa/registry`, `/api/rwa/list`, `/api/rwa/compliance/{id}`, `/api/rwa/mint`, `/api/rwa/{id}` | `GET`/`POST` | `testnet` | RWA registry, compliance lookup, prepared mint, detail lookup. | `OK` |
 | `/api/collection/{id}`, `/api/nft/{id}` | `GET` | `testnet` | KVP-106 collection and NFT detail lookups (`400`/`404`/`501`/`502`/`503`). | `OK` |
 | `/api/tokens`, `/api/pools`, `/api/token_prepare`, `/api/token_submit` | `GET`/`POST` | `testnet` | KVP-102 tokens, AMM pools, token transfer prepare/submit. | `OK` |
-| `/api/faucet`, `/api/prepare`, `/api/submit` | `POST`/`GET` | `testnet`, `local` | Faucet dispense, native prepare/submit (`mainnet` `403`). | `OK` |
-| `/api/submit_tx` | `POST` | `testnet` | **Added in M1-A**: Accepts `{ tx_hex }`, validates even-length hex (`400`), forwards to `kovanica_sendRawTransaction([cleanHex])`, maps public RPC `401` → `403`, `405` on non-POST, `403` on `mainnet`. | `FIXED_IN_M1A` |
+| `/api/faucet`, `/api/prepare`, `/api/submit` | `GET`/`POST` (`testnet`), `POST`-only (`local`) | `testnet`, `local` | Faucet dispense and native prepare/submit (`mainnet` `403`). On `local`, only `POST` is wired (`GET /api/faucet?source=local`, `GET /api/prepare?source=local`, and `GET /api/submit?source=local` return `404`). | `OK` |
+| `/api/submit_tx` | `POST` | `testnet`, `local` | **Added in M1-A**: Accepts `{ tx_hex }`, validates non-empty even-length hex (`400`), forwards to `kovanica_sendRawTransaction([cleanHex])` on `testnet` (maps public RPC `401` → `403`) or `localSubmitTx(cleanHex)` on `local` (decodes native transfer or queues raw tx in local mempool), `405` on non-POST, `403` on `mainnet`. | `FIXED_IN_M1A` |
 | `/api/origins`, `/api/p2p`, `/api/blocks`, `/api/produce`, `/api/mine`, `/api/mining`, `/api/miner`, `/api/reset`, `/api/origin` | `GET`/`POST` | `local` (`403` for `reset`/`mine`/`mining` on `testnet`) | Local mock playground / node operations (`testnet` falls through to `local` for `origins`/`p2p`/`blocks`/`produce`/`origin` when not blocked). | `OK` (local) |
 
 ### 4.2 Legacy & Unimplemented `/api/*` Endpoints (Left Unstubbed in M1-A)
@@ -166,7 +166,9 @@ All 21 legacy protocol endpoints below (plus `/api/rtc` and unimplemented `endpo
 
 ---
 
-## 5. `kovanica-apps` (`wallet-web`, `browser-extension`, `console-desktop`) — Pending M2
+## 5. `kovanica-apps` (`wallet-web`, `browser-extension`, `console-desktop`) — Parallel M2 Branch (`feat/simplify-ux-and-links`)
+
+> Tracked on parallel M2 branch `feat/simplify-ux-and-links` per `PROJECT.md`; baseline survey findings below remain outside M1-A `kovanica-web` verification scope.
 
 | Target / Pattern | Source (`File:Line`) | Status | Planned Remediation |
 |---|---|---|---|
@@ -181,7 +183,9 @@ All 21 legacy protocol endpoints below (plus `/api/rtc` and unimplemented `endpo
 
 ---
 
-## 6. `kovanica-playground` — Pending M3
+## 6. `kovanica-playground` — Parallel M3 Branch (`feat/simplify-playground-and-links`)
+
+> Tracked on parallel M3 branch `feat/simplify-playground-and-links` per `PROJECT.md`; baseline survey findings below remain outside M1-A `kovanica-web` verification scope.
 
 | Target / Pattern | Source (`File:Line`) | Status | Planned Remediation |
 |---|---|---|---|
@@ -216,6 +220,6 @@ All 21 legacy protocol endpoints below (plus `/api/rtc` and unimplemented `endpo
 | **M1-A** (`kovanica-web`, completed here) | Branch `feat/reorganize-simplify-web-ux`, `docs/domain-and-link-map.md`, `surfaces.ts`, `host.ts` (roles + `:port` stripping), `__root.tsx` redirects, `network.ts`, `networkConstants.ts`, `api/spec.ts`, `rpc-spec.ts`, `download/$.ts`, `KovanicaDAG` → `BetterCallDzuks` fixes, `api.kovanica.online` → `/api-reference` & `rpc-testnet.kovanica.online/rpc`, `mainnet-launching.tsx` & `source-switch.tsx` launching labels, `contract-inspector-panel.tsx` & `dry-run.ts` RPC URLs, `.org` → `.online` (`engine.ts`, `trezor-provider.ts`), `dashboard.tsx` & `playground-onboarding.tsx` `/wallet` CTAs, `miner-command-builder.tsx` Stratum placeholder note, 17-file Tailwind v4 shade/`bg-surface` fixes, `POST /api/rwa/derive`, `GET /api/supply`, `POST /api/submit_tx`, `snippets.tsx` & `api-console.tsx` alignment, M1-A unit tests. |
 | **M1-B** (`kovanica-web`, pending) | Unified `<Shell>` across `/wallet/*`, `/swap`, `/pools`, `/rwa`, `/multi-asset`, `/stealth`, `/nft`; 4-bucket IA navigation + Ecosystem Switcher; `WalletDefiNav` sub-nav; `/pool` vs `/pools` nav disambiguation; `PlaygroundChrome` cross-links; `rwa-issue.tsx:446` SPA `<Link to="/wallet">`. |
 | **M1-C** (`kovanica-web`, pending) | Page layout simplification (`HomeLanding`, `HomeTestnet`, `ExplorerView`, etc.) and comprehensive route/UX verification tests. |
-| **M2** (`kovanica-apps`, pending) | `wallet-web` & `browser-extension` RPC presets, chain-aware explorer links, Ecosystem Switcher, IA simplification. |
-| **M3** (`kovanica-playground`, pending) | `App.tsx` GitHub org fix, public RPC preset, `.org` → `.online` relays, `WalletContractConsole.tsx` sub-tabs, `WaveARwaStudio.tsx` dark tokens, `README.md` SDK version sync. |
+| **M2** (`kovanica-apps`, parallel branch `feat/simplify-ux-and-links`) | `wallet-web` & `browser-extension` RPC presets, chain-aware explorer links, Ecosystem Switcher, IA simplification (tracked in `PROJECT.md`; outside M1-A verification scope). |
+| **M3** (`kovanica-playground`, parallel branch `feat/simplify-playground-and-links`) | `App.tsx` GitHub org fix, public RPC preset, `.org` → `.online` relays, `WalletContractConsole.tsx` sub-tabs, `WaveARwaStudio.tsx` dark tokens, `README.md` SDK version sync (tracked in `PROJECT.md`; outside M1-A verification scope). |
 | **Out-of-Scope (DNS/TLS/L1/Vendor)** | Edge TLS SAN for `mainnet.kovanica.online`, DNS provisioning (`api.`, `apps.`, `pool.`, `seed2.`, `relay*.`, `indexer.`), nginx static `/download/install.sh`, `kovanica-l1/node/scripts/install.sh:50` (`KovanicaDAG`), `kovanica-l1` `v*-node` release tags, `vendor/kovanica-sdk-wasm/package.json`. |

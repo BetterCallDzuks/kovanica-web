@@ -21,7 +21,7 @@ export const Route = createFileRoute("/download/$")({
       GET: async ({ request }) => {
         const url = new URL(request.url);
         const name = url.pathname.replace(/^\/download\//, "");
-        const target = DOWNLOADS[name];
+        const target = Object.hasOwn(DOWNLOADS, name) ? DOWNLOADS[name] : undefined;
         if (!target) {
           return new Response("not found", { status: 404 });
         }

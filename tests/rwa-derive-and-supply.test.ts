@@ -114,6 +114,43 @@ test("POST /api/rwa/derive matches KVP-106 Rust blake3 derivation for 64-hex and
   );
   assert.equal(resLocalJson.status, 200);
   assert.deepEqual(await resLocalJson.json(), expectedBondV2);
+
+  // Mixed query param (?issuer=...) + JSON body fields
+  const expectedMixed = expectedKvp106AssetId("ab".repeat(32), "RE", "mixed-test", 1);
+  const resMixed = await dispatchApi(
+    new Request(`https://testnet.kovanica.online/api/rwa/derive?issuer=${"ab".repeat(32)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        asset_class: "RE",
+        unique_id: "mixed-test",
+        version: 1,
+      }),
+    }),
+  );
+  assert.equal(resMixed.status, 200);
+  assert.deepEqual(await resMixed.json(), expectedMixed);
+
+  // Untrimmed unique_id must match kovanica-l1 derive_asset_id byte-for-byte without trimming
+  const expectedUntrimmed = expectedKvp106AssetId("ab".repeat(32), "RE", " padded-id ", 1);
+  assert.equal(
+    expectedUntrimmed.asset_id,
+    "e73e1bb91a32acde9d108adf570f1ac8ace282dfdd75f459f0b6fa8ae44072e6",
+  );
+  const resUntrimmed = await dispatchApi(
+    new Request("https://testnet.kovanica.online/api/rwa/derive", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        issuer: "ab".repeat(32),
+        asset_class: "RE",
+        unique_id: " padded-id ",
+        version: 1,
+      }),
+    }),
+  );
+  assert.equal(resUntrimmed.status, 200);
+  assert.deepEqual(await resUntrimmed.json(), expectedUntrimmed);
 });
 
 test("POST /api/rwa/derive validates inputs (400), rejects non-POST (405), and blocks mainnet (403)", async () => {
@@ -196,6 +233,33 @@ test("GET /api/supply returns live testnet height + canonical constants, 503 whe
     assert.equal(res.status, 503);
   } finally {
     restoreStalled();
+  }
+
+  // Partial degradation: /health returns 503 (stalled) while RPC kovanica_syncStatus returns 200
+  const restoreHealthStalled = stubFetch((url) => {
+    if (url.endsWith("/health")) {
+      return new Response("stalled", { status: 503 });
+    }
+    return Response.json({
+      jsonrpc: "2.0",
+      id: 1,
+      result: { committedHeight: 4243, peers: [] },
+    });
+  });
+  try {
+    const res = await dispatchApi(
+      new Request("https://testnet.kovanica.online/api/supply?source=testnet"),
+    );
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      blocks: number;
+      health: { state: string; status: number };
+    };
+    assert.equal(body.blocks, 4243);
+    assert.equal(body.health.state, "stalled");
+    assert.equal(body.health.status, 503);
+  } finally {
+    restoreHealthStalled();
   }
 
   const restoreDown = stubFetch(() => {
@@ -307,4 +371,54 @@ test("POST /api/submit_tx forwards valid hex to kovanica_sendRawTransaction and 
     }),
   );
   assert.equal(getRes.status, 405);
+});
+
+test("POST /api/submit_tx?source=local accepts valid hex, queues in local mempool, and rejects invalid inputs", async () => {
+  await dispatchApi(
+    new Request("https://testnet.kovanica.online/api/reset?source=local", { method: "POST" }),
+  );
+
+  try {
+    const okRes = await dispatchApi(
+      new Request("https://testnet.kovanica.online/api/submit_tx?source=local", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tx_hex: "0xDEADBEEF" }),
+      }),
+    );
+    assert.equal(okRes.status, 200);
+    const okBody = (await okRes.json()) as { ok: boolean; tx: string };
+    assert.equal(okBody.ok, true);
+    assert.match(okBody.tx, /^[0-9a-f]{64}$/);
+
+    const stateRes = await dispatchApi(
+      new Request("https://testnet.kovanica.online/api/state?source=local"),
+    );
+    assert.equal(stateRes.status, 200);
+    const stateBody = (await stateRes.json()) as { node: { mempool: number; pending: string[] } };
+    assert.equal(stateBody.node.mempool, 1);
+    assert.ok(stateBody.node.pending.includes(okBody.tx));
+
+    for (const badBody of ["{}", '{"tx_hex":""}', '{"tx_hex":"abc"}', '{"tx_hex":"zzzz"}', "not-json"]) {
+      const badRes = await dispatchApi(
+        new Request("https://testnet.kovanica.online/api/submit_tx?source=local", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: badBody,
+        }),
+      );
+      assert.equal(badRes.status, 400, `Expected 400 for local submit_tx body: ${badBody}`);
+    }
+
+    const getLocalRes = await dispatchApi(
+      new Request("https://testnet.kovanica.online/api/submit_tx?source=local", {
+        method: "GET",
+      }),
+    );
+    assert.equal(getLocalRes.status, 405);
+  } finally {
+    await dispatchApi(
+      new Request("https://testnet.kovanica.online/api/reset?source=local", { method: "POST" }),
+    );
+  }
 });

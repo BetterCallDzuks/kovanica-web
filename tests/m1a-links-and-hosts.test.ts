@@ -111,6 +111,13 @@ test("/download/$ redirects install.sh and node archives to BetterCallDzuks/kova
     request: new Request("https://kovanica.online/download/nonexistent"),
   });
   assert.equal(missingRes.status, 404);
+
+  for (const protoKey of ["toString", "constructor", "__proto__", "valueOf"]) {
+    const protoRes = await getHandler({
+      request: new Request(`https://kovanica.online/download/${protoKey}`),
+    });
+    assert.equal(protoRes.status, 404, `Expected 404 for prototype key: ${protoKey}`);
+  }
 });
 
 test("dry-run snippets default to https://rpc-testnet.kovanica.online/rpc when rpcUrl is omitted", () => {

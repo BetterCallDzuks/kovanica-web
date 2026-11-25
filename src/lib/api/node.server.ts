@@ -383,6 +383,48 @@ export function localSubmit(
   return { ok: true, tx: id };
 }
 
+export function localSubmitTx(cleanHex: string): ApiSubmit | string {
+  const rawBytes = hexToBytes(cleanHex);
+  if (!rawBytes || rawBytes.length === 0) {
+    return "invalid tx_hex: expected non-empty even-length hex";
+  }
+
+  // Decode bincode native transfer layout (sender32 || nonce8 || kind4=0 || to32 || amount8 || fee8 || sigLen8=64 || sig64 || hash32)
+  if (rawBytes.length === 196) {
+    const view = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
+    const kindTag = view.getUint32(40, true);
+    const sigLen = view.getBigUint64(92, true);
+    if (kindTag === 0 && sigLen === 64n) {
+      const fromHex = bytesToHex(rawBytes.slice(0, 32));
+      const toHex = bytesToHex(rawBytes.slice(44, 76));
+      const amount = view.getBigUint64(76, true);
+      const sigHex = bytesToHex(rawBytes.slice(100, 164));
+      if (amount > 0n && amount <= BigInt(Number.MAX_SAFE_INTEGER)) {
+        const submitted = localSubmit(fromHex, toHex, amount.toString(), sigHex);
+        if (typeof submitted !== "string") {
+          return submitted;
+        }
+      }
+    }
+  }
+
+  const id = hashHex(`raw_tx:${cleanHex}`);
+  const s = store();
+  if (!s.pending.some((p) => p.id === id)) {
+    s.pending.push({
+      id,
+      from: "raw_tx",
+      to: "raw_tx",
+      amount: 0,
+      fee: MIN_FEE,
+      outpoint: { tx: id, index: 0 },
+      sig: "",
+      sighash: id,
+    });
+  }
+  return { ok: true, tx: id };
+}
+
 function spend(s: Store, op: Outpoint): Utxo | null {
   const i = s.utxos.findIndex((u) => u.tx === op.tx && u.index === op.index);
   if (i < 0) return null;
