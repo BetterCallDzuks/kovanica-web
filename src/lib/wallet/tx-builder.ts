@@ -25,11 +25,22 @@ const TX_KEY = asciiPad("KVNC-TX-v1", 32);
 
 export const WATCHED_TOKENS_KEY = "kovanica.watched_tokens";
 
+export interface KovanicaExtensionStealthMeta {
+  metaAddress?: string;
+  meta_address?: string;
+  scanPubkeyHex?: string;
+  scan_pubkey_hex?: string;
+  spendPubkeyHex?: string;
+  spend_pubkey_hex?: string;
+}
+
 export interface KovanicaExtensionProvider {
   readonly isKovanica?: boolean;
   connect(): Promise<{ accounts: string[]; chainId: number }>;
   getAccounts(): Promise<string[]>;
   getChainId?(): Promise<number>;
+  request?<T = unknown>(args: { method: string; params?: unknown }): Promise<T>;
+  getStealthMetaAddress?(): Promise<string | KovanicaExtensionStealthMeta>;
   signTransaction(tx: {
     kind: "call";
     contract: string;

@@ -10,10 +10,12 @@ import {
   deriveOnetimeSpendKey,
   deriveStealthKeypairFromMnemonic,
   generateStealthKeypair,
+  importStealthMetaFromExtension,
   matchStealthAnnouncement,
   parseStealthMetaAddress,
   signSighashWithStealthScalar,
 } from "../src/lib/protocol/stealth";
+import { KVNC_COIN_ICON, resolveTokenIcon } from "../src/lib/tokens/icons";
 import {
   buildStealthScanUrl,
   extractStealthBadgeInfo,
@@ -220,4 +222,60 @@ test("extractStealthBadgeInfo detects KVP-103 stealth metadata from tx fields, m
     `/stealth?tab=scan&view_tag=${onetime.viewTag}&ephemeral=${onetime.ephemeralPubkeyHex}`,
   );
   assert.equal(buildStealthScanUrl({ viewTag: "bad!", ephemeralPubkeyHex: "nope" }), "/stealth");
+});
+
+test("importStealthMetaFromExtension supports direct method, request() fallback, and clear error messages", async () => {
+  const kp = generateStealthKeypair();
+
+  // 1. Direct getStealthMetaAddress() returning st:kvnc:... string
+  const fromDirect = await importStealthMetaFromExtension({
+    connect: async () => ({ accounts: [], chainId: 2 }),
+    getAccounts: async () => [],
+    signTransaction: async () => ({ rawTxHex: "", signingHashHex: "", signatureHex: "" }),
+    getStealthMetaAddress: async () => kp.metaAddress,
+  });
+  assert.equal(fromDirect.metaAddress, kp.metaAddress);
+  assert.equal(fromDirect.scanPubkeyHex, kp.scanPubkeyHex);
+  assert.equal(fromDirect.spendPubkeyHex, kp.spendPubkeyHex);
+
+  // 2. Fallback request({ method: "kovanica_getStealthMetaAddress" }) returning structured pubkeys
+  const fromRequest = await importStealthMetaFromExtension({
+    connect: async () => ({ accounts: [], chainId: 2 }),
+    getAccounts: async () => [],
+    signTransaction: async () => ({ rawTxHex: "", signingHashHex: "", signatureHex: "" }),
+    request: async ({ method }) => {
+      assert.equal(method, "kovanica_getStealthMetaAddress");
+      return {
+        scanPubkeyHex: kp.scanPubkeyHex,
+        spendPubkeyHex: kp.spendPubkeyHex,
+      } as never;
+    },
+  });
+  assert.equal(fromRequest.metaAddress, kp.metaAddress);
+
+  // 3. Missing extension throws clear error
+  await assert.rejects(
+    () => importStealthMetaFromExtension(null),
+    /Kovanica Browser Extension not detected/,
+  );
+
+  // 4. Locked extension error propagates cleanly
+  await assert.rejects(
+    () =>
+      importStealthMetaFromExtension({
+        connect: async () => ({ accounts: [], chainId: 2 }),
+        getAccounts: async () => [],
+        signTransaction: async () => ({ rawTxHex: "", signingHashHex: "", signatureHex: "" }),
+        getStealthMetaAddress: async () => {
+          throw new Error("Extension wallet is locked");
+        },
+      }),
+    /Extension wallet is locked/,
+  );
+});
+
+test("token icon helpers append ?v=2 cache-busting query string for optimized PNGs", () => {
+  assert.equal(KVNC_COIN_ICON, "/kvnc-coin.png?v=2");
+  assert.equal(resolveTokenIcon("KVNC"), "/kvnc-coin.png?v=2");
+  assert.equal(resolveTokenIcon("KSMOKE"), "/tokens/ksmoke.png?v=2");
 });

@@ -8,11 +8,11 @@
  *   bytes (such as `KSMOKE`) fall back to bundled static artwork in `/tokens/`.
  */
 
-export const KVNC_COIN_ICON = "/kvnc-coin.png";
+export const KVNC_COIN_ICON = "/kvnc-coin.png?v=2";
 
 const FALLBACK_TOKEN_ICONS_BY_SYMBOL: Record<string, string> = {
   KVNC: KVNC_COIN_ICON,
-  KSMOKE: "/tokens/ksmoke.png",
+  KSMOKE: "/tokens/ksmoke.png?v=2",
 };
 
 /** Resolve the best display icon URL for a token (on-chain icon wins over local fallback). */

@@ -17,6 +17,11 @@ import { sha512 } from "@noble/hashes/sha2.js";
 import { api, apiPostJson } from "@/lib/api/client";
 import type { ApiHistory, ApiUtxos } from "@/lib/api/contract";
 import { encodeAddress, hexToKvnc, parseAddr } from "@/lib/wallet/address";
+import {
+  getKovanicaExtension,
+  type KovanicaExtensionProvider,
+  type KovanicaExtensionStealthMeta,
+} from "@/lib/wallet/tx-builder";
 
 // Ensure @noble/ed25519 has synchronous SHA-512 configured in both browser & Node.
 if (!ed.hashes.sha512) {
@@ -241,6 +246,55 @@ export function createStealthMeta(
 ): StealthMetaAddress {
   const metaAddress = formatStealthMetaAddress(scanPubkeyHex, spendPubkeyHex);
   return parseStealthMetaAddress(metaAddress);
+}
+
+/**
+ * Import the public KVP-103 stealth meta-address (`st:kvnc:<scanPub>:<spendPub>`)
+ * from the Kovanica Browser Extension (`window.kovanica`). Private scan/spend
+ * keys never leave the extension.
+ */
+export async function importStealthMetaFromExtension(
+  providerOverride?: KovanicaExtensionProvider | null,
+): Promise<StealthMetaAddress> {
+  const provider = providerOverride === undefined ? getKovanicaExtension() : providerOverride;
+  if (!provider) {
+    throw new Error(
+      "Kovanica Browser Extension not detected. Install and unlock the extension to import your stealth meta-address.",
+    );
+  }
+
+  let raw: string | KovanicaExtensionStealthMeta | undefined;
+  if (typeof provider.getStealthMetaAddress === "function") {
+    raw = await provider.getStealthMetaAddress();
+  } else if (typeof provider.request === "function") {
+    raw = await provider.request<string | KovanicaExtensionStealthMeta>({
+      method: "kovanica_getStealthMetaAddress",
+    });
+  } else {
+    throw new Error(
+      "Your Kovanica Browser Extension does not support stealth meta-address import (kovanica_getStealthMetaAddress). Please update the extension.",
+    );
+  }
+
+  if (typeof raw === "string") {
+    return parseStealthMetaAddress(raw);
+  }
+
+  if (raw && typeof raw === "object") {
+    const metaStr = raw.metaAddress ?? raw.meta_address;
+    if (typeof metaStr === "string" && metaStr.trim()) {
+      return parseStealthMetaAddress(metaStr);
+    }
+    const scanPub = raw.scanPubkeyHex ?? raw.scan_pubkey_hex;
+    const spendPub = raw.spendPubkeyHex ?? raw.spend_pubkey_hex;
+    if (typeof scanPub === "string" && typeof spendPub === "string") {
+      return createStealthMeta(scanPub, spendPub);
+    }
+  }
+
+  throw new Error(
+    "Kovanica Browser Extension returned an invalid stealth meta-address. Ensure your extension wallet is unlocked and try again.",
+  );
 }
 
 // --- Sender: One-Time Stealth Address Derivation ------------------------------
