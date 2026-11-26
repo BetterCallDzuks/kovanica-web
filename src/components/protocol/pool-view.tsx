@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Info,
   Loader2,
+  Minus,
   RefreshCw,
   ShieldCheck,
   Wallet,
@@ -28,11 +29,16 @@ import { api, useApiSource } from "@/lib/api/client";
 import { useLedger } from "@/lib/ledger/store";
 import { shortId } from "@/lib/ledger/hash";
 import { ATOM, TOKEN } from "@/lib/networkConstants";
+import {
+  computeLpPosition,
+  computeRemoveLiquidityShares,
+} from "@/lib/amm/math";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
 import { KVNC_COIN_ICON, resolveTokenIcon } from "@/lib/tokens/icons";
 import { priceImpactBps, quote, type ApiPool } from "@/lib/tokens/pool";
 import {
   connectExtensionSigner,
+  executeRemoveLiquidity,
   executeTokenBuy,
   executeTokenSell,
   getKovanicaExtension,
@@ -57,8 +63,10 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
   const [pools, setPools] = useState<ApiPool[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<"swap" | "remove">("swap");
   const [dir, setDir] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("1");
+  const [lpRemoveStr, setLpRemoveStr] = useState("");
   const [slippageBps, setSlippageBps] = useState<number>(50);
   const [loading, setLoading] = useState(false);
 
@@ -69,6 +77,7 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
 
   const unlockedSigner = useMemo(() => webWalletSigner(wallet), [wallet]);
   const activeSigner = unlockedSigner ?? extSigner;
+  const activeAddressHex = activeSigner?.addressHex ?? wallet?.address ?? null;
   const hasExtension = useMemo(() => getKovanicaExtension() !== null, []);
 
   const genRef = useRef(0);
@@ -92,7 +101,10 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
     setError(null);
     try {
       const watched = getWatchedTokenContracts();
-      const suffix = watched.length ? `?watched=${encodeURIComponent(watched.join(","))}` : "";
+      const qs = new URLSearchParams();
+      if (watched.length) qs.set("watched", watched.join(","));
+      if (activeAddressHex) qs.set("address", activeAddressHex);
+      const suffix = qs.toString() ? `?${qs.toString()}` : "";
       const rows = await api<ApiPool[]>(`/api/pools${suffix}`);
       if (!Array.isArray(rows)) {
         throw new Error("Malformed pools response");
@@ -131,7 +143,7 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
       genRef.current += 1;
       inFlightGenRef.current = null;
     };
-  }, [source, refreshKey]);
+  }, [source, refreshKey, activeAddressHex]);
 
   const pool = useMemo(
     () => pools?.find((p) => p.address === selected) ?? pools?.[0] ?? null,
@@ -140,6 +152,39 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
 
   const kunaReserve = pool ? BigInt(pool.kuna_reserve) : 0n;
   const tokenReserve = pool ? BigInt(pool.token_reserve) : 0n;
+  const lpTotal = pool ? BigInt(pool.lp_total) : 0n;
+  const userLpShares = pool?.lp_balance ? BigInt(pool.lp_balance) : 0n;
+  const userLpPosition = useMemo(
+    () =>
+      computeLpPosition({
+        userLpShares,
+        totalLpSupply: lpTotal,
+        reserve0: kunaReserve,
+        reserve1: tokenReserve,
+      }),
+    [userLpShares, lpTotal, kunaReserve, tokenReserve],
+  );
+  const removeLpShares = useMemo(() => {
+    const clean = lpRemoveStr.trim();
+    if (!clean || !/^\d+$/.test(clean)) return 0n;
+    try {
+      return BigInt(clean);
+    } catch {
+      return 0n;
+    }
+  }, [lpRemoveStr]);
+  const removeEstimate = useMemo(
+    () =>
+      computeLpPosition({
+        userLpShares: removeLpShares,
+        totalLpSupply: lpTotal,
+        reserve0: kunaReserve,
+        reserve1: tokenReserve,
+      }),
+    [removeLpShares, lpTotal, kunaReserve, tokenReserve],
+  );
+  const removeMinKuna = (removeEstimate.underlying0 * BigInt(10_000 - slippageBps)) / 10_000n;
+  const removeMinTokens = (removeEstimate.underlying1 * BigInt(10_000 - slippageBps)) / 10_000n;
   const inDecimals = dir === "buy" ? KVNC_DECIMALS : (pool?.decimals ?? 0);
   const outDecimals = dir === "buy" ? (pool?.decimals ?? 0) : KVNC_DECIMALS;
   const atoms = pool ? parseTokenAmount(amount, inDecimals) : null;
@@ -221,6 +266,49 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
     } catch (e) {
       setSwapStatus(null);
       toast.error(e instanceof Error ? e.message : "Swap failed");
+    } finally {
+      setSwapping(false);
+    }
+  }
+
+  async function onExecuteRemoveLiquidity() {
+    if (!pool) return;
+    if (pool.paused) {
+      toast.error(`${pool.symbol} pool is currently paused`);
+      return;
+    }
+    if (!activeSigner) {
+      toast.error("Unlock your Web Wallet on /wallet or connect window.kovanica first");
+      return;
+    }
+    if (removeLpShares <= 0n) {
+      toast.error("Enter a positive LP share amount to remove");
+      return;
+    }
+    if (userLpShares > 0n && removeLpShares > userLpShares) {
+      toast.error("Amount exceeds your LP share balance");
+      return;
+    }
+
+    setSwapping(true);
+    setLastSwap(null);
+    setSwapStatus("Preparing amm_remove_liquidity transaction…");
+    try {
+      const res = await executeRemoveLiquidity(activeSigner, {
+        contract: pool.address,
+        lpShares: removeLpShares,
+        minKunaOut: removeMinKuna,
+        minTokensOut: removeMinTokens,
+        onStatus: setSwapStatus,
+      });
+      setLastSwap(res);
+      setSwapStatus(null);
+      setLpRemoveStr("");
+      toast.success(`amm_remove_liquidity broadcast (${shortId(res.txHash)}) on ${pool.symbol} / KVNC`);
+      void load();
+    } catch (e) {
+      setSwapStatus(null);
+      toast.error(e instanceof Error ? e.message : "Remove liquidity failed");
     } finally {
       setSwapping(false);
     }
@@ -351,6 +439,37 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
                           })} KVNC`}
                     </dd>
                   </dl>
+
+                  {activeAddressHex && (() => {
+                    const rowPos = computeLpPosition({
+                      userLpShares: BigInt(row.lp_balance ?? "0"),
+                      totalLpSupply: BigInt(row.lp_total),
+                      reserve0: BigInt(row.kuna_reserve),
+                      reserve1: BigInt(row.token_reserve),
+                    });
+                    return (
+                      <div className="mt-3 rounded-lg border border-border/70 bg-bg/70 px-3 py-2 font-mono text-[11px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-subtle">Your LP Position</span>
+                          <span className={rowPos.lpShares > 0n ? "font-semibold text-emerald-400" : "text-muted"}>
+                            {formatTokenAmount(rowPos.lpShares, 0)} LP ({rowPos.sharePct.toFixed(2)}%)
+                          </span>
+                        </div>
+                        {rowPos.lpShares > 0n && (
+                          <p className="mt-1 text-[10px] text-muted">
+                            Est. underlying:{" "}
+                            <span className="text-fg">
+                              {formatTokenAmount(rowPos.underlying0, KVNC_DECIMALS)} KVNC
+                            </span>{" "}
+                            +{" "}
+                            <span className="text-fg">
+                              {formatTokenAmount(rowPos.underlying1, row.decimals)} {row.symbol}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </button>
               );
             })}
@@ -359,9 +478,30 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
           {pool && (
             <div className="flex min-w-0 flex-col gap-4 self-start rounded-xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                  Quote &amp; Swap
-                </p>
+                <div className="inline-flex rounded-md border border-border bg-bg p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPanelTab("swap")}
+                    className={
+                      panelTab === "swap"
+                        ? "rounded px-2.5 py-1 text-[11px] font-medium text-fg bg-surface-2"
+                        : "rounded px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg"
+                    }
+                  >
+                    Quote &amp; Swap
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPanelTab("remove")}
+                    className={
+                      panelTab === "remove"
+                        ? "rounded px-2.5 py-1 text-[11px] font-medium text-fg bg-surface-2"
+                        : "rounded px-2.5 py-1 text-[11px] font-medium text-muted hover:text-fg"
+                    }
+                  >
+                    Remove LP
+                  </button>
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -373,90 +513,174 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
                 </Button>
               </div>
 
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={dir === "buy" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setDir("buy")}
-                >
-                  KVNC → {pool.symbol}
-                </Button>
-                <Button
-                  type="button"
-                  variant={dir === "sell" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setDir("sell")}
-                >
-                  {pool.symbol} → KVNC
-                </Button>
-              </div>
-
-              <label className="text-xs text-muted">
-                You pay ({dir === "buy" ? "KVNC" : pool.symbol})
-                <input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  inputMode="decimal"
-                  disabled={swapping}
-                  className="mt-1 h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
-                  placeholder="0"
-                />
-              </label>
-
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted">Slippage</span>
-                <div className="flex gap-1">
-                  {SLIPPAGE_PRESETS.map((p) => (
-                    <button
-                      key={p.bps}
+              {panelTab === "swap" ? (
+                <>
+                  <div className="flex gap-2">
+                    <Button
                       type="button"
-                      onClick={() => setSlippageBps(p.bps)}
-                      className={
-                        slippageBps === p.bps
-                          ? "rounded bg-gold/20 px-2 py-0.5 font-mono text-[11px] text-gold"
-                          : "rounded border border-border bg-bg px-2 py-0.5 font-mono text-[11px] text-muted hover:text-fg"
-                      }
+                      variant={dir === "buy" ? "default" : "outline"}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setDir("buy")}
                     >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                      KVNC → {pool.symbol}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={dir === "sell" ? "default" : "outline"}
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setDir("sell")}
+                    >
+                      {pool.symbol} → KVNC
+                    </Button>
+                  </div>
 
-              <div className="rounded-lg border border-border bg-bg p-3">
-                <p className="text-[10px] uppercase tracking-wide text-subtle">You receive</p>
-                <p className="mt-1 break-all font-mono text-sm text-fg">
-                  {out === null
-                    ? "—"
-                    : `${formatTokenAmount(out, outDecimals)} ${
-                        dir === "buy" ? pool.symbol : "KVNC"
-                      }`}
-                </p>
-                {minOut !== null && (
-                  <p className="mt-1 font-mono text-[10px] text-muted">
-                    Min received ({(slippageBps / 100).toFixed(1)}%):{" "}
-                    {formatTokenAmount(minOut, outDecimals)}{" "}
-                    {dir === "buy" ? pool.symbol : "KVNC"}
+                  <label className="text-xs text-muted">
+                    You pay ({dir === "buy" ? "KVNC" : pool.symbol})
+                    <input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      inputMode="decimal"
+                      disabled={swapping}
+                      className="mt-1 h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
+                      placeholder="0"
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-muted">Slippage</span>
+                    <div className="flex gap-1">
+                      {SLIPPAGE_PRESETS.map((p) => (
+                        <button
+                          key={p.bps}
+                          type="button"
+                          onClick={() => setSlippageBps(p.bps)}
+                          className={
+                            slippageBps === p.bps
+                              ? "rounded bg-gold/20 px-2 py-0.5 font-mono text-[11px] text-gold"
+                              : "rounded border border-border bg-bg px-2 py-0.5 font-mono text-[11px] text-muted hover:text-fg"
+                          }
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-border bg-bg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-subtle">You receive</p>
+                    <p className="mt-1 break-all font-mono text-sm text-fg">
+                      {out === null
+                        ? "—"
+                        : `${formatTokenAmount(out, outDecimals)} ${
+                            dir === "buy" ? pool.symbol : "KVNC"
+                          }`}
+                    </p>
+                    {minOut !== null && (
+                      <p className="mt-1 font-mono text-[10px] text-muted">
+                        Min received ({(slippageBps / 100).toFixed(1)}%):{" "}
+                        {formatTokenAmount(minOut, outDecimals)}{" "}
+                        {dir === "buy" ? pool.symbol : "KVNC"}
+                      </p>
+                    )}
+                    <p className="mt-1 font-mono text-[10px] text-subtle">
+                      Price impact {impact === null ? "—" : `${(impact / 100).toFixed(2)}%`} · Fee{" "}
+                      {(pool.fee_bps / 100).toFixed(2)}%
+                    </p>
+                  </div>
+
+                  <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted">
+                    <Info className="mt-0.5 size-3.5 shrink-0 text-blue" />
+                    Executes a client-signed{" "}
+                    <code className="font-mono text-[10px] text-fg">
+                      {dir === "buy" ? "token_buy" : "token_sell"}
+                    </code>{" "}
+                    call directly on the KVP-102 token contract with{" "}
+                    <code className="font-mono text-[10px] text-fg">min_out</code> slippage protection.
                   </p>
-                )}
-                <p className="mt-1 font-mono text-[10px] text-subtle">
-                  Price impact {impact === null ? "—" : `${(impact / 100).toFixed(2)}%`} · Fee{" "}
-                  {(pool.fee_bps / 100).toFixed(2)}%
-                </p>
-              </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5 rounded-lg border border-border bg-bg p-3 font-mono text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-subtle">Your LP Shares</span>
+                      <span className="font-semibold text-fg">
+                        {formatTokenAmount(userLpPosition.lpShares, 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-subtle">Pool Share</span>
+                      <span className="text-emerald-400">
+                        {userLpPosition.sharePct.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-subtle">Est. Underlying</span>
+                      <span className="text-right text-fg">
+                        {formatTokenAmount(userLpPosition.underlying0, KVNC_DECIMALS)} KVNC +{" "}
+                        {formatTokenAmount(userLpPosition.underlying1, pool.decimals)}{" "}
+                        {pool.symbol}
+                      </span>
+                    </div>
+                  </div>
 
-              <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted">
-                <Info className="mt-0.5 size-3.5 shrink-0 text-blue" />
-                Executes a client-signed{" "}
-                <code className="font-mono text-[10px] text-fg">
-                  {dir === "buy" ? "token_buy" : "token_sell"}
-                </code>{" "}
-                call directly on the KVP-102 token contract with{" "}
-                <code className="font-mono text-[10px] text-fg">min_out</code> slippage protection.
-              </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted">LP Shares to Remove</span>
+                      <div className="flex gap-1">
+                        {[25, 50, 75, 100].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            disabled={swapping || userLpShares <= 0n}
+                            onClick={() =>
+                              setLpRemoveStr(
+                                computeRemoveLiquidityShares(userLpShares, pct).toString(),
+                              )
+                            }
+                            className="rounded border border-border bg-bg px-2 py-0.5 font-mono text-[10px] text-muted transition-colors hover:border-gold/40 hover:text-fg disabled:opacity-40"
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <input
+                      value={lpRemoveStr}
+                      onChange={(e) => setLpRemoveStr(e.target.value)}
+                      inputMode="numeric"
+                      disabled={swapping}
+                      className="h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
+                      placeholder={userLpShares > 0n ? userLpShares.toString() : "0"}
+                    />
+                  </div>
+
+                  <div className="space-y-1 rounded-lg border border-border bg-bg p-3 font-mono text-[11px]">
+                    <p className="text-[10px] uppercase tracking-wide text-subtle">
+                      Estimated Withdrawal
+                    </p>
+                    <div className="flex justify-between">
+                      <span className="text-muted">KVNC</span>
+                      <span className="text-fg">
+                        {formatTokenAmount(removeEstimate.underlying0, KVNC_DECIMALS)} KVNC
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted">{pool.symbol}</span>
+                      <span className="text-fg">
+                        {formatTokenAmount(removeEstimate.underlying1, pool.decimals)}{" "}
+                        {pool.symbol}
+                      </span>
+                    </div>
+                    <p className="pt-1 text-[10px] text-subtle">
+                      Min after {(slippageBps / 100).toFixed(1)}% slippage:{" "}
+                      {formatTokenAmount(removeMinKuna, KVNC_DECIMALS)} KVNC +{" "}
+                      {formatTokenAmount(removeMinTokens, pool.decimals)} {pool.symbol}
+                    </p>
+                  </div>
+                </>
+              )}
 
               {swapStatus && (
                 <div className="flex items-center gap-2 rounded-lg border border-blue/30 bg-blue/10 px-3 py-2 text-xs text-blue">
@@ -475,26 +699,48 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
                       </span>
                       <span className="text-fg">{shortId(activeSigner.addressKvnc)}</span>
                     </div>
-                    <Button
-                      type="button"
-                      className="w-full"
-                      disabled={swapping || pool.paused || out === null || out <= 0n}
-                      onClick={() => void onExecuteSwap()}
-                    >
-                      {swapping ? (
-                        <>
-                          <Loader2 className="mr-2 size-4 animate-spin" />
-                          Signing {dir === "buy" ? "token_buy" : "token_sell"}…
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheck className="mr-2 size-4" />
-                          {dir === "buy"
-                            ? `Buy ${pool.symbol} with KVNC`
-                            : `Sell ${pool.symbol} for KVNC`}
-                        </>
-                      )}
-                    </Button>
+                    {panelTab === "swap" ? (
+                      <Button
+                        type="button"
+                        className="w-full"
+                        disabled={swapping || pool.paused || out === null || out <= 0n}
+                        onClick={() => void onExecuteSwap()}
+                      >
+                        {swapping ? (
+                          <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Signing {dir === "buy" ? "token_buy" : "token_sell"}…
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="mr-2 size-4" />
+                            {dir === "buy"
+                              ? `Buy ${pool.symbol} with KVNC`
+                              : `Sell ${pool.symbol} for KVNC`}
+                          </>
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        className="w-full"
+                        variant="outline"
+                        disabled={swapping || pool.paused || removeLpShares <= 0n}
+                        onClick={() => void onExecuteRemoveLiquidity()}
+                      >
+                        {swapping ? (
+                          <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Signing amm_remove_liquidity…
+                          </>
+                        ) : (
+                          <>
+                            <Minus className="mr-2 size-4" />
+                            Remove Liquidity ({pool.symbol} / KVNC)
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <div className="flex flex-col gap-2">

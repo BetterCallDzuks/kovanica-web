@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import type { Block } from "@/lib/ledger/types";
 import { type ApiNode, type ApiDagBlock } from "@/lib/api/contract";
 import { ExplorerTxCard } from "@/components/explorer/tx-card";
+import { fetchStealthAnnouncements, type StealthAnnouncement } from "@/lib/protocol/stealth";
 import { MiningDagPanel } from "@/components/explorer/mining-dag-panel";
 import { LiveDagDrawer } from "@/components/explorer/live-dag-drawer";
 import { BlockPowDrawer } from "@/components/explorer/block-pow-drawer";
@@ -557,6 +558,20 @@ function GraphPanel({
   apiBlock: ApiDagBlock | null;
   searchedId?: string | null;
 }) {
+  const [stealthAnnouncements, setStealthAnnouncements] = useState<StealthAnnouncement[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    fetchStealthAnnouncements()
+      .then((rows) => {
+        if (active) setStealthAnnouncements(rows);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
   if (!selected) {
     return (
       <div className="rounded-lg border border-border bg-surface p-6 text-center">
@@ -629,7 +644,11 @@ function GraphPanel({
         ) : (
           <ul className="mt-3 space-y-3">
             {txs.map((tx) => (
-              <ExplorerTxCard key={tx.id} tx={tx} />
+              <ExplorerTxCard
+                key={tx.id}
+                tx={tx}
+                stealthAnnouncements={stealthAnnouncements}
+              />
             ))}
           </ul>
         )}

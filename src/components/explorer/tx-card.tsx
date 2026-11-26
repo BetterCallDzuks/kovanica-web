@@ -6,6 +6,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  EyeOff,
   ScrollText,
   ShieldCheck,
   FileCode,
@@ -14,6 +15,8 @@ import { shortId } from "@/lib/ledger/hash";
 import { cn } from "@/lib/utils";
 import type { ApiTx } from "@/lib/networkConstants";
 import type { Tx } from "@/lib/ledger/types";
+import type { StealthAnnouncement } from "@/lib/protocol/stealth";
+import { buildStealthScanUrl, extractStealthBadgeInfo } from "@/lib/protocol/stealth-badge";
 import { normalizeReceiptTxHash } from "@/lib/contracts/dry-run";
 import { toCanonicalAddress } from "@/lib/wallet/address";
 import {
@@ -25,8 +28,11 @@ import {
   type DecodedContractCall,
 } from "@/lib/contracts/decoders";
 
+export { buildStealthScanUrl, extractStealthBadgeInfo } from "@/lib/protocol/stealth-badge";
+
 export type TxCardProps = {
   tx: ApiTx | Tx;
+  stealthAnnouncements?: readonly StealthAnnouncement[];
 };
 
 /**
@@ -112,11 +118,19 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-export function ExplorerTxCard({ tx }: TxCardProps) {
+export function ExplorerTxCard({ tx, stealthAnnouncements }: TxCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showRawHex, setShowRawHex] = useState(false);
 
   const kind = getTransactionKind(tx);
+  const stealthBadge = useMemo(
+    () => extractStealthBadgeInfo(tx, stealthAnnouncements),
+    [tx, stealthAnnouncements],
+  );
+  const stealthHref = useMemo(
+    () => (stealthBadge ? buildStealthScanUrl(stealthBadge) : null),
+    [stealthBadge],
+  );
 
   const method =
     tx.method ?? (typeof tx.kind === "object" ? tx.kind?.method : undefined) ?? "";
@@ -225,6 +239,25 @@ export function ExplorerTxCard({ tx }: TxCardProps) {
             <span className="inline-flex items-center rounded-full bg-gold/15 px-2 py-0.5 font-semibold text-gold border border-gold/30">
               {method}
             </span>
+          )}
+
+          {/* KVP-103 Stealth Announcement Badge */}
+          {stealthBadge && stealthHref && (
+            <a
+              href={stealthHref}
+              onClick={(e) => e.stopPropagation()}
+              data-testid="tx-stealth-badge"
+              title={`Inspect KVP-103 stealth announcement (view tag 0x${stealthBadge.viewTag}, R=${stealthBadge.ephemeralPubkeyHex})`}
+              className="inline-flex items-center gap-1 rounded-full border border-purple-500/40 bg-purple-500/15 px-2 py-0.5 font-semibold text-purple-300 transition-colors hover:border-purple-400/70 hover:bg-purple-500/25"
+            >
+              <EyeOff className="size-2.5 text-purple-300" aria-hidden="true" />
+              <span>Stealth (KVP-103)</span>
+              <span className="text-purple-200/80">0x{stealthBadge.viewTag}</span>
+              <span className="hidden sm:inline text-purple-200/70">
+                · {shortId(stealthBadge.ephemeralPubkeyHex, 6)}
+              </span>
+              <ArrowUpRight className="size-2.5 text-purple-300" aria-hidden="true" />
+            </a>
           )}
 
           <span className="text-ok font-medium">Success</span>

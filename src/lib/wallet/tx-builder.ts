@@ -373,6 +373,28 @@ export function encodeTokenSellArgs(params: { amountIn: bigint; minOut: bigint }
   return concatBytes([u128le(params.amountIn), u128le(params.minOut)]);
 }
 
+/**
+ * `amm_remove_liquidity(lp_shares, min_kuna_out, min_tokens_out)`.
+ * Wire layout: `(u128, u128, u128)` — exact 48 bytes.
+ */
+export function encodeAmmRemoveLiquidityArgs(params: {
+  lpShares: bigint;
+  minKunaOut: bigint;
+  minTokensOut: bigint;
+}): Uint8Array {
+  if (params.lpShares <= 0n) {
+    throw new Error("LP shares to burn must be greater than zero");
+  }
+  if (params.minKunaOut < 0n || params.minTokensOut < 0n) {
+    throw new Error("Minimum withdrawal outputs cannot be negative");
+  }
+  return concatBytes([
+    u128le(params.lpShares),
+    u128le(params.minKunaOut),
+    u128le(params.minTokensOut),
+  ]);
+}
+
 // --- Transaction Signing Preimage & Wire Bincode Serialization ----------------
 
 function signingHashForKind(
@@ -1267,7 +1289,7 @@ export interface AmmCallResult {
   contractHex: string;
   contractKvnc: string;
   fee: bigint;
-  method: "token_init_pool" | "token_buy" | "token_sell";
+  method: "token_init_pool" | "token_buy" | "token_sell" | "amm_remove_liquidity";
 }
 
 /**
@@ -1439,6 +1461,64 @@ export async function executeTokenSell(
     contractKvnc: hexToKvnc(contractHex),
     fee,
     method: "token_sell",
+  };
+}
+
+/**
+ * Burn LP shares and withdraw proportional KVNC + token reserves (`amm_remove_liquidity`).
+ * Sets `Call.value = 0` and enforces `minKunaOut` / `minTokensOut` slippage guards.
+ */
+export async function executeRemoveLiquidity(
+  signer: ActiveSigner,
+  params: {
+    contract: string;
+    lpShares: bigint;
+    minKunaOut: bigint;
+    minTokensOut: bigint;
+    onStatus?: (msg: string) => void;
+  },
+): Promise<AmmCallResult> {
+  const contractHex = parseAddr(params.contract);
+  if (!contractHex) throw new Error("Invalid pool contract address");
+
+  params.onStatus?.("Fetching account nonce and fee rate…");
+  const ctx = await fetchAccountTxContext(signer.addressHex);
+  const args = encodeAmmRemoveLiquidityArgs({
+    lpShares: params.lpShares,
+    minKunaOut: params.minKunaOut,
+    minTokensOut: params.minTokensOut,
+  });
+
+  const txBytes =
+    CALL_WIRE_OVERHEAD + 4 + 32 + 8 + 8 + "amm_remove_liquidity".length + 8 + args.length + 8;
+  const fee = computeDynamicCallFee(txBytes, ctx.feeRate);
+
+  if (ctx.balance < fee) {
+    throw new Error(
+      `Insufficient KVNC balance for fee: have ${(Number(ctx.balance) / 1e9).toFixed(4)} KVNC, need ${(Number(fee) / 1e9).toFixed(4)} KVNC.`,
+    );
+  }
+
+  params.onStatus?.("Signing amm_remove_liquidity transaction…");
+  const signed = await signCallTx(signer, {
+    nonce: ctx.nonce,
+    contractHex,
+    value: 0n,
+    method: "amm_remove_liquidity",
+    args,
+    gasLimit: DEFAULT_CONTRACT_GAS_LIMIT,
+    fee,
+    chainId: ctx.chainId,
+  });
+
+  params.onStatus?.("Broadcasting amm_remove_liquidity to Testnet…");
+  const txHash = await broadcastRawTx(signed.rawTxHex);
+  return {
+    txHash,
+    contractHex,
+    contractKvnc: hexToKvnc(contractHex),
+    fee,
+    method: "amm_remove_liquidity",
   };
 }
 

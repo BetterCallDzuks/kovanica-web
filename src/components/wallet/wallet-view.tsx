@@ -12,6 +12,8 @@ import { MIN_FEE, TOKEN, isNativeAsset, assetLabel } from "@/lib/api/contract";
 import type { ApiToken } from "@/lib/tokens/codec";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
 import { resolveTokenIcon } from "@/lib/tokens/icons";
+import type { ApiPool } from "@/lib/tokens/pool";
+import { computeLpPosition } from "@/lib/amm/math";
 import { prepareUrl, submitUrl, assetOptionsFromUtxos, balanceForAsset } from "@/lib/api/assets";
 import {
   TOKEN_SEND_FEE,
@@ -114,6 +116,26 @@ export function WalletView() {
   /** KVP-102: contract address of the token selected in the send form. */
   const [tokenAddr, setTokenAddr] = useState<string | null>(null);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [lpPools, setLpPools] = useState<ApiPool[]>([]);
+
+  useEffect(() => {
+    if (!wallet?.address || source === "mainnet") {
+      setLpPools([]);
+      return;
+    }
+    let active = true;
+    const qs = new URLSearchParams();
+    qs.set("address", wallet.address);
+    if (watchedContracts.length > 0) qs.set("watched", watchedContracts.join(","));
+    api<ApiPool[]>(`/api/pools?${qs.toString()}`)
+      .then((rows) => {
+        if (active && Array.isArray(rows)) setLpPools(rows);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [wallet?.address, source, watchedContracts]);
 
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
@@ -1177,6 +1199,72 @@ export function WalletView() {
                 })}
               </ul>
             )}
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] tracking-wide text-subtle uppercase">
+                AMM LP Positions
+              </p>
+              <Link
+                to="/pools"
+                className="font-mono text-[10px] text-blue hover:underline"
+              >
+                Manage / Remove →
+              </Link>
+            </div>
+            {(() => {
+              const activeLp = lpPools
+                .map((p) => ({
+                  pool: p,
+                  pos: computeLpPosition({
+                    userLpShares: BigInt(p.lp_balance ?? "0"),
+                    totalLpSupply: BigInt(p.lp_total),
+                    reserve0: BigInt(p.kuna_reserve),
+                    reserve1: BigInt(p.token_reserve),
+                  }),
+                }))
+                .filter((x) => x.pos.lpShares > 0n);
+
+              if (activeLp.length === 0) {
+                return (
+                  <p className="text-sm text-muted">
+                    No active LP shares on {live ? "Testnet" : "this chain"} yet.
+                  </p>
+                );
+              }
+              return (
+                <ul className="divide-y divide-border rounded-xl border border-border">
+                  {activeLp.map(({ pool, pos }) => (
+                    <li
+                      key={pool.address}
+                      className="flex flex-col gap-1.5 px-4 py-3 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-fg">
+                          {pool.symbol} / KVNC
+                        </span>
+                        <span className="font-mono text-emerald-400">
+                          {formatTokenAmount(pos.lpShares, 0)} LP ({pos.sharePct.toFixed(2)}%)
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-muted">
+                        <span>
+                          ~{formatTokenAmount(pos.underlying0, 9)} KVNC +{" "}
+                          {formatTokenAmount(pos.underlying1, pool.decimals)} {pool.symbol}
+                        </span>
+                        <Link
+                          to="/pools"
+                          className="shrink-0 text-[10px] text-gold hover:underline"
+                        >
+                          Remove
+                        </Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
           </section>
 
           <section>

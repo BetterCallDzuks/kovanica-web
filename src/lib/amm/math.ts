@@ -136,6 +136,87 @@ export function computeSwapQuote(
   return { amountOut, minAmountOut, feeAmount, priceImpactPct };
 }
 
+export type PriceImpactSeverity = "low" | "moderate" | "high";
+
+export interface PriceImpactAssessment {
+  severity: PriceImpactSeverity;
+  label: string;
+  warning: string | null;
+}
+
+/**
+ * Classify swap price impact % into UX severity tiers:
+ * - `<= 3%`: low (emerald)
+ * - `> 3%` and `<= 10%`: moderate (amber warning)
+ * - `> 10%`: high (red warning)
+ */
+export function classifyPriceImpact(priceImpactPct: number): PriceImpactAssessment {
+  if (!Number.isFinite(priceImpactPct) || priceImpactPct <= 3) {
+    return {
+      severity: "low",
+      label: "Low Price Impact",
+      warning: null,
+    };
+  }
+  if (priceImpactPct > 10) {
+    return {
+      severity: "high",
+      label: "High Price Impact (>10%)",
+      warning:
+        "High price impact (>10%). You will receive significantly less than the current spot rate.",
+    };
+  }
+  return {
+    severity: "moderate",
+    label: "Elevated Price Impact (>3%)",
+    warning:
+      "Price impact exceeds 3%. Consider reducing trade size or verifying pool liquidity.",
+  };
+}
+
+export interface LpPositionEstimate {
+  lpShares: bigint;
+  /** Percentage of total pool supply in `[0, 100]`. */
+  sharePct: number;
+  /** Estimated underlying reserve0 units redeemable for `lpShares`. */
+  underlying0: bigint;
+  /** Estimated underlying reserve1 units redeemable for `lpShares`. */
+  underlying1: bigint;
+}
+
+/**
+ * Compute a liquidity provider's pool share % and estimated underlying reserves
+ * using integer-safe bigint arithmetic.
+ */
+export function computeLpPosition(params: {
+  userLpShares: bigint;
+  totalLpSupply: bigint;
+  reserve0: bigint;
+  reserve1: bigint;
+}): LpPositionEstimate {
+  const { userLpShares, totalLpSupply, reserve0, reserve1 } = params;
+  if (userLpShares <= 0n || totalLpSupply <= 0n) {
+    return { lpShares: 0n, sharePct: 0, underlying0: 0n, underlying1: 0n };
+  }
+  const effective = userLpShares > totalLpSupply ? totalLpSupply : userLpShares;
+  const underlying0 = reserve0 > 0n ? (effective * reserve0) / totalLpSupply : 0n;
+  const underlying1 = reserve1 > 0n ? (effective * reserve1) / totalLpSupply : 0n;
+  // Scale by 1_000_000 (0.0001% precision) before converting to JS number.
+  const shareMicro = (effective * 1_000_000n) / totalLpSupply;
+  const sharePct = Number(shareMicro) / 10_000;
+  return { lpShares: effective, sharePct, underlying0, underlying1 };
+}
+
+/**
+ * Compute exact LP shares to burn for a quick-preset percentage (e.g. 25, 50, 75, 100).
+ */
+export function computeRemoveLiquidityShares(userLpShares: bigint, percent: number): bigint {
+  if (userLpShares <= 0n || !Number.isFinite(percent) || percent <= 0) return 0n;
+  if (percent >= 100) return userLpShares;
+  const bps = BigInt(Math.round(percent * 100));
+  return (userLpShares * bps) / 10_000n;
+}
+
 /** Annualized LP fee APR estimate: `(volume24hUsd * 0.003 * 365) / tvlUsd * 100`. */
 export function estimatePoolAprPct(volume24hUsd: number, tvlUsd: number, feeBps = 30): number {
   if (tvlUsd <= 0 || volume24hUsd <= 0) return 0;

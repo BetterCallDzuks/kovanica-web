@@ -14,6 +14,10 @@ import {
   parseStealthMetaAddress,
   signSighashWithStealthScalar,
 } from "../src/lib/protocol/stealth";
+import {
+  buildStealthScanUrl,
+  extractStealthBadgeInfo,
+} from "../src/lib/protocol/stealth-badge";
 import { dispatchApi } from "../src/lib/api/dispatch.server";
 
 ed.hashes.sha512 = sha512;
@@ -144,4 +148,76 @@ test("POST /api/stealth/announce and GET /api/stealth/announcements persist publ
     else process.env.KOVANICA_STEALTH_FILE = prev;
     fs.rmSync(tmpFile, { force: true });
   }
+});
+
+test("extractStealthBadgeInfo detects KVP-103 stealth metadata from tx fields, memo, and announcement feed", () => {
+  const recipient = generateStealthKeypair();
+  const onetime = deriveOnetimeAddress(recipient.metaAddress);
+  const txId = "12".repeat(32);
+
+  // 1. Direct stealth_announcement field on tx
+  const fromField = extractStealthBadgeInfo({
+    id: txId,
+    coinbase: false,
+    amount: 1_000_000_000,
+    stealth_announcement: {
+      view_tag: `0x${onetime.viewTag.toUpperCase()}`,
+      ephemeral_pubkey_hex: `0x${onetime.ephemeralPubkeyHex}`,
+      stealth_address: onetime.address,
+    },
+  } as never);
+  assert.ok(fromField);
+  assert.equal(fromField.source, "tx");
+  assert.equal(fromField.viewTag, onetime.viewTag);
+  assert.equal(fromField.ephemeralPubkeyHex, onetime.ephemeralPubkeyHex);
+
+  // 2. Memo string format `kvp103:<viewTag>:<ephemeralHex>`
+  const fromMemo = extractStealthBadgeInfo({
+    id: txId,
+    coinbase: false,
+    amount: 500_000_000,
+    memo: `kvp103:${onetime.viewTag}:${onetime.ephemeralPubkeyHex}`,
+  } as never);
+  assert.ok(fromMemo);
+  assert.equal(fromMemo.source, "memo");
+  assert.equal(fromMemo.viewTag, onetime.viewTag);
+  assert.equal(fromMemo.ephemeralPubkeyHex, onetime.ephemeralPubkeyHex);
+
+  // 3. Announcement feed cross-reference by recipient stealthAddress
+  const fromFeed = extractStealthBadgeInfo(
+    {
+      id: "34".repeat(32),
+      coinbase: false,
+      inputs: 1,
+      outputs: [{ owner: onetime.address, value: 1_000_000_000 }],
+    },
+    [
+      {
+        ephemeralPubkeyHex: onetime.ephemeralPubkeyHex,
+        viewTag: onetime.viewTag,
+        stealthAddress: onetime.address,
+        stealthAddressHex: onetime.addressHex,
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  );
+  assert.ok(fromFeed);
+  assert.equal(fromFeed.source, "announcement");
+  assert.equal(fromFeed.viewTag, onetime.viewTag);
+
+  // 4. Ordinary non-stealth tx returns null
+  const ordinary = extractStealthBadgeInfo({
+    id: txId,
+    coinbase: false,
+    amount: 100,
+  });
+  assert.equal(ordinary, null);
+
+  // 5. buildStealthScanUrl builds sanitized deep link
+  const url = buildStealthScanUrl(fromField);
+  assert.equal(
+    url,
+    `/stealth?tab=scan&view_tag=${onetime.viewTag}&ephemeral=${onetime.ephemeralPubkeyHex}`,
+  );
+  assert.equal(buildStealthScanUrl({ viewTag: "bad!", ephemeralPubkeyHex: "nope" }), "/stealth");
 });

@@ -21,7 +21,15 @@ import {
   type ApiToken,
   type TokenState,
 } from "../tokens/codec";
-import { decodePool, POOL_SLOT_HEX, spotPriceKuna, type ApiPool, type PoolState } from "../tokens/pool";
+import {
+  decodeLpShares,
+  decodePool,
+  lpSlotHex,
+  POOL_SLOT_HEX,
+  spotPriceKuna,
+  type ApiPool,
+  type PoolState,
+} from "../tokens/pool";
 import { hexToKvnc, parseAddr } from "../wallet/address";
 import { rpcCall } from "./rpc-url.server";
 
@@ -270,18 +278,34 @@ async function readPool(address: string): Promise<PoolState | null> {
   }
 }
 
+/** Read and decode one provider's LP share balance (`kvnc/v1/lp/<addr>`), `0n` when absent. */
+async function readLpShares(contractAddress: string, holderHex: string): Promise<bigint> {
+  const slot = lpSlotHex(holderHex);
+  if (!slot) return 0n;
+  try {
+    const raw = await rpc<string>("kovanica_getStorageAt", [contractAddress, slot]);
+    const bytes = hexToBytes(raw);
+    if (!bytes || bytes.length === 0) return 0n;
+    return decodeLpShares(bytes) ?? 0n;
+  } catch {
+    return 0n;
+  }
+}
+
 /**
  * Every token contract that has an initialized AMM pool, largest KUNA reserve
  * first.
  *
  * Pools are not indexed: a token is a pool iff its `kvnc/v1/pool` slot decodes,
  * so this reuses the token discovery scan and adds one storage read per token.
+ * When `holderHex` is provided, also reads the caller's LP share balance slot.
  */
-export async function listPools(extraContracts?: string[]): Promise<ApiPool[]> {
+export async function listPools(extraContracts?: string[], holderHex?: string): Promise<ApiPool[]> {
   const { entries: scanned } = await (inflight ??= collect().finally(() => {
     inflight = null;
   }));
   const entries = await mergeExtraEntries(scanned, extraContracts);
+  const holder = holderHex?.toLowerCase() ?? null;
 
   const rows = await Promise.all(
     entries.map(async (entry): Promise<ApiPool | null> => {
@@ -289,6 +313,7 @@ export async function listPools(extraContracts?: string[]): Promise<ApiPool[]> {
       if (!pool) return null;
       const hex = parseAddr(entry.address);
       if (!hex) return null;
+      const lpBalance = holder ? await readLpShares(entry.address, holder) : null;
       return {
         address: `0x${hex}`,
         name: entry.state.name,
@@ -301,6 +326,7 @@ export async function listPools(extraContracts?: string[]): Promise<ApiPool[]> {
         kuna_reserve: pool.kunaReserve.toString(),
         token_reserve: pool.tokenReserve.toString(),
         lp_total: pool.lpTotal.toString(),
+        lp_balance: lpBalance !== null ? lpBalance.toString() : null,
         price_kuna: spotPriceKuna(pool, entry.state.decimals),
       };
     }),
