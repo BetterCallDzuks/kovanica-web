@@ -8,6 +8,7 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
+  Puzzle,
   Radio,
   RefreshCw,
   Scan,
@@ -27,6 +28,7 @@ import {
   deriveStealthKeypairFromMnemonic,
   fetchStealthAnnouncements,
   generateStealthKeypair,
+  importStealthMetaFromExtension,
   prepareStealthSpend,
   publishStealthAnnouncement,
   scanStealthOutputs,
@@ -34,6 +36,7 @@ import {
   submitStealthSpend,
   type StealthAnnouncement,
   type StealthKeypair,
+  type StealthMetaAddress,
   type StealthOnetime,
   type StealthScanHit,
 } from "@/lib/protocol/stealth";
@@ -56,6 +59,11 @@ export function StealthView() {
 
   // Receive tab state
   const [keys, setKeys] = useState<StealthKeypair | null>(null);
+  const [importedMeta, setImportedMeta] = useState<StealthMetaAddress | null>(null);
+  const [importingExt, setImportingExt] = useState(false);
+  const [extStatus, setExtStatus] = useState<{ kind: "success" | "error"; message: string } | null>(
+    null,
+  );
   const [showSecrets, setShowSecrets] = useState(false);
 
   // Send / Derive tab state
@@ -130,6 +138,8 @@ export function StealthView() {
     try {
       const kp = generateStealthKeypair();
       setKeys(kp);
+      setImportedMeta(null);
+      setExtStatus(null);
       setShowSecrets(false);
       toast.success("Generated fresh KVP-103 dual-key stealth identity locally");
     } catch (e) {
@@ -145,10 +155,39 @@ export function StealthView() {
     try {
       const kp = deriveStealthKeypairFromMnemonic(unlockedWallet.mnemonic);
       setKeys(kp);
+      setImportedMeta(null);
+      setExtStatus(null);
       setShowSecrets(false);
       toast.success("Derived deterministic stealth identity from your Web Wallet phrase");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Derivation failed");
+    }
+  }
+
+  async function onImportFromExtension() {
+    setImportingExt(true);
+    setExtStatus(null);
+    try {
+      const meta = await importStealthMetaFromExtension();
+      setImportedMeta(meta);
+      setKeys(null);
+      setShowSecrets(false);
+      setScanSpendPub(meta.spendPubkeyHex);
+      setExtStatus({
+        kind: "success",
+        message:
+          "Imported public stealth meta-address and scan/spend pubkeys from Kovanica Extension. Private keys remain inside the extension.",
+      });
+      toast.success("Imported stealth meta-address from Kovanica Extension");
+    } catch (e) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : "Failed to import stealth meta-address from Kovanica Extension. Ensure the extension is installed and unlocked.";
+      setExtStatus({ kind: "error", message });
+      toast.error(message);
+    } finally {
+      setImportingExt(false);
     }
   }
 
@@ -347,6 +386,19 @@ export function StealthView() {
                 <Sparkles className="mr-1.5 size-4" />
                 Generate Stealth Keys
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={importingExt}
+                onClick={() => void onImportFromExtension()}
+              >
+                {importingExt ? (
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                ) : (
+                  <Puzzle className="mr-1.5 size-4" />
+                )}
+                Import from Kovanica Extension
+              </Button>
               {unlockedWallet ? (
                 <Button type="button" variant="outline" onClick={onDeriveFromWallet}>
                   <Wallet className="mr-1.5 size-4" />
@@ -361,6 +413,106 @@ export function StealthView() {
                 </Button>
               )}
             </div>
+
+            {extStatus && (
+              <p
+                role={extStatus.kind === "error" ? "alert" : "status"}
+                className={
+                  extStatus.kind === "error"
+                    ? "rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"
+                    : "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"
+                }
+              >
+                {extStatus.message}
+              </p>
+            )}
+
+            {importedMeta && !keys && (
+              <div className="space-y-3 rounded-xl border border-gold/30 bg-gold/5 p-4">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium tracking-wide text-gold uppercase">
+                      Extension Stealth Meta-Address (Safe to Share)
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => copyText(importedMeta.metaAddress, "Stealth meta-address")}
+                    >
+                      <Copy className="mr-1 size-3" /> Copy
+                    </Button>
+                  </div>
+                  <p className="mt-1 break-all rounded-md border border-border bg-bg p-2.5 font-mono text-xs text-fg">
+                    {importedMeta.metaAddress}
+                  </p>
+                </div>
+
+                <div className="grid gap-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-bg px-3 py-2">
+                    <span className="text-muted">Scan Pubkey (V)</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-mono text-fg">
+                        {shortId(importedMeta.scanPubkeyHex, 10)}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText(importedMeta.scanPubkeyHex, "Scan public key")}
+                        className="text-subtle hover:text-fg"
+                        aria-label="Copy scan public key"
+                      >
+                        <Copy className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-bg px-3 py-2">
+                    <span className="text-muted">Spend Pubkey (B)</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-mono text-fg">
+                        {shortId(importedMeta.spendPubkeyHex, 10)}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText(importedMeta.spendPubkeyHex, "Spend public key")}
+                        className="text-subtle hover:text-fg"
+                        aria-label="Copy spend public key"
+                      >
+                        <Copy className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setScanSpendPub(importedMeta.spendPubkeyHex);
+                      setTab("scan");
+                      toast.success("Loaded extension spend pubkey into Scan");
+                    }}
+                  >
+                    <Scan className="mr-1.5 size-3.5" />
+                    Load Spend Pubkey into Scan
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTargetMeta(importedMeta.metaAddress);
+                      setTab("send");
+                    }}
+                  >
+                    <Send className="mr-1.5 size-3.5" />
+                    Test Derive Address
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {keys && (
               <div className="space-y-3 rounded-xl border border-gold/30 bg-gold/5 p-4">

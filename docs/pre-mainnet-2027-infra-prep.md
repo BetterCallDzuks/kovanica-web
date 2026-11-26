@@ -9,10 +9,11 @@
 
 ## 1. Executive Summary
 
-> [!NOTE] Remediation Update (`2026-11-25`)
+> [!NOTE] Remediation Update (`2026-11-26`)
 > - **Blocker #1 (`mainnet.kovanica.online` TLS SAN): RESOLVED** — Let's Encrypt webroot cert (`CN=mainnet.kovanica.online`, valid until `2027-02-23`) and Nginx `443 ssl` + `http2` vhost provisioned on `seed1`; `curl -fsSI https://mainnet.kovanica.online/` now returns `HTTP/2 200`.
 > - **Blocker #4 (`kovanica-chain2-faucet` & Disk): RESOLVED / IMPROVED** — `kovanica-chain2-faucet` recreated with `KOVANICA_FAUCET_PASSPHRASE` and now reports `Up (healthy)` (`http://127.0.0.1:3000/health` → `OK`); reclaimed ~7.5 GB of build/npm/sccache/Playwright caches & journals, lowering root disk `/` from **75% → 70.4%** (`58G` free).
-> - **Remaining Gates:** Blocker #2 (Cloudflare DNS for `pool`, `rpc-mainnet`, `seed2`, `seed3`, apex `CAA`), Blocker #3 (`rpc.kovanica.online` Chain-1 wiring at `1.1.2027`), and Blocker #5 (provisioning/bringing online `seed2` & `seed3` VPS hosts + external TCP `:8000` P2P for full-mesh 3-node dress rehearsal).
+> - **Topology & DNS Update (`2026-11-26`):** `seed2.kovanica.online` and `seed3.kovanica.online` are retired; `pool.kovanica.online` DNS is now set; and the canonical Mainnet RPC hostname is locked to **`rpc.kovanica.online`**. Use the production cutover Nginx template in [`ops/nginx/rpc.kovanica.online.conf.example`](../ops/nginx/rpc.kovanica.online.conf.example) (TLS/HSTS, rate-limiting zones, WebSocket upgrade support, and separation of public read-only `/rpc` vs `KOVANICA_RPC_WRITE_TOKEN` bearer-authenticated `/rpc/write`).
+> - **Remaining Gates:** Apex `CAA` record and `rpc.kovanica.online` Chain-1 cutover at `1.1.2027` (staging `ops/nginx/rpc.kovanica.online.conf.example`).
 
 A live, read-only audit of Kovanica's public DNS records, edge/origin TLS certificates, and primary VPS (`seed1`, `145.223.116.178`) identified **five concrete pre-mainnet blockers** that must be resolved before the `1.1.2027` Mainnet cutover:
 
@@ -142,9 +143,9 @@ Execute these steps during a scheduled maintenance window (zero downtime for `ko
      | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
    curl -fsSI https://mainnet.kovanica.online/
    ```
-5. **Prepare `rpc.kovanica.online` Origin TLS & Nginx Vhost** (for `1.1.2027` cutover):
+5. **Prepare `rpc.kovanica.online` Origin TLS & Nginx Vhost** (for `1.1.2027` cutover — Mainnet RPC hostname is locked to `rpc.kovanica.online`):
    - Issue origin cert `sudo certbot certonly --nginx -d rpc.kovanica.online` (required for Cloudflare **Full (Strict)** SSL).
-   - Stage `/etc/nginx/sites-available/rpc.kovanica.online` with `location = /rpc` proxying to Mainnet Chain `1` JSON-RPC (`127.0.0.1:<MAINNET_RPC_PORT>`), `location = /health`, and `limit_req` rate limiting; keep disabled until dress rehearsal passes.
+   - Stage `/etc/nginx/sites-available/rpc.kovanica.online` from [`ops/nginx/rpc.kovanica.online.conf.example`](../ops/nginx/rpc.kovanica.online.conf.example) (includes TLS/HSTS headers, rate-limiting zones, WebSocket `/ws` upgrade support, public read-only `/rpc`, and `KOVANICA_RPC_WRITE_TOKEN` bearer-authenticated `/rpc/write`); keep disabled until dress rehearsal passes.
 
 ---
 
