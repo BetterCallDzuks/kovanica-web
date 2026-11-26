@@ -1645,7 +1645,14 @@ test("Section E: Explorer Live Mining & DAG Telemetry panel renders truthful tel
   });
 
   try {
-    await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+    assert.equal(
+      await page.getByTestId("telemetry-drawers-toggle").getAttribute("aria-expanded"),
+      "false",
+      "Live Mining & DAG Telemetry drawers must start hidden by default",
+    );
+    await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+    await waitForBodyText(page, "Live Mining & DAG Telemetry");
     await waitForBodyText(page, "Live · GHOSTDAG K=5");
 
     const panel = page.locator('section[aria-label="Live Mining and DAG Telemetry"]');
@@ -1753,7 +1760,9 @@ test("Section E: Explorer live stream indicator supports Polling fallback, WS Li
     });
 
     try {
-      await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+      await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+      await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+      await waitForBodyText(page, "Live Mining & DAG Telemetry");
       await waitForBodyText(page, "12450");
       const badge = page.getByTestId("live-stream-badge");
       const toggle = page.getByTestId("live-stream-toggle");
@@ -1886,7 +1895,9 @@ test("Section E: Explorer live stream indicator supports Polling fallback, WS Li
     `);
 
     try {
-      await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+      await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+      await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+      await waitForBodyText(page, "Live Mining & DAG Telemetry");
       const badge = page.getByTestId("live-stream-badge");
       const toggle = page.getByTestId("live-stream-toggle");
 
@@ -2098,7 +2109,9 @@ test("Section E: Explorer Node & Network Diagnostics drawer opens and copies san
   });
 
   try {
-    await gotoAndSettle(page, `${baseUrl}/explorer`, "Node & Network Diagnostics");
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+    await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+    await waitForBodyText(page, "Node & Network Diagnostics");
 
     const drawer = page.getByTestId("explorer-diagnostics-drawer");
     await drawer.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
@@ -2200,7 +2213,9 @@ test("Section E: Explorer Diagnostics Drawer renders RPC latency sparkline and s
   });
 
   try {
-    await gotoAndSettle(page, `${baseUrl}/explorer`, "Node & Network Diagnostics");
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+    await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+    await waitForBodyText(page, "Node & Network Diagnostics");
 
     await expandCollapsibleToggle(page, "explorer-diagnostics-toggle");
 
@@ -2293,7 +2308,9 @@ test("Section E: Explorer KovanicaHash Miner & Stratum TLS Command Builder expan
   });
 
   try {
-    await gotoAndSettle(page, `${baseUrl}/explorer`, "Live Mining & DAG Telemetry");
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+    await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+    await waitForBodyText(page, "Live Mining & DAG Telemetry");
 
     const builder = page.getByTestId("miner-command-builder");
     await builder.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
@@ -2384,7 +2401,9 @@ test("Section E: LiveDagDrawer renders Fee Pressure & 1.2x Buffered Fee pill wit
   });
 
   try {
-    await gotoAndSettle(page, `${baseUrl}/explorer`, "Live DAG & Mempool Stream");
+    await gotoAndSettle(page, `${baseUrl}/explorer`, "Telemetry & Drawers");
+    await expandCollapsibleToggle(page, "telemetry-drawers-toggle");
+    await waitForBodyText(page, "Live DAG & Mempool Stream");
 
     const drawer = page.getByTestId("live-dag-drawer");
     await drawer.waitFor({ state: "visible", timeout: HYDRATION_TIMEOUT });
