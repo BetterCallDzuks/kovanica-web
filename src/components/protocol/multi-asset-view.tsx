@@ -163,9 +163,11 @@ export function MultiAssetView() {
         icon,
         onStatus: (msg) => setCreateStatus(msg),
       });
+      watchTokenContract(result.contractHex);
+      setWatched(true);
       setCreatedToken(result);
       setCreateStatus(null);
-      toast.success(`Token ${symbol} created on Testnet!`);
+      toast.success(`Token ${symbol} created on Testnet and added to your Wallet watchlist!`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Token creation failed";
       setCreateStatus(null);

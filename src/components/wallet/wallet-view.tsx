@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useRouterState } from "@tanstack/react-router";
-import { ChevronDown, Copy, Eye, EyeOff, Gem, Lock, Unlock, Usb } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ChevronDown, Copy, Eye, EyeOff, Gem, Lock, Plus, Unlock, Usb, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AddressQr } from "@/components/wallet/address-qr";
@@ -33,6 +33,11 @@ import { encryptMnemonic, decryptMnemonic } from "@/lib/wallet/vault";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useWalletSync } from "@/lib/wallet/use-wallet-sync";
 import { validatePoolHandoff } from "@/lib/wallet/handoff";
+import {
+  getWatchedTokenContracts,
+  unwatchTokenContract,
+  watchTokenContract,
+} from "@/lib/wallet/tx-builder";
 
 function isLocked(w: WalletRec | null): w is SoftwareWalletRec & {
   encryptedMnemonic: NonNullable<SoftwareWalletRec["encryptedMnemonic"]>;
@@ -69,8 +74,39 @@ export function WalletView() {
     tokens,
     feeRates,
     isStale,
+    refresh,
     notifyConfirmedTransaction,
   } = useWalletSync(wallet?.address, source);
+  const [watchedContracts, setWatchedContracts] = useState<string[]>([]);
+  const [showWatchForm, setShowWatchForm] = useState(false);
+  const [watchInput, setWatchInput] = useState("");
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setWatchedContracts(getWatchedTokenContracts());
+  }, [hydrated]);
+
+  function onAddWatchToken(e: React.FormEvent) {
+    e.preventDefault();
+    const hex = parseAddr(watchInput.trim());
+    if (!hex) {
+      toast.error("Enter a valid KVP-102 token contract address (kvnc…dag or 64-hex)");
+      return;
+    }
+    const next = watchTokenContract(hex);
+    setWatchedContracts(next);
+    setWatchInput("");
+    setShowWatchForm(false);
+    toast.success("Added token contract to watchlist — refreshing balances…");
+    void refresh();
+  }
+
+  function onRemoveWatchToken(contractAddress: string) {
+    const next = unwatchTokenContract(contractAddress);
+    setWatchedContracts(next);
+    toast.message("Removed token from local watchlist");
+    void refresh();
+  }
   const [feeTier, setFeeTier] = useState<"slow" | "normal" | "fast">("normal");
   /** RFC-002: null = native KVNC */
   const [assetId, setAssetId] = useState<string | null>(null);
@@ -1036,36 +1072,105 @@ export function WalletView() {
 
         <div className="flex min-w-0 flex-col gap-6">
           <section>
-            <p className="mb-2 text-[10px] tracking-wide text-subtle uppercase">Tokens</p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] tracking-wide text-subtle uppercase">
+                Tokens{watchedContracts.length > 0 ? ` (${watchedContracts.length} watched)` : ""}
+              </p>
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/multi-asset"
+                  className="font-mono text-[10px] text-blue hover:underline"
+                >
+                  Create
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowWatchForm((v) => !v)}
+                  className="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-0.5 font-mono text-[10px] text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                >
+                  <Plus className="size-2.5" />
+                  Watch token
+                </button>
+              </div>
+            </div>
+            {showWatchForm && (
+              <form onSubmit={onAddWatchToken} className="mb-3 flex gap-2">
+                <input
+                  value={watchInput}
+                  onChange={(e) => setWatchInput(e.target.value)}
+                  placeholder="kvnc…dag or 64-hex token contract"
+                  className="h-9 flex-1 rounded-md border border-border bg-bg px-2.5 font-mono text-xs text-fg placeholder:text-subtle focus:outline-none focus:ring-1 focus:ring-blue"
+                />
+                <Button type="submit" size="sm" variant="outline" className="h-9 text-xs">
+                  Add
+                </Button>
+              </form>
+            )}
             {tokens.length === 0 ? (
               <p className="text-sm text-muted">
                 No KVP-102 tokens on {live ? "Testnet" : "this chain"} yet.
               </p>
             ) : (
               <ul className="divide-y divide-border rounded-xl border border-border">
-                {tokens.slice(0, 8).map((token) => (
-                  <li key={token.address} className="flex items-center gap-3 px-4 py-3">
-                    {token.icon ? (
-                      <img
-                        src={token.icon}
-                        alt=""
-                        className="size-8 shrink-0 rounded-full border border-border object-cover"
-                      />
-                    ) : (
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-mono text-[11px] text-teal">
-                        {token.symbol.slice(0, 2).toUpperCase()}
+                {tokens.slice(0, 12).map((token) => {
+                  const tokenHex = parseAddr(token.address);
+                  const isWatched = tokenHex ? watchedContracts.includes(tokenHex) : false;
+                  return (
+                    <li
+                      key={token.address}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2/40"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onPickAsset(`token:${token.address}`)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        title="Select token in Send form"
+                      >
+                        {token.icon ? (
+                          <img
+                            src={token.icon}
+                            alt=""
+                            className="size-8 shrink-0 rounded-full border border-border object-cover"
+                          />
+                        ) : (
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-mono text-[11px] text-teal">
+                            {token.symbol.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5 truncate text-sm text-fg">
+                            <span>{token.symbol}</span>
+                            {isWatched && (
+                              <span className="rounded bg-blue/15 px-1.5 py-0.2 font-mono text-[9px] text-blue uppercase">
+                                watched
+                              </span>
+                            )}
+                          </span>
+                          <span className="block truncate text-[11px] text-subtle">
+                            {token.name}
+                          </span>
+                        </span>
+                      </button>
+                      <span className="shrink-0 text-right font-mono text-xs tabular-nums text-muted">
+                        {formatTokenAmount(BigInt(token.balance ?? "0"), token.decimals)}
+                        {token.paused ? (
+                          <span className="ml-1 text-[10px] text-gold">paused</span>
+                        ) : null}
                       </span>
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-fg">{token.symbol}</span>
-                      <span className="block truncate text-[11px] text-subtle">{token.name}</span>
-                    </span>
-                    <span className="shrink-0 text-right font-mono text-xs tabular-nums text-muted">
-                      {formatTokenAmount(BigInt(token.balance ?? "0"), token.decimals)}
-                      {token.paused ? <span className="ml-1 text-[10px] text-gold">paused</span> : null}
-                    </span>
-                  </li>
-                ))}
+                      {isWatched && (
+                        <button
+                          type="button"
+                          onClick={() => onRemoveWatchToken(token.address)}
+                          className="shrink-0 rounded p-1 text-subtle transition-colors hover:bg-surface-2 hover:text-fg"
+                          aria-label={`Unwatch ${token.symbol}`}
+                          title="Remove from local watchlist"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>

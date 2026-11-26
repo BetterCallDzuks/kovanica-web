@@ -114,6 +114,15 @@ export function hexToBytes(hex: string): Uint8Array {
   return out;
 }
 
+export function u16le(value: number): Uint8Array {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
+    throw new RangeError(`Value out of range for u16: ${value}`);
+  }
+  const buf = new Uint8Array(2);
+  new DataView(buf.buffer).setUint16(0, value, true);
+  return buf;
+}
+
 export function u32le(value: number): Uint8Array {
   if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
     throw new RangeError(`Value out of range for u32: ${value}`);
@@ -312,6 +321,56 @@ export function encodeRwaCreateArgs(params: {
  */
 export function encodeRwaToAmountArgs(to: string, amount: bigint): Uint8Array {
   return concatBytes([addressBytes32(to, "recipient address"), u128le(amount)]);
+}
+
+/**
+ * `token_init_pool(kuna_in, tokens_in, fee_bps)`.
+ * Wire layout: `(u128, u128, u16)` — exact 34 bytes.
+ * Matches `kovanica-l1/crates/kovanica-token/src/lib.rs` & `kovanica-cli/src/contracts.rs`.
+ */
+export function encodeTokenInitPoolArgs(params: {
+  kunaIn: bigint;
+  tokensIn: bigint;
+  feeBps: number;
+}): Uint8Array {
+  if (params.kunaIn <= 0n) {
+    throw new Error("Initial KVNC reserve must be greater than zero");
+  }
+  if (params.tokensIn <= 0n) {
+    throw new Error("Initial token reserve must be greater than zero");
+  }
+  if (!Number.isInteger(params.feeBps) || params.feeBps < 0 || params.feeBps > 1_000) {
+    throw new Error("Pool fee must be an integer between 0 and 1000 bps (max 10%)");
+  }
+  return concatBytes([u128le(params.kunaIn), u128le(params.tokensIn), u16le(params.feeBps)]);
+}
+
+/**
+ * `token_buy(amount_in, min_out)`.
+ * Wire layout: `(u128, u128)` — exact 32 bytes.
+ */
+export function encodeTokenBuyArgs(params: { amountIn: bigint; minOut: bigint }): Uint8Array {
+  if (params.amountIn <= 0n) {
+    throw new Error("Buy amount must be greater than zero");
+  }
+  if (params.minOut < 0n) {
+    throw new Error("Minimum output cannot be negative");
+  }
+  return concatBytes([u128le(params.amountIn), u128le(params.minOut)]);
+}
+
+/**
+ * `token_sell(amount_in, min_out)`.
+ * Wire layout: `(u128, u128)` — exact 32 bytes.
+ */
+export function encodeTokenSellArgs(params: { amountIn: bigint; minOut: bigint }): Uint8Array {
+  if (params.amountIn <= 0n) {
+    throw new Error("Sell amount must be greater than zero");
+  }
+  if (params.minOut < 0n) {
+    throw new Error("Minimum output cannot be negative");
+  }
+  return concatBytes([u128le(params.amountIn), u128le(params.minOut)]);
 }
 
 // --- Transaction Signing Preimage & Wire Bincode Serialization ----------------
@@ -527,6 +586,17 @@ export async function fetchAccountTxContext(address: string): Promise<AccountTxC
     chainId: typeof acct.chain_id === "number" ? acct.chain_id : scheduleChainId,
     fixedFeesActive: Boolean(schedule?.active),
   };
+}
+
+/**
+ * Compute required dynamic byte fee for a standard contract Call (no fixed floor):
+ * `max(MIN_FEE, ceil(txBytes * feeRate * 1.2))`.
+ */
+export function computeDynamicCallFee(txBytes: number, feeRate: bigint): bigint {
+  const effectiveRate = feeRate > 0n ? feeRate : 1n;
+  const byteFee = (BigInt(txBytes) * effectiveRate * 12n + 9n) / 10n;
+  const minFloor = BigInt(MIN_FEE);
+  return byteFee > minFloor ? byteFee : minFloor;
 }
 
 /**
@@ -1190,14 +1260,218 @@ export async function deployAndIssueRwa(
   };
 }
 
-// --- Local Token Watchlist Helper ---------------------------------------------
+// --- KVP-102 AMM Pool Orchestrators (token_init_pool, token_buy, token_sell) ---
+
+export interface AmmCallResult {
+  txHash: string;
+  contractHex: string;
+  contractKvnc: string;
+  fee: bigint;
+  method: "token_init_pool" | "token_buy" | "token_sell";
+}
+
+/**
+ * Initialize a KVP-102 constant-product pool on a token contract (`token_init_pool`).
+ * Sends `kunaInAtoms` as `Call.value` and locks `tokensInAtoms` from the caller's token balance.
+ */
+export async function initTokenPool(
+  signer: ActiveSigner,
+  params: {
+    contract: string;
+    kunaInAtoms: bigint;
+    tokensInAtoms: bigint;
+    feeBps: number;
+    onStatus?: (msg: string) => void;
+  },
+): Promise<AmmCallResult> {
+  const contractHex = parseAddr(params.contract);
+  if (!contractHex) throw new Error("Invalid token contract address");
+
+  params.onStatus?.("Fetching account nonce and fee rate…");
+  const ctx = await fetchAccountTxContext(signer.addressHex);
+  const args = encodeTokenInitPoolArgs({
+    kunaIn: params.kunaInAtoms,
+    tokensIn: params.tokensInAtoms,
+    feeBps: params.feeBps,
+  });
+
+  const txBytes =
+    CALL_WIRE_OVERHEAD + 4 + 32 + 8 + 8 + "token_init_pool".length + 8 + args.length + 8;
+  const fee = computeDynamicCallFee(txBytes, ctx.feeRate);
+  const totalKvnc = params.kunaInAtoms + fee;
+
+  if (ctx.balance < totalKvnc) {
+    throw new Error(
+      `Insufficient KVNC balance: have ${(Number(ctx.balance) / 1e9).toFixed(4)} KVNC, need ${(Number(totalKvnc) / 1e9).toFixed(4)} KVNC (pool seed + fee).`,
+    );
+  }
+
+  params.onStatus?.("Signing token_init_pool transaction…");
+  const signed = await signCallTx(signer, {
+    nonce: ctx.nonce,
+    contractHex,
+    value: params.kunaInAtoms,
+    method: "token_init_pool",
+    args,
+    gasLimit: DEFAULT_CONTRACT_GAS_LIMIT,
+    fee,
+    chainId: ctx.chainId,
+  });
+
+  params.onStatus?.("Broadcasting token_init_pool to Testnet…");
+  const txHash = await broadcastRawTx(signed.rawTxHex);
+  return {
+    txHash,
+    contractHex,
+    contractKvnc: hexToKvnc(contractHex),
+    fee,
+    method: "token_init_pool",
+  };
+}
+
+/**
+ * Buy KVP-102 tokens from a token contract's AMM pool using native KVNC (`token_buy`).
+ * Attaches `kunaInAtoms` as `Call.value` and enforces `minOutAtoms` slippage guard.
+ */
+export async function executeTokenBuy(
+  signer: ActiveSigner,
+  params: {
+    contract: string;
+    kunaInAtoms: bigint;
+    minOutAtoms: bigint;
+    onStatus?: (msg: string) => void;
+  },
+): Promise<AmmCallResult> {
+  const contractHex = parseAddr(params.contract);
+  if (!contractHex) throw new Error("Invalid token contract address");
+
+  params.onStatus?.("Fetching account nonce and fee rate…");
+  const ctx = await fetchAccountTxContext(signer.addressHex);
+  const args = encodeTokenBuyArgs({
+    amountIn: params.kunaInAtoms,
+    minOut: params.minOutAtoms,
+  });
+
+  const txBytes =
+    CALL_WIRE_OVERHEAD + 4 + 32 + 8 + 8 + "token_buy".length + 8 + args.length + 8;
+  const fee = computeDynamicCallFee(txBytes, ctx.feeRate);
+  const totalKvnc = params.kunaInAtoms + fee;
+
+  if (ctx.balance < totalKvnc) {
+    throw new Error(
+      `Insufficient KVNC balance: have ${(Number(ctx.balance) / 1e9).toFixed(4)} KVNC, need ${(Number(totalKvnc) / 1e9).toFixed(4)} KVNC (swap input + fee).`,
+    );
+  }
+
+  params.onStatus?.("Signing token_buy swap transaction…");
+  const signed = await signCallTx(signer, {
+    nonce: ctx.nonce,
+    contractHex,
+    value: params.kunaInAtoms,
+    method: "token_buy",
+    args,
+    gasLimit: DEFAULT_CONTRACT_GAS_LIMIT,
+    fee,
+    chainId: ctx.chainId,
+  });
+
+  params.onStatus?.("Broadcasting token_buy to Testnet…");
+  const txHash = await broadcastRawTx(signed.rawTxHex);
+  return {
+    txHash,
+    contractHex,
+    contractKvnc: hexToKvnc(contractHex),
+    fee,
+    method: "token_buy",
+  };
+}
+
+/**
+ * Sell KVP-102 tokens into a token contract's AMM pool for native KVNC (`token_sell`).
+ * Sets `Call.value = 0` and enforces `minOutAtoms` (KVNC atoms) slippage guard.
+ */
+export async function executeTokenSell(
+  signer: ActiveSigner,
+  params: {
+    contract: string;
+    tokensInAtoms: bigint;
+    minOutAtoms: bigint;
+    onStatus?: (msg: string) => void;
+  },
+): Promise<AmmCallResult> {
+  const contractHex = parseAddr(params.contract);
+  if (!contractHex) throw new Error("Invalid token contract address");
+
+  params.onStatus?.("Fetching account nonce and fee rate…");
+  const ctx = await fetchAccountTxContext(signer.addressHex);
+  const args = encodeTokenSellArgs({
+    amountIn: params.tokensInAtoms,
+    minOut: params.minOutAtoms,
+  });
+
+  const txBytes =
+    CALL_WIRE_OVERHEAD + 4 + 32 + 8 + 8 + "token_sell".length + 8 + args.length + 8;
+  const fee = computeDynamicCallFee(txBytes, ctx.feeRate);
+
+  if (ctx.balance < fee) {
+    throw new Error(
+      `Insufficient KVNC balance for fee: have ${(Number(ctx.balance) / 1e9).toFixed(4)} KVNC, need ${(Number(fee) / 1e9).toFixed(4)} KVNC.`,
+    );
+  }
+
+  params.onStatus?.("Signing token_sell swap transaction…");
+  const signed = await signCallTx(signer, {
+    nonce: ctx.nonce,
+    contractHex,
+    value: 0n,
+    method: "token_sell",
+    args,
+    gasLimit: DEFAULT_CONTRACT_GAS_LIMIT,
+    fee,
+    chainId: ctx.chainId,
+  });
+
+  params.onStatus?.("Broadcasting token_sell to Testnet…");
+  const txHash = await broadcastRawTx(signed.rawTxHex);
+  return {
+    txHash,
+    contractHex,
+    contractKvnc: hexToKvnc(contractHex),
+    fee,
+    method: "token_sell",
+  };
+}
+
+// --- Local Token Watchlist Helpers --------------------------------------------
+
+export function getWatchedTokenContracts(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(WATCHED_TOKENS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of parsed) {
+      if (typeof item !== "string") continue;
+      const norm = parseAddr(item);
+      if (norm && !seen.has(norm)) {
+        seen.add(norm);
+        out.push(norm);
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
 
 export function watchTokenContract(contractHex: string): string[] {
   if (typeof window === "undefined") return [];
   const normalized = parseAddr(contractHex) ?? contractHex.trim().toLowerCase();
   try {
-    const raw = window.localStorage.getItem(WATCHED_TOKENS_KEY);
-    const list: string[] = raw ? (JSON.parse(raw) as string[]) : [];
+    const list = getWatchedTokenContracts();
     if (!list.includes(normalized)) {
       list.unshift(normalized);
       window.localStorage.setItem(WATCHED_TOKENS_KEY, JSON.stringify(list));
@@ -1205,5 +1479,17 @@ export function watchTokenContract(contractHex: string): string[] {
     return list;
   } catch {
     return [normalized];
+  }
+}
+
+export function unwatchTokenContract(contractHex: string): string[] {
+  if (typeof window === "undefined") return [];
+  const normalized = parseAddr(contractHex) ?? contractHex.trim().toLowerCase();
+  try {
+    const list = getWatchedTokenContracts().filter((addr) => addr !== normalized);
+    window.localStorage.setItem(WATCHED_TOKENS_KEY, JSON.stringify(list));
+    return list;
+  } catch {
+    return [];
   }
 }

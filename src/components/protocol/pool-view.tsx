@@ -1,30 +1,74 @@
 /**
- * KVP-102 AMM pools — read-only explorer plus an exact quote calculator.
+ * KVP-102 AMM pools — live on-chain pool explorer, exact quote calculator,
+ * and client-signed swap execution (`token_buy` / `token_sell`).
  *
- * A pool is contract state, not an RPC view: `/api/pools` scans the token
- * contracts and decodes each `kvnc/v1/pool` slot. Swapping is a signed
- * `token_buy` / `token_sell` call, so this page deliberately stops at quoting —
- * the same formula the contract runs, so the numbers match on execution.
+ * A pool is contract state: `/api/pools` scans token contracts (plus any locally
+ * watched token contracts) and decodes each `kvnc/v1/pool` slot. Swapping signs
+ * a canonical `Call` transaction (`token_buy` with `Call.value = kuna_in` or
+ * `token_sell` with `Call.value = 0`) via the unlocked Web Wallet or `window.kovanica`
+ * and broadcasts through `/api/submit_tx` (`kovanica_sendRawTransaction`).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownUp, Copy, Info, RefreshCw, Waves } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  ArrowDownUp,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  Info,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Wallet,
+  Waves,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { api, useApiSource } from "@/lib/api/client";
+import { useLedger } from "@/lib/ledger/store";
+import { shortId } from "@/lib/ledger/hash";
+import { ATOM, TOKEN } from "@/lib/networkConstants";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
 import { priceImpactBps, quote, type ApiPool } from "@/lib/tokens/pool";
+import {
+  connectExtensionSigner,
+  executeTokenBuy,
+  executeTokenSell,
+  getKovanicaExtension,
+  getWatchedTokenContracts,
+  webWalletSigner,
+  type ActiveSigner,
+  type AmmCallResult,
+} from "@/lib/wallet/tx-builder";
 
 /** Native KVNC always has 9 decimals. */
 const KVNC_DECIMALS = 9;
 
-export function PoolView() {
+const SLIPPAGE_PRESETS = [
+  { label: "0.5%", bps: 50 },
+  { label: "1.0%", bps: 100 },
+  { label: "2.0%", bps: 200 },
+] as const;
+
+export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
   const source = useApiSource();
+  const wallet = useLedger((s) => s.wallet);
   const [pools, setPools] = useState<ApiPool[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [dir, setDir] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("1");
+  const [slippageBps, setSlippageBps] = useState<number>(50);
   const [loading, setLoading] = useState(false);
+
+  const [extSigner, setExtSigner] = useState<ActiveSigner | null>(null);
+  const [swapping, setSwapping] = useState(false);
+  const [swapStatus, setSwapStatus] = useState<string | null>(null);
+  const [lastSwap, setLastSwap] = useState<AmmCallResult | null>(null);
+
+  const unlockedSigner = useMemo(() => webWalletSigner(wallet), [wallet]);
+  const activeSigner = unlockedSigner ?? extSigner;
+  const hasExtension = useMemo(() => getKovanicaExtension() !== null, []);
 
   const genRef = useRef(0);
   const inFlightGenRef = useRef<number | null>(null);
@@ -46,7 +90,9 @@ export function PoolView() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await api<ApiPool[]>("/api/pools");
+      const watched = getWatchedTokenContracts();
+      const suffix = watched.length ? `?watched=${encodeURIComponent(watched.join(","))}` : "";
+      const rows = await api<ApiPool[]>(`/api/pools${suffix}`);
       if (!Array.isArray(rows)) {
         throw new Error("Malformed pools response");
       }
@@ -84,7 +130,7 @@ export function PoolView() {
       genRef.current += 1;
       inFlightGenRef.current = null;
     };
-  }, [source]);
+  }, [source, refreshKey]);
 
   const pool = useMemo(
     () => pools?.find((p) => p.address === selected) ?? pools?.[0] ?? null,
@@ -102,6 +148,7 @@ export function PoolView() {
         ? quote(atoms, kunaReserve, tokenReserve, pool.fee_bps)
         : quote(atoms, tokenReserve, kunaReserve, pool.fee_bps)
       : null;
+  const minOut = out !== null ? (out * BigInt(10_000 - slippageBps)) / 10_000n : null;
   const impact =
     pool && atoms !== null && out !== null && out > 0n
       ? priceImpactBps(
@@ -121,6 +168,63 @@ export function PoolView() {
     }
   }
 
+  async function onConnectExtension() {
+    try {
+      const signer = await connectExtensionSigner();
+      setExtSigner(signer);
+      toast.success(`Connected ${shortId(signer.addressKvnc)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Extension connection failed");
+    }
+  }
+
+  async function onExecuteSwap() {
+    if (!pool) return;
+    if (pool.paused) {
+      toast.error(`${pool.symbol} pool is currently paused`);
+      return;
+    }
+    if (!activeSigner) {
+      toast.error("Unlock your Web Wallet on /wallet or connect window.kovanica first");
+      return;
+    }
+    if (atoms === null || out === null || minOut === null || out <= 0n) {
+      toast.error("Enter a valid positive swap amount");
+      return;
+    }
+
+    setSwapping(true);
+    setLastSwap(null);
+    setSwapStatus(`Preparing ${dir === "buy" ? "token_buy" : "token_sell"} transaction…`);
+    try {
+      const res =
+        dir === "buy"
+          ? await executeTokenBuy(activeSigner, {
+              contract: pool.address,
+              kunaInAtoms: atoms,
+              minOutAtoms: minOut,
+              onStatus: setSwapStatus,
+            })
+          : await executeTokenSell(activeSigner, {
+              contract: pool.address,
+              tokensInAtoms: atoms,
+              minOutAtoms: minOut,
+              onStatus: setSwapStatus,
+            });
+      setLastSwap(res);
+      setSwapStatus(null);
+      toast.success(
+        `${res.method} broadcast (${shortId(res.txHash)}) on ${pool.symbol} / KVNC`,
+      );
+      void load();
+    } catch (e) {
+      setSwapStatus(null);
+      toast.error(e instanceof Error ? e.message : "Swap failed");
+    } finally {
+      setSwapping(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-6 md:py-8">
       <header className="flex items-start justify-between gap-3">
@@ -133,7 +237,9 @@ export function PoolView() {
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
             Every token contract can hold a constant-product pool between its own token and
-            KVNC. Reserves, fee and LP supply are read straight from contract storage.
+            KVNC. Reserves, fee and LP supply are read straight from contract storage, and swaps
+            sign <code className="font-mono text-xs text-fg">token_buy</code> /{" "}
+            <code className="font-mono text-xs text-fg">token_sell</code> client-side.
           </p>
         </div>
         <Button
@@ -163,13 +269,13 @@ export function PoolView() {
               token_init_pool
             </code>{" "}
             on the token contract with an initial KVNC reserve, token reserve and fee (max 10%).
-            The token keeps working as a normal KVP-102 token until then.
+            Use the Initialize Pool panel above to seed a pool directly from your browser.
           </p>
         </div>
       )}
 
       {pools !== null && pools.length > 0 && (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="flex min-w-0 flex-col gap-3">
             {pools.map((row) => {
               const on = pool?.address === row.address;
@@ -177,7 +283,10 @@ export function PoolView() {
                 <button
                   key={row.address}
                   type="button"
-                  onClick={() => setSelected(row.address)}
+                  onClick={() => {
+                    setSelected(row.address);
+                    setLastSwap(null);
+                  }}
                   className={
                     on
                       ? "rounded-xl border border-gold/50 bg-gold/5 p-4 text-left"
@@ -233,7 +342,9 @@ export function PoolView() {
           {pool && (
             <div className="flex min-w-0 flex-col gap-4 self-start rounded-xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted">Quote</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                  Quote &amp; Swap
+                </p>
                 <Button
                   type="button"
                   variant="ghost"
@@ -272,10 +383,31 @@ export function PoolView() {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   inputMode="decimal"
+                  disabled={swapping}
                   className="mt-1 h-11 w-full rounded-md border border-border bg-bg px-3 font-mono text-sm text-fg outline-none"
                   placeholder="0"
                 />
               </label>
+
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted">Slippage</span>
+                <div className="flex gap-1">
+                  {SLIPPAGE_PRESETS.map((p) => (
+                    <button
+                      key={p.bps}
+                      type="button"
+                      onClick={() => setSlippageBps(p.bps)}
+                      className={
+                        slippageBps === p.bps
+                          ? "rounded bg-gold/20 px-2 py-0.5 font-mono text-[11px] text-gold"
+                          : "rounded border border-border bg-bg px-2 py-0.5 font-mono text-[11px] text-muted hover:text-fg"
+                      }
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <div className="rounded-lg border border-border bg-bg p-3">
                 <p className="text-[10px] uppercase tracking-wide text-subtle">You receive</p>
@@ -286,7 +418,14 @@ export function PoolView() {
                         dir === "buy" ? pool.symbol : "KVNC"
                       }`}
                 </p>
-                <p className="mt-2 font-mono text-[10px] text-subtle">
+                {minOut !== null && (
+                  <p className="mt-1 font-mono text-[10px] text-muted">
+                    Min received ({(slippageBps / 100).toFixed(1)}%):{" "}
+                    {formatTokenAmount(minOut, outDecimals)}{" "}
+                    {dir === "buy" ? pool.symbol : "KVNC"}
+                  </p>
+                )}
+                <p className="mt-1 font-mono text-[10px] text-subtle">
                   Price impact {impact === null ? "—" : `${(impact / 100).toFixed(2)}%`} · Fee{" "}
                   {(pool.fee_bps / 100).toFixed(2)}%
                 </p>
@@ -294,32 +433,104 @@ export function PoolView() {
 
               <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted">
                 <Info className="mt-0.5 size-3.5 shrink-0 text-blue" />
-                Quote uses the contract&apos;s own constant-product formula (fee retained in the
-                reserve). Executing a swap is a signed{" "}
-                <code className="font-mono text-[10px] text-fg">token_buy</code> /{" "}
-                <code className="font-mono text-[10px] text-fg">token_sell</code> call — use the
-                CLI or the Android wallet.
+                Executes a client-signed{" "}
+                <code className="font-mono text-[10px] text-fg">
+                  {dir === "buy" ? "token_buy" : "token_sell"}
+                </code>{" "}
+                call directly on the KVP-102 token contract with{" "}
+                <code className="font-mono text-[10px] text-fg">min_out</code> slippage protection.
               </p>
 
-              {/* Pool -> Wallet Handoff Action (Gated by wallet execution capability) */}
-              <div className="pt-2 border-t border-border flex flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled
-                  className="w-full cursor-not-allowed opacity-60 font-mono text-xs text-muted"
-                  aria-disabled="true"
-                  title="AMM pool swap execution (token_buy / token_sell) is not supported by the web wallet"
-                >
-                  Open in Wallet (Unsupported)
-                </Button>
-                <p className="text-[11px] leading-relaxed text-subtle">
-                  Notice: AMM pool execution is not supported by the web wallet. Swapping requires signed{" "}
-                  <code className="font-mono text-[10px] text-fg">token_buy</code> /{" "}
-                  <code className="font-mono text-[10px] text-fg">token_sell</code> smart contract
-                  calls. This page remains strictly quote-only.
-                </p>
+              {swapStatus && (
+                <div className="flex items-center gap-2 rounded-lg border border-blue/30 bg-blue/10 px-3 py-2 text-xs text-blue">
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                  <span>{swapStatus}</span>
+                </div>
+              )}
+
+              {/* Live Client-Signed Execution */}
+              <div className="flex flex-col gap-2 border-t border-border pt-3">
+                {activeSigner ? (
+                  <>
+                    <div className="flex items-center justify-between font-mono text-[10px] text-muted">
+                      <span>
+                        Signer ({activeSigner.kind === "web-wallet" ? "Web Wallet" : "Extension"})
+                      </span>
+                      <span className="text-fg">{shortId(activeSigner.addressKvnc)}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={swapping || pool.paused || out === null || out <= 0n}
+                      onClick={() => void onExecuteSwap()}
+                    >
+                      {swapping ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Signing {dir === "buy" ? "token_buy" : "token_sell"}…
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="mr-2 size-4" />
+                          {dir === "buy"
+                            ? `Buy ${pool.symbol} with KVNC`
+                            : `Sell ${pool.symbol} for KVNC`}
+                        </>
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-1.5 text-[11px] text-muted">
+                      <Wallet className="size-3.5 text-gold" />
+                      <span>Unlock your Web Wallet or connect window.kovanica to swap.</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {hasExtension && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs"
+                          onClick={() => void onConnectExtension()}
+                        >
+                          Connect Extension
+                        </Button>
+                      )}
+                      <Button asChild size="sm" variant="outline" className="flex-1 text-xs">
+                        <Link to="/wallet">Unlock Wallet</Link>
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {lastSwap && (
+                <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
+                  <div className="flex items-center gap-1.5 font-medium text-emerald-400">
+                    <CheckCircle2 className="size-4" />
+                    <span>{lastSwap.method} broadcast!</span>
+                  </div>
+                  <div className="space-y-1 font-mono text-[11px]">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted">Tx Hash</span>
+                      <span className="truncate text-fg">{shortId(lastSwap.txHash)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted">Fee</span>
+                      <span className="text-fg">
+                        {(Number(lastSwap.fee) / ATOM).toFixed(6)} {TOKEN}
+                      </span>
+                    </div>
+                  </div>
+                  <Button asChild size="sm" variant="outline" className="w-full text-xs">
+                    <Link to="/explorer">
+                      <ExternalLink className="mr-1.5 size-3.5" />
+                      View in Explorer
+                    </Link>
+                  </Button>
+                </div>
+              )}
 
               <p className="flex items-center gap-1.5 font-mono text-[10px] text-subtle">
                 <ArrowDownUp className="size-3" /> LP supply{" "}

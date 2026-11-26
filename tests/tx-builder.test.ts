@@ -5,6 +5,7 @@ import {
   buildCallSighash,
   buildDeploySighash,
   bytesToHex,
+  computeDynamicCallFee,
   computeOperationFee,
   deriveDeployedContractAddress,
   deriveRwaAssetId,
@@ -14,8 +15,15 @@ import {
   encodeRwaToAmountArgs,
   encodeSignedCallTx,
   encodeSignedDeployTx,
+  encodeTokenBuyArgs,
   encodeTokenCreateArgs,
+  encodeTokenInitPoolArgs,
+  encodeTokenSellArgs,
+  executeTokenBuy,
+  executeTokenSell,
   hexToBytes,
+  initTokenPool,
+  type ActiveSigner,
 } from "../src/lib/wallet/tx-builder";
 import { dispatchApi } from "../src/lib/api/dispatch.server";
 import { FIXED_FEES, MIN_FEE } from "../src/lib/networkConstants";
@@ -260,6 +268,145 @@ test("GET /api/account_nonce and GET /api/contract_code proxy RPC and validate i
       new Request(`https://testnet.kovanica.online/api/account_nonce?source=mainnet&address=${addr}`),
     );
     assert.equal(mainnetNonce.status, 503);
+  } finally {
+    restore();
+  }
+});
+
+test("AMM bincode encoders match L1 kovanica-token wire layouts (token_init_pool, token_buy, token_sell)", () => {
+  // Matches kovanica-cli/src/contracts.rs: bincode::serialize(&(10u128, 20u128, 30u16))
+  const initArgs = encodeTokenInitPoolArgs({ kunaIn: 10n, tokensIn: 20n, feeBps: 30 });
+  assert.equal(initArgs.length, 34);
+  const initView = new DataView(initArgs.buffer);
+  assert.equal(initView.getBigUint64(0, true), 10n);
+  assert.equal(initView.getBigUint64(8, true), 0n);
+  assert.equal(initView.getBigUint64(16, true), 20n);
+  assert.equal(initView.getBigUint64(24, true), 0n);
+  assert.equal(initView.getUint16(32, true), 30);
+
+  assert.throws(() => encodeTokenInitPoolArgs({ kunaIn: 0n, tokensIn: 20n, feeBps: 30 }));
+  assert.throws(() => encodeTokenInitPoolArgs({ kunaIn: 10n, tokensIn: 0n, feeBps: 30 }));
+  assert.throws(() => encodeTokenInitPoolArgs({ kunaIn: 10n, tokensIn: 20n, feeBps: 1001 }));
+
+  // Matches token_buy(amount_in: u128, min_out: u128) -> 32 bytes
+  const buyArgs = encodeTokenBuyArgs({ amountIn: 1_000_000_000n, minOut: 950_000n });
+  assert.equal(buyArgs.length, 32);
+  const buyView = new DataView(buyArgs.buffer);
+  assert.equal(buyView.getBigUint64(0, true), 1_000_000_000n);
+  assert.equal(buyView.getBigUint64(16, true), 950_000n);
+
+  // Matches token_sell(amount_in: u128, min_out: u128) -> 32 bytes
+  const sellArgs = encodeTokenSellArgs({ amountIn: 500_000n, minOut: 490_000_000n });
+  assert.equal(sellArgs.length, 32);
+  const sellView = new DataView(sellArgs.buffer);
+  assert.equal(sellView.getBigUint64(0, true), 500_000n);
+  assert.equal(sellView.getBigUint64(16, true), 490_000_000n);
+
+  assert.throws(() => encodeTokenBuyArgs({ amountIn: 0n, minOut: 0n }));
+  assert.throws(() => encodeTokenSellArgs({ amountIn: 0n, minOut: 0n }));
+});
+
+test("computeDynamicCallFee enforces MIN_FEE floor and scales with byte fee rate", () => {
+  assert.equal(computeDynamicCallFee(250, 1n), BigInt(MIN_FEE));
+  // 500 bytes * 100 atoms/byte * 1.2 = 60,000 atoms > MIN_FEE (5,000)
+  assert.equal(computeDynamicCallFee(500, 100n), 60_000n);
+});
+
+test("initTokenPool, executeTokenBuy, and executeTokenSell sign and broadcast expected Call payloads", async () => {
+  const signedCalls: Array<{
+    method: string;
+    value?: string | number;
+    argsHex?: string;
+    nonce: string | number;
+    chainId?: number;
+  }> = [];
+  const broadcasts: string[] = [];
+
+  const signer: ActiveSigner = {
+    kind: "extension",
+    addressHex: "11".repeat(32),
+    addressKvnc: "kvnc" + "q".repeat(57) + "dag",
+    provider: {
+      connect: async () => ({ accounts: ["11".repeat(32)], chainId: 2 }),
+      getAccounts: async () => ["11".repeat(32)],
+      signTransaction: async (tx) => {
+        signedCalls.push({
+          method: tx.method,
+          value: tx.value,
+          argsHex: tx.argsHex,
+          nonce: tx.nonce,
+          chainId: tx.chainId,
+        });
+        return {
+          rawTxHex: "deadbeef",
+          signingHashHex: "aa".repeat(32),
+          signatureHex: "bb".repeat(64),
+        };
+      },
+    },
+  };
+
+  const restore = stubFetch((url, init) => {
+    if (url.includes("/api/account_nonce")) {
+      return Response.json({
+        address: "11".repeat(32),
+        nonce: "7",
+        balance: "50000000000", // 50 KVNC
+        fee_rate: "1",
+        chain_id: 2,
+      });
+    }
+    if (url.includes("/api/fee_schedule")) {
+      return Response.json({ active: true, chain_id: "2" });
+    }
+    if (url.includes("/api/submit_tx")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { tx_hex: string };
+      broadcasts.push(body.tx_hex);
+      return Response.json({ ok: true, tx: "cc".repeat(32) });
+    }
+    return Response.json({});
+  });
+
+  try {
+    const contract = "22".repeat(32);
+
+    const initRes = await initTokenPool(signer, {
+      contract,
+      kunaInAtoms: 5_000_000_000n,
+      tokensInAtoms: 1_000_000n,
+      feeBps: 30,
+    });
+    assert.equal(initRes.method, "token_init_pool");
+    assert.equal(initRes.txHash, "cc".repeat(32));
+
+    const buyRes = await executeTokenBuy(signer, {
+      contract,
+      kunaInAtoms: 1_000_000_000n,
+      minOutAtoms: 150_000n,
+    });
+    assert.equal(buyRes.method, "token_buy");
+
+    const sellRes = await executeTokenSell(signer, {
+      contract,
+      tokensInAtoms: 100_000n,
+      minOutAtoms: 400_000_000n,
+    });
+    assert.equal(sellRes.method, "token_sell");
+
+    assert.equal(signedCalls.length, 3);
+    assert.equal(signedCalls[0]?.method, "token_init_pool");
+    assert.equal(signedCalls[0]?.value, "5000000000");
+    assert.equal(signedCalls[0]?.argsHex?.length, 68); // 34 bytes
+
+    assert.equal(signedCalls[1]?.method, "token_buy");
+    assert.equal(signedCalls[1]?.value, "1000000000");
+    assert.equal(signedCalls[1]?.argsHex?.length, 64); // 32 bytes
+
+    assert.equal(signedCalls[2]?.method, "token_sell");
+    assert.equal(signedCalls[2]?.value, "0");
+    assert.equal(signedCalls[2]?.argsHex?.length, 64); // 32 bytes
+
+    assert.equal(broadcasts.length, 3);
   } finally {
     restore();
   }

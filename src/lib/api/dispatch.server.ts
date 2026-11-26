@@ -1198,14 +1198,22 @@ async function dispatchMeteredApi(
     if (name === "tokens") {
       try {
         const holder = parseAddr(q.get("address") ?? "");
-        return json(await listTokens(holder ?? undefined));
+        const watched = (q.get("watched") ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return json(await listTokens(holder ?? undefined, watched.length ? watched : undefined));
       } catch (e) {
         return text(`token scan failed: ${e instanceof Error ? e.message : e}`, 502);
       }
     }
     if (name === "pools") {
       try {
-        return json(await listPools());
+        const watched = (q.get("watched") ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return json(await listPools(watched.length ? watched : undefined));
       } catch (e) {
         return text(`pool scan failed: ${e instanceof Error ? e.message : e}`, 502);
       }
