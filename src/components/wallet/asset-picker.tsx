@@ -1,5 +1,6 @@
 import { Coins, Gem, Landmark } from "lucide-react";
 import { TOKEN, assetLabel, isNativeAsset } from "@/lib/api/contract";
+import { KVNC_COIN_ICON, resolveTokenIcon } from "@/lib/tokens/icons";
 import { cn } from "@/lib/utils";
 
 export type AssetOption = {
@@ -56,7 +57,9 @@ const isNft = (opt: AssetOption) => opt.kind === "nft";
           const nft = isNft(opt);
           const rwa = isRwa(opt);
           const label = opt.label ?? opt.symbol ?? assetLabel(id);
-          const icon = opt.icon && opt.icon.length > 0 ? opt.icon : null;
+          const icon = isNativeAsset(id)
+            ? KVNC_COIN_ICON
+            : resolveTokenIcon(opt.symbol ?? opt.label, opt.icon);
 
           return (
             <button

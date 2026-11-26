@@ -36,6 +36,7 @@ import { FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import { useLedger } from "@/lib/ledger/store";
 import { hexToKvnc } from "@/lib/wallet/address";
 import { shortId } from "@/lib/ledger/hash";
+import { KVNC_COIN_ICON } from "@/lib/tokens/icons";
 import {
   connectExtensionSigner,
   deployAndCreateToken,
@@ -600,7 +601,15 @@ export function MultiAssetView() {
                       className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg px-3 py-2"
                     >
                       <div className="flex min-w-0 items-center gap-2">
-                        <Coins className="size-3.5 shrink-0 text-blue" />
+                        {b.assetId === NATIVE_ASSET_ID ? (
+                          <img
+                            src={KVNC_COIN_ICON}
+                            alt="KVNC"
+                            className="size-4 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <Coins className="size-3.5 shrink-0 text-blue" />
+                        )}
                         <span className="font-mono text-sm text-fg">
                           {shortAssetLabel(b.assetId, 12)}
                         </span>

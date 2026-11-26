@@ -28,6 +28,7 @@ import {
 } from "@/lib/amm/math";
 import { computeSwapInterfaceFee, getSwapInterfaceFeeConfig } from "@/lib/monetization";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
+import { resolveTokenIcon } from "@/lib/tokens/icons";
 import {
   priceImpactBps as computeKvpPriceImpactBps,
   quote as computeKvpPoolQuote,
@@ -525,7 +526,16 @@ function SwapPage() {
                 disabled={submitting}
                 className="flex-1 bg-transparent font-mono text-2xl text-fg focus:outline-none"
               />
-              <span className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
+              <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
+                {(() => {
+                  const iconSrc = resolveTokenIcon(
+                    tokenIn.symbol,
+                    selectedLivePool && !tokenIn.isNative ? selectedLivePool.icon : null,
+                  );
+                  return iconSrc ? (
+                    <img src={iconSrc} alt="" className="size-5 rounded-full object-cover" />
+                  ) : null;
+                })()}
                 {tokenIn.symbol}
               </span>
             </div>
@@ -563,7 +573,16 @@ function SwapPage() {
                     : formatTokenUnits(quote.amountOut, tokenOut.decimals, 6)
                   : "0.0"}
               </div>
-              <span className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
+              <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
+                {(() => {
+                  const iconSrc = resolveTokenIcon(
+                    tokenOut.symbol,
+                    selectedLivePool && !tokenOut.isNative ? selectedLivePool.icon : null,
+                  );
+                  return iconSrc ? (
+                    <img src={iconSrc} alt="" className="size-5 rounded-full object-cover" />
+                  ) : null;
+                })()}
                 {tokenOut.symbol}
               </span>
             </div>
