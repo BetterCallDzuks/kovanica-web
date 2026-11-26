@@ -29,6 +29,7 @@ import { useLedger } from "@/lib/ledger/store";
 import { shortId } from "@/lib/ledger/hash";
 import { ATOM, TOKEN } from "@/lib/networkConstants";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
+import { KVNC_COIN_ICON, resolveTokenIcon } from "@/lib/tokens/icons";
 import { priceImpactBps, quote, type ApiPool } from "@/lib/tokens/pool";
 import {
   connectExtensionSigner,
@@ -294,12 +295,28 @@ export function PoolView({ refreshKey = 0 }: { refreshKey?: number }) {
                   }
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {row.icon ? (
-                        <img src={row.icon} alt="" className="size-6 rounded-full object-cover" />
-                      ) : (
-                        <Waves className="size-5 text-blue" />
-                      )}
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex shrink-0 -space-x-2">
+                        {(() => {
+                          const iconSrc = resolveTokenIcon(row.symbol, row.icon);
+                          return iconSrc ? (
+                            <img
+                              src={iconSrc}
+                              alt=""
+                              className="size-7 rounded-full border border-border bg-bg object-cover"
+                            />
+                          ) : (
+                            <span className="flex size-7 items-center justify-center rounded-full border border-border bg-surface-2">
+                              <Waves className="size-4 text-blue" />
+                            </span>
+                          );
+                        })()}
+                        <img
+                          src={KVNC_COIN_ICON}
+                          alt="KVNC"
+                          className="size-7 rounded-full border border-border bg-bg object-cover"
+                        />
+                      </div>
                       <div className="min-w-0">
                         <p className="truncate font-display text-lg tracking-tight text-fg">
                           {row.symbol} / KVNC

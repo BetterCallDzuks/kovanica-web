@@ -11,6 +11,7 @@ import { api, useApiSource, isPublic } from "@/lib/api/client";
 import { MIN_FEE, TOKEN, isNativeAsset, assetLabel } from "@/lib/api/contract";
 import type { ApiToken } from "@/lib/tokens/codec";
 import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
+import { resolveTokenIcon } from "@/lib/tokens/icons";
 import { prepareUrl, submitUrl, assetOptionsFromUtxos, balanceForAsset } from "@/lib/api/assets";
 import {
   TOKEN_SEND_FEE,
@@ -1126,17 +1127,20 @@ export function WalletView() {
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"
                         title="Select token in Send form"
                       >
-                        {token.icon ? (
-                          <img
-                            src={token.icon}
-                            alt=""
-                            className="size-8 shrink-0 rounded-full border border-border object-cover"
-                          />
-                        ) : (
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-mono text-[11px] text-teal">
-                            {token.symbol.slice(0, 2).toUpperCase()}
-                          </span>
-                        )}
+                        {(() => {
+                          const iconSrc = resolveTokenIcon(token.symbol, token.icon);
+                          return iconSrc ? (
+                            <img
+                              src={iconSrc}
+                              alt=""
+                              className="size-8 shrink-0 rounded-full border border-border object-cover"
+                            />
+                          ) : (
+                            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 font-mono text-[11px] text-teal">
+                              {token.symbol.slice(0, 2).toUpperCase()}
+                            </span>
+                          );
+                        })()}
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5 truncate text-sm text-fg">
                             <span>{token.symbol}</span>
