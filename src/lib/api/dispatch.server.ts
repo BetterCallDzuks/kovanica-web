@@ -38,6 +38,7 @@ import {
 import { type ApiSource, type ApiState, type ApiHead, type ApiBootstrap } from "./contract";
 import { encodeAddress, parseAddr, toCanonicalAddress } from "../wallet/address";
 import { listPools, listTokens, getTokenState } from "./tokens.server";
+import { addStealthAnnouncement, listStealthAnnouncements } from "./stealth.server";
 import { handleInquirySubmission } from "./inquiries.server";
 import { handleBillingRequest } from "./billing.server";
 import { checkApiRateLimit, handleApiKeysRequest } from "./api-keys.server";
@@ -844,7 +845,6 @@ const LEGACY_UNIMPLEMENTED_ACTIONS = new Set([
   "light_sync",
   "multisig",
   "rtc",
-  "stealth",
   "vault",
 ]);
 
@@ -1217,6 +1217,32 @@ async function dispatchMeteredApi(
       } catch (e) {
         return text(`pool scan failed: ${e instanceof Error ? e.message : e}`, 502);
       }
+    }
+    if (name === "stealth") {
+      const sub = url.pathname.replace(/^\/api\/stealth\/?/, "").replace(/\/+$/, "");
+      if (sub === "announcements" && method === "GET") {
+        const viewTag = q.get("view_tag");
+        const limitRaw = q.get("limit");
+        const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
+        return json({
+          announcements: listStealthAnnouncements({
+            viewTag,
+            limit: Number.isFinite(limit) ? limit : undefined,
+          }),
+        });
+      }
+      if (sub === "announce" && method === "POST") {
+        let body: Record<string, unknown>;
+        try {
+          body = (await req.json()) as Record<string, unknown>;
+        } catch {
+          return text("invalid JSON body", 400);
+        }
+        const saved = addStealthAnnouncement(body);
+        if (!saved.ok) return text(saved.error, saved.status);
+        return json({ ok: true, announcement: saved.announcement }, 201);
+      }
+      return text("not found: use GET /api/stealth/announcements or POST /api/stealth/announce", 404);
     }
     if (name === "token_prepare" || name === "token_submit") {
       try {
