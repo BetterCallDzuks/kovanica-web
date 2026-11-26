@@ -26,6 +26,7 @@ import {
   type ActiveSigner,
 } from "../src/lib/wallet/tx-builder";
 import { dispatchApi } from "../src/lib/api/dispatch.server";
+import { rpcCall, rpcWriteToken } from "../src/lib/api/rpc-url.server";
 import { FIXED_FEES, MIN_FEE } from "../src/lib/networkConstants";
 
 function stubFetch(
@@ -409,5 +410,40 @@ test("initTokenPool, executeTokenBuy, and executeTokenSell sign and broadcast ex
     assert.equal(broadcasts.length, 3);
   } finally {
     restore();
+  }
+});
+
+test("rpcCall attaches server-only Authorization Bearer header when KOVANICA_RPC_WRITE_TOKEN(S) is set", async () => {
+  const prevSingle = process.env.KOVANICA_RPC_WRITE_TOKEN;
+  const prevList = process.env.KOVANICA_RPC_WRITE_TOKENS;
+  const seenAuth: Array<string | undefined> = [];
+
+  const restore = stubFetch((_url, init) => {
+    const hdrs = (init?.headers ?? {}) as Record<string, string>;
+    seenAuth.push(hdrs.authorization ?? hdrs.Authorization);
+    return Response.json({ jsonrpc: "2.0", id: 1, result: "0x1" });
+  });
+
+  try {
+    delete process.env.KOVANICA_RPC_WRITE_TOKEN;
+    delete process.env.KOVANICA_RPC_WRITE_TOKENS;
+    assert.equal(rpcWriteToken(), null);
+    await rpcCall("kovanica_blockNumber");
+
+    process.env.KOVANICA_RPC_WRITE_TOKENS = "tok-a, tok-b";
+    assert.equal(rpcWriteToken(), "tok-a");
+    await rpcCall("kovanica_sendRawTransaction", ["0xaa"]);
+
+    process.env.KOVANICA_RPC_WRITE_TOKEN = "tok-primary";
+    assert.equal(rpcWriteToken(), "tok-primary");
+    await rpcCall("kovanica_sendRawTransaction", ["0xbb"]);
+
+    assert.deepEqual(seenAuth, [undefined, "Bearer tok-a", "Bearer tok-primary"]);
+  } finally {
+    restore();
+    if (prevSingle === undefined) delete process.env.KOVANICA_RPC_WRITE_TOKEN;
+    else process.env.KOVANICA_RPC_WRITE_TOKEN = prevSingle;
+    if (prevList === undefined) delete process.env.KOVANICA_RPC_WRITE_TOKENS;
+    else process.env.KOVANICA_RPC_WRITE_TOKENS = prevList;
   }
 });

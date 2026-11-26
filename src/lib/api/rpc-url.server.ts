@@ -58,14 +58,37 @@ export function faucetEndpoint(): string | null {
   return envValue("KOVANICA_FAUCET_URL");
 }
 
-/** One anonymous JSON-RPC call, bounded by `RPC_TIMEOUT_MS`. */
+/**
+ * Optional server-only Bearer token for authenticated write RPC methods
+ * (`kovanica_sendRawTransaction`). Mirrors `kovanica-faucet`: prefers
+ * `KOVANICA_RPC_WRITE_TOKEN`, falling back to the first entry of
+ * `KOVANICA_RPC_WRITE_TOKENS`. Never exposed to the browser.
+ */
+export function rpcWriteToken(): string | null {
+  const single = envValue("KOVANICA_RPC_WRITE_TOKEN");
+  if (single) return single;
+  const list = envValue("KOVANICA_RPC_WRITE_TOKENS");
+  if (!list) return null;
+  const first = list
+    .split(",")
+    .map((s) => s.trim())
+    .find((s) => s.length > 0);
+  return first ?? null;
+}
+
+/** One JSON-RPC call (attaching server-side Bearer token when configured), bounded by `RPC_TIMEOUT_MS`. */
 export async function rpcCall<T = unknown>(method: string, params: unknown[] = []): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), RPC_TIMEOUT_MS);
   try {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    const token = rpcWriteToken();
+    if (token) {
+      headers.authorization = `Bearer ${token}`;
+    }
     const res = await fetch(rpcEndpoint(), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers,
       body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
       signal: ctrl.signal,
     });
