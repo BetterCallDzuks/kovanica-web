@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowDownUp,
   ArrowLeft,
   CheckCircle2,
+  Clock,
   ExternalLink,
   Layers,
   Loader2,
@@ -22,6 +24,7 @@ import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
   buildWaveASwapBatchPlan,
+  classifyPriceImpact,
   computeSwapQuote,
   formatTokenUnits,
   parseTokenUnits,
@@ -79,6 +82,16 @@ function SwapPage() {
   const [submitting, setSubmitting] = useState(false);
   const [swapStatus, setSwapStatus] = useState<string | null>(null);
   const [lastSwap, setLastSwap] = useState<AmmCallResult | null>(null);
+  const [recentSwaps, setRecentSwaps] = useState<
+    Array<{
+      poolId: string;
+      txHash: string;
+      method: string;
+      inLabel: string;
+      outLabel: string;
+      timestamp: string;
+    }>
+  >([]);
 
   // Live Wave B dynamic base fee & storage deposit telemetry
   const [baseFeeAtoms, setBaseFeeAtoms] = useState<number>(1);
@@ -214,6 +227,24 @@ function SwapPage() {
     return computeSwapQuote(amountInRaw, reserveIn, reserveOut, slippageBps);
   }, [amountInRaw, feeBps, reserveIn, reserveOut, selectedLivePool, slippageBps]);
 
+  const priceImpactAssessment = useMemo(
+    () => (quote ? classifyPriceImpact(quote.priceImpactPct) : null),
+    [quote],
+  );
+
+  const spotRateDisplay = useMemo(() => {
+    if (reserveIn <= 0n || reserveOut <= 0n) return null;
+    const inHuman = Number(reserveIn) / 10 ** tokenIn.decimals;
+    const outHuman = Number(reserveOut) / 10 ** tokenOut.decimals;
+    if (!Number.isFinite(inHuman) || inHuman <= 0 || !Number.isFinite(outHuman)) return null;
+    return outHuman / inHuman;
+  }, [reserveIn, reserveOut, tokenIn.decimals, tokenOut.decimals]);
+
+  const poolRecentSwaps = useMemo(
+    () => recentSwaps.filter((s) => s.poolId === selectedPoolId).slice(0, 5),
+    [recentSwaps, selectedPoolId],
+  );
+
   const interfaceFeeConfig = getSwapInterfaceFeeConfig();
   const interfaceFeeRaw = useMemo(
     () =>
@@ -281,6 +312,17 @@ function SwapPage() {
             });
         setLastSwap(res);
         setSwapStatus(null);
+        setRecentSwaps((prev) => [
+          {
+            poolId: selectedPoolId,
+            txHash: res.txHash,
+            method: res.method,
+            inLabel: `${formatTokenAmount(amountInRaw, tokenIn.decimals)} ${tokenIn.symbol}`,
+            outLabel: `${formatTokenAmount(quote.amountOut, tokenOut.decimals)} ${tokenOut.symbol}`,
+            timestamp: new Date().toLocaleTimeString(),
+          },
+          ...prev.slice(0, 19),
+        ]);
         toast.success(`Swap broadcast! ${res.method} (${shortId(res.txHash)})`);
         void fetchLivePools();
       } catch (err) {
@@ -613,24 +655,42 @@ function SwapPage() {
               <div className="flex justify-between text-muted">
                 <span>Price Impact</span>
                 <span
+                  data-testid="swap-price-impact"
                   className={
-                    quote.priceImpactPct > 3
-                      ? "font-mono text-amber-400"
-                      : "font-mono text-emerald-400"
+                    priceImpactAssessment?.severity === "high"
+                      ? "font-mono font-semibold text-red-400"
+                      : priceImpactAssessment?.severity === "moderate"
+                        ? "font-mono font-semibold text-amber-400"
+                        : "font-mono text-emerald-400"
                   }
                 >
-                  {quote.priceImpactPct.toFixed(3)}%
+                  {quote.priceImpactPct.toFixed(2)}%
                 </span>
               </div>
               <div className="flex justify-between text-muted">
                 <span>Minimum Received ({(slippageBps / 100).toFixed(2)}% slippage)</span>
-                <span className="font-mono text-fg">
+                <span className="font-mono font-semibold text-fg">
                   {selectedLivePool
                     ? formatTokenAmount(quote.minAmountOut, tokenOut.decimals)
                     : formatTokenUnits(quote.minAmountOut, tokenOut.decimals, 6)}{" "}
                   {tokenOut.symbol}
                 </span>
               </div>
+
+              {priceImpactAssessment?.warning && (
+                <div
+                  role="alert"
+                  data-testid="swap-price-impact-warning"
+                  className={
+                    priceImpactAssessment.severity === "high"
+                      ? "mt-2 flex items-start gap-2 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-[11px] text-red-300"
+                      : "mt-2 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300"
+                  }
+                >
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                  <span>{priceImpactAssessment.warning}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -741,6 +801,86 @@ function SwapPage() {
             </div>
           )}
         </div>
+
+        {/* Selected Pair Pool Stats & Recent Swaps Strip */}
+        <section className="space-y-3 rounded-xl border border-border bg-surface p-4 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-mono text-[10px] tracking-wider text-subtle uppercase">
+              Pool Stats · {tokenIn.symbol} / {tokenOut.symbol}
+            </span>
+            {selectedLivePool ? (
+              <Link
+                to="/explorer"
+                search={{ tab: "contracts", contract: selectedLivePool.address } as Record<string, string>}
+                className="font-mono text-[10px] text-blue hover:underline"
+              >
+                Inspect Pool Contract →
+              </Link>
+            ) : (
+              <Link to="/pools" className="font-mono text-[10px] text-muted hover:text-fg hover:underline">
+                Manage Liquidity →
+              </Link>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 font-mono text-[11px]">
+            <div className="rounded-lg border border-border/70 bg-bg px-3 py-2">
+              <p className="text-[10px] text-subtle">Spot Rate</p>
+              <p className="mt-0.5 truncate text-fg">
+                {spotRateDisplay !== null
+                  ? `1 ${tokenIn.symbol} ≈ ${spotRateDisplay.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${tokenOut.symbol}`
+                  : "—"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-border/70 bg-bg px-3 py-2">
+              <p className="text-[10px] text-subtle">LP Fee</p>
+              <p className="mt-0.5 text-emerald-400">{(feeBps / 100).toFixed(2)}%</p>
+            </div>
+            <div className="col-span-2 sm:col-span-1 rounded-lg border border-border/70 bg-bg px-3 py-2">
+              <p className="text-[10px] text-subtle">
+                {selectedLivePool ? "LP Supply" : "Reference TVL"}
+              </p>
+              <p className="mt-0.5 truncate text-fg">
+                {selectedLivePool
+                  ? `${formatTokenAmount(BigInt(selectedLivePool.lp_total), 0)} LP`
+                  : `$${refPool.tvlUsd.toLocaleString("en-US")}`}
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-border/60 pt-2.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-subtle">
+                <Clock className="size-3" />
+                Recent Swaps ({poolRecentSwaps.length})
+              </span>
+              <span className="font-mono text-[10px] text-muted">
+                {selectedLivePool ? "Live session executions" : "Preview mode"}
+              </span>
+            </div>
+            {poolRecentSwaps.length === 0 ? (
+              <p className="text-[11px] text-muted">
+                No swaps broadcast for {tokenIn.symbol}/{tokenOut.symbol} in this session yet.
+              </p>
+            ) : (
+              <ul className="space-y-1 font-mono text-[11px]">
+                {poolRecentSwaps.map((sw) => (
+                  <li
+                    key={sw.txHash}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/50 bg-bg px-2.5 py-1.5"
+                  >
+                    <span className="text-fg">
+                      {sw.inLabel} → <strong className="text-emerald-400">{sw.outLabel}</strong>
+                    </span>
+                    <span className="text-subtle">
+                      {shortId(sw.txHash, 6)} · {sw.timestamp}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
       </main>
     </Shell>
   );

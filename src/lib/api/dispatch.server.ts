@@ -943,6 +943,33 @@ async function dispatchMeteredApi(
     );
   }
 
+  if (name === "stealth") {
+    const sub = url.pathname.replace(/^\/api\/stealth\/?/, "").replace(/\/+$/, "");
+    if (sub === "announcements" && method === "GET") {
+      const viewTag = q.get("view_tag");
+      const limitRaw = q.get("limit");
+      const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
+      return json({
+        announcements: listStealthAnnouncements({
+          viewTag,
+          limit: Number.isFinite(limit) ? limit : undefined,
+        }),
+      });
+    }
+    if (sub === "announce" && method === "POST") {
+      let body: Record<string, unknown>;
+      try {
+        body = (await req.json()) as Record<string, unknown>;
+      } catch {
+        return text("invalid JSON body", 400);
+      }
+      const saved = addStealthAnnouncement(body);
+      if (!saved.ok) return text(saved.error, saved.status);
+      return json({ ok: true, announcement: saved.announcement }, 201);
+    }
+    return text("not found: use GET /api/stealth/announcements or POST /api/stealth/announce", 404);
+  }
+
   // When querying testnet (or public by default)
   if (source === "testnet") {
     if (name === "reset" || name === "mine" || name === "mining") {
@@ -1209,40 +1236,15 @@ async function dispatchMeteredApi(
     }
     if (name === "pools") {
       try {
+        const holder = parseAddr(q.get("address") ?? "");
         const watched = (q.get("watched") ?? "")
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean);
-        return json(await listPools(watched.length ? watched : undefined));
+        return json(await listPools(watched.length ? watched : undefined, holder ?? undefined));
       } catch (e) {
         return text(`pool scan failed: ${e instanceof Error ? e.message : e}`, 502);
       }
-    }
-    if (name === "stealth") {
-      const sub = url.pathname.replace(/^\/api\/stealth\/?/, "").replace(/\/+$/, "");
-      if (sub === "announcements" && method === "GET") {
-        const viewTag = q.get("view_tag");
-        const limitRaw = q.get("limit");
-        const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
-        return json({
-          announcements: listStealthAnnouncements({
-            viewTag,
-            limit: Number.isFinite(limit) ? limit : undefined,
-          }),
-        });
-      }
-      if (sub === "announce" && method === "POST") {
-        let body: Record<string, unknown>;
-        try {
-          body = (await req.json()) as Record<string, unknown>;
-        } catch {
-          return text("invalid JSON body", 400);
-        }
-        const saved = addStealthAnnouncement(body);
-        if (!saved.ok) return text(saved.error, saved.status);
-        return json({ ok: true, announcement: saved.announcement }, 201);
-      }
-      return text("not found: use GET /api/stealth/announcements or POST /api/stealth/announce", 404);
     }
     if (name === "token_prepare" || name === "token_submit") {
       try {

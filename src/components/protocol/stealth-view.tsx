@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   KeyRound,
   Loader2,
   Radio,
+  RefreshCw,
   Scan,
   Send,
   ShieldCheck,
@@ -24,12 +25,14 @@ import {
   deriveOnetimeAddress,
   deriveOnetimeSpendKey,
   deriveStealthKeypairFromMnemonic,
+  fetchStealthAnnouncements,
   generateStealthKeypair,
   prepareStealthSpend,
   publishStealthAnnouncement,
   scanStealthOutputs,
   signSighashWithStealthScalar,
   submitStealthSpend,
+  type StealthAnnouncement,
   type StealthKeypair,
   type StealthOnetime,
   type StealthScanHit,
@@ -69,6 +72,41 @@ export function StealthView() {
   const [manualEphemeral, setManualEphemeral] = useState("");
   const [scanning, setScanning] = useState(false);
   const [hits, setHits] = useState<StealthScanHit[] | null>(null);
+  const [feedAnnouncements, setFeedAnnouncements] = useState<StealthAnnouncement[]>([]);
+  const [loadingFeed, setLoadingFeed] = useState(false);
+
+  const loadAnnouncementsFeed = useCallback(async (tag?: string) => {
+    setLoadingFeed(true);
+    try {
+      const rows = await fetchStealthAnnouncements(tag);
+      setFeedAnnouncements(rows);
+      return rows;
+    } catch {
+      return [];
+    } finally {
+      setLoadingFeed(false);
+    }
+  }, []);
+
+  // Pre-fill Scan tab when arriving from an Explorer Stealth (KVP-103) badge link
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const qTab = params.get("tab");
+    const qTag = params.get("view_tag")?.trim() ?? "";
+    const qEph = params.get("ephemeral")?.trim() ?? "";
+    if (qTab === "receive" || qTab === "send" || qTab === "scan" || qTab === "spend") {
+      setTab(qTab);
+    } else if (qTag || qEph) {
+      setTab("scan");
+    }
+    if (qTag) setViewTagFilter(qTag);
+    if (qEph) setManualEphemeral(qEph);
+  }, []);
+
+  useEffect(() => {
+    void loadAnnouncementsFeed();
+  }, [loadAnnouncementsFeed]);
 
   // Spend tab state
   const [spendEphemeral, setSpendEphemeral] = useState("");
@@ -157,27 +195,46 @@ export function StealthView() {
   }
 
   async function onScan() {
-    if (!scanPriv.trim() || !scanSpendPub.trim()) {
-      toast.error("Scan private key and spend public key are both required");
+    let effectiveScanPriv = scanPriv.trim();
+    let effectiveSpendPub = scanSpendPub.trim();
+
+    // 1-click convenience: if scan keys are empty and Web Wallet is unlocked, derive them locally
+    if ((!effectiveScanPriv || !effectiveSpendPub) && unlockedWallet?.kind === "web-wallet") {
+      try {
+        const derivedKeys = keys ?? deriveStealthKeypairFromMnemonic(unlockedWallet.mnemonic);
+        if (!keys) setKeys(derivedKeys);
+        effectiveScanPriv = derivedKeys.scanPrivkeyHex;
+        effectiveSpendPub = derivedKeys.spendPubkeyHex;
+        setScanPriv(effectiveScanPriv);
+        setScanSpendPub(effectiveSpendPub);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to derive wallet stealth keys");
+        return;
+      }
+    }
+
+    if (!effectiveScanPriv || !effectiveSpendPub) {
+      toast.error("Scan private key and spend public key are required (or unlock Web Wallet)");
       return;
     }
     setScanning(true);
     try {
+      const latestFeed = await loadAnnouncementsFeed(viewTagFilter.trim() || undefined);
       const manual = manualEphemeral
         .split(/[\s,]+/)
         .map((s) => s.trim())
         .filter(Boolean);
       const res = await scanStealthOutputs({
-        scanPrivkeyHex: scanPriv.trim(),
-        spendPubkeyHex: scanSpendPub.trim(),
+        scanPrivkeyHex: effectiveScanPriv,
+        spendPubkeyHex: effectiveSpendPub,
         viewTagFilter: viewTagFilter.trim() || undefined,
         manualEphemerals: manual,
       });
       setHits(res);
       toast.success(
         res.length
-          ? `Found ${res.length} matching stealth output${res.length > 1 ? "s" : ""}`
-          : "No matching stealth announcements found",
+          ? `Scanned ${latestFeed.length} announcement${latestFeed.length === 1 ? "" : "s"} — found ${res.length} match${res.length === 1 ? "" : "es"}`
+          : `Scanned ${latestFeed.length} announcement${latestFeed.length === 1 ? "" : "s"} — no matches found`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Scan failed");
@@ -557,19 +614,63 @@ export function StealthView() {
               </div>
             </div>
 
-            <Button type="button" disabled={scanning} onClick={() => void onScan()}>
-              {scanning ? (
-                <>
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  Scanning Locally…
-                </>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" disabled={scanning} onClick={() => void onScan()}>
+                {scanning ? (
+                  <>
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                    Loading &amp; Scanning Locally…
+                  </>
+                ) : (
+                  <>
+                    <Scan className="mr-1.5 size-4" />
+                    Load &amp; Scan On-Chain Announcements
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={loadingFeed}
+                onClick={() => void loadAnnouncementsFeed(viewTagFilter.trim() || undefined)}
+              >
+                <RefreshCw className={loadingFeed ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"} />
+                Refresh Feed ({feedAnnouncements.length})
+              </Button>
+            </div>
+
+            {/* Live Public Announcement Feed Strip */}
+            <div className="rounded-lg border border-border/80 bg-bg/70 p-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-subtle">
+                  Public KVP-103 Announcement Feed ({feedAnnouncements.length} loaded)
+                </span>
+                <span className="font-mono text-[10px] text-muted">/api/stealth/announcements</span>
+              </div>
+              {feedAnnouncements.length === 0 ? (
+                <p className="mt-1.5 text-[11px] text-muted">
+                  No public stealth announcements published yet. Publish one from Derive &amp; Announce or paste an ephemeral pubkey above.
+                </p>
               ) : (
-                <>
-                  <Scan className="mr-1.5 size-4" />
-                  Scan Announcements (Client-Side ECDH)
-                </>
+                <ul className="mt-2 max-h-40 space-y-1.5 overflow-y-auto font-mono text-[11px]">
+                  {feedAnnouncements.slice(0, 8).map((ann) => (
+                    <li
+                      key={`${ann.ephemeralPubkeyHex}-${ann.stealthAddressHex}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/50 bg-surface/50 px-2.5 py-1.5"
+                    >
+                      <span className="flex items-center gap-1.5 text-fg">
+                        <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-[10px] text-purple-300">
+                          0x{ann.viewTag}
+                        </span>
+                        <span>R={shortId(ann.ephemeralPubkeyHex, 6)}</span>
+                      </span>
+                      <span className="text-muted">→ {shortId(ann.stealthAddress)}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </Button>
+            </div>
 
             {hits !== null && (
               <div className="space-y-2 pt-1">

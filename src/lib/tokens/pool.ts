@@ -21,13 +21,37 @@
  * bytes at this slot at all).
  */
 import { blake3 } from "@noble/hashes/blake3.js";
-import { bytesToHex } from "./codec";
+import { bytesToHex, hexToBytes } from "./codec";
 
 /** Raw key the contract writes its singleton pool under. */
 const POOL_KEY = "kvnc/v1/pool";
 
+/** Raw key prefix for per-provider LP share balance (`b"kvnc/v1/lp/" ++ address_32`). */
+const LP_PREFIX_BYTES = new TextEncoder().encode("kvnc/v1/lp/");
+
 /** Storage slot the host actually stores that key at (`blake3(raw_key)`). */
 export const POOL_SLOT_HEX = bytesToHex(blake3(new TextEncoder().encode(POOL_KEY)));
+
+/**
+ * Storage slot for a provider's LP share balance (`blake3("kvnc/v1/lp/" ++ address_32)`).
+ * Returns `null` if `addressHex` is not a valid 64-char hex address.
+ */
+export function lpSlotHex(addressHex: string): string | null {
+  const clean = addressHex.trim().replace(/^0x/i, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(clean)) return null;
+  const addrBytes = hexToBytes(clean);
+  if (!addrBytes || addrBytes.length !== 32) return null;
+  const key = new Uint8Array(LP_PREFIX_BYTES.length + 32);
+  key.set(LP_PREFIX_BYTES, 0);
+  key.set(addrBytes, LP_PREFIX_BYTES.length);
+  return bytesToHex(blake3(key));
+}
+
+/** Decode a raw `kovanica_getStorageAt` value for an LP share slot (`u128` LE, 16 bytes). */
+export function decodeLpShares(raw: Uint8Array): bigint | null {
+  if (raw.length !== 16) return null;
+  return readU128(raw, 0);
+}
 
 /** Largest fee the contract accepts, in basis points (10%). */
 export const MAX_FEE_BPS = 1_000;
@@ -68,6 +92,8 @@ export type ApiPool = {
   token_reserve: string;
   /** Sum of all LP shares, decimal string. */
   lp_total: string;
+  /** Caller's LP share balance when `?address=` was supplied, decimal string or `null`. */
+  lp_balance?: string | null;
   /** KUNA atoms per whole token at the current reserve ratio, or `null`. */
   price_kuna: number | null;
 };

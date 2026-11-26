@@ -23,6 +23,8 @@ import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
   buildWaveAAddLiquidityBatchPlan,
+  computeLpPosition,
+  computeRemoveLiquidityShares,
   estimatePoolAprPct,
   formatTokenUnits,
   parseTokenUnits,
@@ -236,14 +238,68 @@ function PoolsPage() {
     }
   };
 
-  const handleRemoveLiquidity = () => {
-    if (!lpRemoveStr.trim() || !/^\d+$/.test(lpRemoveStr.trim())) {
-      toast.error("Enter a valid integer LP share amount");
+  const lpRemoveRaw = useMemo(() => {
+    const clean = lpRemoveStr.trim();
+    if (!clean || !/^\d+$/.test(clean)) return 0n;
+    try {
+      return BigInt(clean);
+    } catch {
+      return 0n;
+    }
+  }, [lpRemoveStr]);
+
+  // Preview 1% reference LP position when a wallet is active on the Wave A simulator
+  const refUserLpShares = useMemo(
+    () => (activeSigner ? selectedPool.totalLpSupply / 100n : 0n),
+    [activeSigner, selectedPool.totalLpSupply],
+  );
+  const refRemoveEstimate = useMemo(
+    () =>
+      computeLpPosition({
+        userLpShares: lpRemoveRaw,
+        totalLpSupply: selectedPool.totalLpSupply,
+        reserve0: selectedPool.reserve0,
+        reserve1: selectedPool.reserve1,
+      }),
+    [lpRemoveRaw, selectedPool],
+  );
+
+  const handleRemoveLiquidity = async () => {
+    if (lpRemoveRaw <= 0n) {
+      toast.error("Enter a valid positive integer LP share amount");
       return;
     }
-    toast.success(
-      `Prepared amm_remove_liquidity (${lpRemoveStr} LP shares) on ${selectedPool.token0.symbol}/${selectedPool.token1.symbol}`,
-    );
+    const kovanicaProvider = (
+      window as unknown as {
+        kovanica?: {
+          signBatchTransaction?: (payload: unknown) => Promise<unknown>;
+        };
+      }
+    ).kovanica;
+    try {
+      if (kovanicaProvider?.signBatchTransaction) {
+        await kovanicaProvider.signBatchTransaction({
+          actions: [
+            {
+              contract: selectedPool.id,
+              method: "amm_remove_liquidity",
+              description: `Burn ${lpRemoveRaw.toString()} LP shares on ${selectedPool.token0.symbol}/${selectedPool.token1.symbol}`,
+              valueAtoms: "0",
+            },
+          ],
+          feeAtoms: String(baseFeeAtoms * 300 + FIXED_FEES.rwa_mint),
+        });
+        toast.success(
+          `Signed amm_remove_liquidity (${lpRemoveRaw.toString()} LP shares) on ${selectedPool.token0.symbol}/${selectedPool.token1.symbol}`,
+        );
+      } else {
+        toast.success(
+          `Prepared amm_remove_liquidity (${lpRemoveRaw.toString()} LP → ~${formatTokenUnits(refRemoveEstimate.underlying0, selectedPool.token0.decimals)} ${selectedPool.token0.symbol} + ${formatTokenUnits(refRemoveEstimate.underlying1, selectedPool.token1.decimals)} ${selectedPool.token1.symbol})`,
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Remove liquidity failed");
+    }
   };
 
   return (
@@ -654,16 +710,57 @@ function PoolsPage() {
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs text-muted">
-                  LP Shares to Burn (raw units)
-                </label>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs text-muted">
+                    LP Shares to Burn (raw units)
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[25, 50, 75, 100].map((pct) => {
+                      const base = refUserLpShares > 0n ? refUserLpShares : selectedPool.totalLpSupply / 100n;
+                      return (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() =>
+                            setLpRemoveStr(computeRemoveLiquidityShares(base, pct).toString())
+                          }
+                          className="rounded border border-border bg-bg px-2 py-0.5 font-mono text-[10px] text-muted transition-colors hover:border-gold/40 hover:text-fg"
+                        >
+                          {pct}%
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <input
                   value={lpRemoveStr}
                   onChange={(e) => setLpRemoveStr(e.target.value)}
                   className="h-10 w-full rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
                 />
               </div>
-              <Button className="w-full" variant="outline" onClick={handleRemoveLiquidity}>
+
+              <div className="space-y-1 rounded-lg border border-border bg-bg p-3 font-mono text-xs">
+                <div className="flex justify-between text-muted">
+                  <span>Pool Share Burned</span>
+                  <span className="text-emerald-400">{refRemoveEstimate.sharePct.toFixed(4)}%</span>
+                </div>
+                <div className="flex justify-between text-muted">
+                  <span>Est. {selectedPool.token0.symbol} Received</span>
+                  <span className="text-fg">
+                    {formatTokenUnits(refRemoveEstimate.underlying0, selectedPool.token0.decimals)}{" "}
+                    {selectedPool.token0.symbol}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted">
+                  <span>Est. {selectedPool.token1.symbol} Received</span>
+                  <span className="text-fg">
+                    {formatTokenUnits(refRemoveEstimate.underlying1, selectedPool.token1.decimals)}{" "}
+                    {selectedPool.token1.symbol}
+                  </span>
+                </div>
+              </div>
+
+              <Button className="w-full" variant="outline" onClick={() => void handleRemoveLiquidity()}>
                 Burn LP &amp; Withdraw Reserves
               </Button>
             </div>

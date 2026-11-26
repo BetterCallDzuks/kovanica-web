@@ -536,6 +536,14 @@ async function setupIsolatedPage(
         });
         return;
       }
+      if (path === "/api/stealth/announcements") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ announcements: [] }),
+        });
+        return;
+      }
     }
 
     // Default: continue local server handling
