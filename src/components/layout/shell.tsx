@@ -60,6 +60,7 @@ import { getBadgeColor } from "@/lib/network";
 import { SURFACE, SURFACE_STATUS } from "@/lib/surfaces";
 import { Button } from "@/components/ui/button";
 import { GlobalSearch } from "@/components/search/global-search";
+import { KVNC_COIN_ICON } from "@/lib/tokens/icons";
 
 export const NAV_GROUPS = [
   {
@@ -195,12 +196,20 @@ export function Shell({ children }: { children: React.ReactNode }) {
           className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-bg/95 px-3 backdrop-blur-sm md:h-16 md:px-5"
           style={{ borderTop: `1px solid ${getBadgeColor()}` }}
         >
-          <Link to="/" className="flex min-w-0 shrink-0 items-baseline gap-2">
-            <span className="font-display text-xl tracking-tight text-fg italic md:text-2xl">
-              Kovanica
-            </span>
-            <span className="hidden font-mono text-[10px] tracking-brand text-blue uppercase 2xl:inline 2xl:text-xs">
-              Protocol
+          <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2">
+            <img
+              src={KVNC_COIN_ICON}
+              alt=""
+              aria-hidden="true"
+              className="size-5.5 rounded-full object-cover ring-1 ring-gold/30"
+            />
+            <span className="flex items-baseline gap-2">
+              <span className="font-display text-xl tracking-tight text-fg italic md:text-2xl">
+                Kovanica
+              </span>
+              <span className="hidden font-mono text-[10px] tracking-brand text-blue uppercase 2xl:inline 2xl:text-xs">
+                Protocol
+              </span>
             </span>
           </Link>
 

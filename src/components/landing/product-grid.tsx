@@ -1,17 +1,16 @@
 /**
- * Product grid.
+ * Product grid — curated 3x2 flagship surface showcase.
  * - variant="landing" → absolute testnet/docs URLs (apex marketing page)
  * - variant="app"     → in-app TanStack Links (testnet host only; rarely used)
  */
 import { Link } from "@tanstack/react-router";
 import {
-  Activity,
+  ArrowLeftRight,
+  ArrowUpRight,
+  Building2,
   Compass,
-  Lock,
-  Map,
-  Route,
-  Users,
-  Vault,
+  Eye,
+  FileText,
   Wallet,
 } from "lucide-react";
 
@@ -21,19 +20,17 @@ const DOCS = "https://docs.kovanica.online";
 type ProductTo =
   | "/explorer"
   | "/wallet"
-  | "/map"
-  | "/multisig"
-  | "/network"
-  | "/roadmap"
-  | "/htlc"
-  | "/vaults"
-  | "/faucet";
+  | "/swap"
+  | "/rwa"
+  | "/stealth"
+  | "/docs";
 
 type Product = {
   to: ProductTo;
   /** Absolute URL used on marketing landing so apex never “owns” protocol paths */
   external?: string;
   icon: typeof Compass;
+  accent: string;
   title: string;
   body: string;
 };
@@ -43,57 +40,49 @@ const PRODUCTS: Product[] = [
     to: "/explorer",
     external: `${TESTNET}/explorer`,
     icon: Compass,
-    title: "Explorer",
-    body: "BlockDAG topology, tips, transaction stream, and protocol consensus stats.",
+    accent: "text-blue",
+    title: "BlockDAG Explorer",
+    body: "Live multi-lane BlockDAG graph, transactions, mining telemetry, and contract inspector.",
   },
   {
     to: "/wallet",
     external: `${TESTNET}/wallet`,
     icon: Wallet,
-    title: "Wallet",
-    body: "Create or import a seed, one phrase = one address, hardware wallets, QR, faucet and Ed25519 sends.",
+    accent: "text-teal",
+    title: "Non-Custodial Wallet",
+    body: "BIP-44 keys, browser extension, Android wallet, QR receive, faucet, and Ed25519 sends.",
   },
   {
-    to: "/multisig",
-    external: `${TESTNET}/multisig`,
-    icon: Users,
-    title: "Multisig",
-    body: "M-of-N P2SH addresses, spend proposals, partial signatures and combine — RFC-001.",
+    to: "/swap",
+    external: `${TESTNET}/swap`,
+    icon: ArrowLeftRight,
+    accent: "text-gold",
+    title: "AMM Swap & Pools",
+    body: "Constant-product DEX with 1-click atomic Approve → Swap batches and LP position tracking.",
   },
   {
-    to: "/htlc",
-    external: `${TESTNET}/htlc`,
-    icon: Lock,
-    title: "HTLC",
-    body: "Hashed time-locked contracts for atomic swaps — redeem or refund — KVP-104.",
+    to: "/rwa",
+    external: `${TESTNET}/rwa`,
+    icon: Building2,
+    accent: "text-gold",
+    title: "Tokens, NFTs & RWA",
+    body: "Create KVP-102 tokens, mint KVP-106 NFTs, and issue compliant real-world assets.",
   },
   {
-    to: "/vaults",
-    external: `${TESTNET}/vaults`,
-    icon: Vault,
-    title: "Vaults",
-    body: "CLTV / CSV time-lock vaults and treasury vesting templates — KVP-105.",
+    to: "/stealth",
+    external: `${TESTNET}/stealth`,
+    icon: Eye,
+    accent: "text-teal",
+    title: "Stealth Privacy",
+    body: "KVP-103 dual-key Ed25519 ECDH one-time stealth addresses with fast view-tag scanning.",
   },
   {
-    to: "/network",
-    external: `${TESTNET}/network`,
-    icon: Activity,
-    title: "Network",
-    body: "Live head, peers, connected seeds, and network bootstrap configuration.",
-  },
-  {
-    to: "/roadmap",
-    external: `${TESTNET}/roadmap`,
-    icon: Route,
-    title: "Roadmap",
-    body: "RFC status, client surfaces, and what is shipping next on the protocol.",
-  },
-  {
-    to: "/map",
-    external: `${TESTNET}/map`,
-    icon: Map,
-    title: "Origins map",
-    body: "Choropleth of real origin pulses from recorded visits — record your origin to leave yours.",
+    to: "/docs",
+    external: DOCS,
+    icon: FileText,
+    accent: "text-blue",
+    title: "Developer Docs & SDK",
+    body: "Protocol specs, JSON-RPC 2.0 reference, interactive Playground, and TypeScript SDK v0.10.",
   },
 ];
 
@@ -103,21 +92,26 @@ export function ProductGrid({
   variant?: "landing" | "app";
 }) {
   return (
-    <section className="mt-10 md:mt-12" aria-labelledby="products-heading">
-      <h2
-        id="products-heading"
-        className="font-display text-2xl tracking-tight text-fg md:text-3xl"
-      >
-        Surfaces
-      </h2>
-      <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="mt-10 md:mt-14" aria-labelledby="products-heading">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2
+          id="products-heading"
+          className="font-display text-2xl tracking-tight text-fg md:text-3xl"
+        >
+          Everything on Kovanica
+        </h2>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-subtle">
+          Live on Testnet
+        </span>
+      </div>
+      <ul className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {PRODUCTS.map((p) => (
           <ProductCard key={p.title} product={p} variant={variant} />
         ))}
       </ul>
       {variant === "landing" && (
         <p className="mt-4 text-center text-xs text-subtle">
-          Protocol surfaces live on{" "}
+          All 38 protocol surfaces live on{" "}
           <a href={TESTNET} className="underline hover:text-fg">
             testnet.kovanica.online
           </a>
@@ -139,13 +133,18 @@ function ProductCard({
   product: Product;
   variant: "landing" | "app";
 }) {
-  const { to, external, icon: Icon, title, body } = product;
+  const { to, external, icon: Icon, accent, title, body } = product;
   const className =
-    "flex h-full flex-col rounded-xl border border-border bg-surface p-4 transition-colors duration-150 hover:bg-surface-2";
+    "group flex h-full flex-col rounded-xl border border-border bg-surface p-4.5 transition-all duration-150 hover:border-gold/40 hover:bg-surface-2";
   const inner = (
     <>
-      <Icon className="size-4 text-blue" />
-      <h3 className="mt-3 font-display text-xl tracking-tight text-fg">{title}</h3>
+      <div className="flex items-center justify-between">
+        <span className="inline-flex size-8 items-center justify-center rounded-lg border border-border bg-surface-2">
+          <Icon className={`size-4 ${accent}`} />
+        </span>
+        <ArrowUpRight className="size-4 text-subtle transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-gold" />
+      </div>
+      <h3 className="mt-3.5 font-display text-lg tracking-tight text-fg">{title}</h3>
       <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
     </>
   );
