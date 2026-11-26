@@ -58,7 +58,7 @@ export function ExplorerView() {
   const [inspectFields, setInspectFields] = useState<Record<string, string> | null>(null);
   const [inspectedAddress, setInspectedAddress] = useState<string | null>(null);
   const [inspectedCodeBytes, setInspectedCodeBytes] = useState<number | null>(null);
-  const [telemetryExpanded, setTelemetryExpanded] = useState(true);
+  const [telemetryExpanded, setTelemetryExpanded] = useState(false);
   const locationSearch = useRouterState({ select: (s) => s.location.search });
 
   const dagCacheRef = useRef(createDagBlocksCache());
@@ -359,6 +359,7 @@ export function ExplorerView() {
           </div>
           <button
             type="button"
+            data-testid="telemetry-drawers-toggle"
             onClick={() => setTelemetryExpanded((v) => !v)}
             aria-expanded={telemetryExpanded}
             className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 font-mono text-[11px] text-fg transition-colors hover:border-gold/40 hover:bg-surface-2"
