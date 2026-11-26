@@ -22,7 +22,7 @@ import {
   type TokenState,
 } from "../tokens/codec";
 import { decodePool, POOL_SLOT_HEX, spotPriceKuna, type ApiPool, type PoolState } from "../tokens/pool";
-import { parseAddr } from "../wallet/address";
+import { hexToKvnc, parseAddr } from "../wallet/address";
 import { rpcCall } from "./rpc-url.server";
 
 export type { ApiToken };
@@ -183,17 +183,60 @@ async function collect(): Promise<{ entries: Entry[] }> {
   return { entries: fresh };
 }
 
+const MAX_WATCHED_CONTRACTS = 25;
+
+/**
+ * Merge any caller-supplied watched token contracts that are not yet in the
+ * log-scan cache (e.g. freshly created tokens before cache TTL or log scan).
+ */
+async function mergeExtraEntries(
+  entries: Entry[],
+  extraContracts?: string[],
+): Promise<Entry[]> {
+  if (!extraContracts || extraContracts.length === 0) return entries;
+  const knownHex = new Set<string>();
+  for (const entry of entries) {
+    const hex = parseAddr(entry.address);
+    if (hex) knownHex.add(hex);
+  }
+  const missingHex: string[] = [];
+  for (const raw of extraContracts) {
+    if (missingHex.length >= MAX_WATCHED_CONTRACTS) break;
+    const hex = parseAddr(raw);
+    if (!hex || knownHex.has(hex)) continue;
+    knownHex.add(hex);
+    missingHex.push(hex);
+  }
+  if (missingHex.length === 0) return entries;
+
+  const extra = await Promise.all(
+    missingHex.map(async (hex): Promise<Entry | null> => {
+      const canonical = hexToKvnc(hex);
+      const state = (await readToken(canonical)) ?? (await readToken(hex));
+      return state ? { height: Number.MAX_SAFE_INTEGER, address: canonical, state } : null;
+    }),
+  );
+  const resolved = extra.filter((e): e is Entry => e !== null);
+  return resolved.length > 0 ? [...resolved, ...entries] : entries;
+}
+
 /**
  * Every readable token on the local chain, newest first.
  *
  * `holderHex` (lowercase 64-hex, no `0x`) adds the holder's balance to each row.
+ * `extraContracts` optionally includes client-watched contract addresses so
+ * newly created tokens appear immediately with live balances.
  */
-export async function listTokens(holderHex?: string): Promise<ApiToken[]> {
+export async function listTokens(
+  holderHex?: string,
+  extraContracts?: string[],
+): Promise<ApiToken[]> {
   // A cold server scans the whole chain; concurrent page requests share it
   // instead of each starting the same scan.
-  const { entries } = await (inflight ??= collect().finally(() => {
+  const { entries: scanned } = await (inflight ??= collect().finally(() => {
     inflight = null;
   }));
+  const entries = await mergeExtraEntries(scanned, extraContracts);
   const holder = holderHex?.toLowerCase() ?? null;
   return entries.flatMap((entry) => {
     // The node prints `kvnc…dag`; the API and the UI keys use 64-hex.
@@ -234,10 +277,11 @@ async function readPool(address: string): Promise<PoolState | null> {
  * Pools are not indexed: a token is a pool iff its `kvnc/v1/pool` slot decodes,
  * so this reuses the token discovery scan and adds one storage read per token.
  */
-export async function listPools(): Promise<ApiPool[]> {
-  const { entries } = await (inflight ??= collect().finally(() => {
+export async function listPools(extraContracts?: string[]): Promise<ApiPool[]> {
+  const { entries: scanned } = await (inflight ??= collect().finally(() => {
     inflight = null;
   }));
+  const entries = await mergeExtraEntries(scanned, extraContracts);
 
   const rows = await Promise.all(
     entries.map(async (entry): Promise<ApiPool | null> => {

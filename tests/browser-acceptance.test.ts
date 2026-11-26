@@ -698,8 +698,8 @@ test("Section A: desktop viewport renders home, explorer, wallet, pool, and docs
     assert.ok(poolText.includes("Liquidity pools"), "Pools route must render 'Liquidity pools'");
     assert.ok(poolText.includes("TEST / KVNC"), "Pools route must render deterministic TEST / KVNC pool");
     assert.ok(
-      poolText.includes("Open in Wallet (Unsupported)"),
-      "Pools route must render disabled 'Open in Wallet (Unsupported)' button",
+      poolText.includes("Unlock Wallet") && poolText.includes("token_init_pool"),
+      "Pools route must render wallet-gated AMM pool initialization and swap controls",
     );
     // Direct reload on Pools
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -1225,13 +1225,12 @@ test("Section D: quote-only pool calculator calculates exact quotes without fina
       assert.ok(text.includes("—"), `Invalid amount '${invalidVal}' must render quote as em-dash`);
     }
 
-    // 4. Assert Open in Wallet button is disabled with execution capability explanation
-    const openBtn = page.locator("button:text(\"Open in Wallet (Unsupported)\")");
-    const isDisabled = await openBtn.isDisabled();
-    assert.equal(isDisabled, true, "Open in Wallet button must be strictly disabled");
+    // 4. Assert swap execution is gated behind wallet unlock (no silent/unsigned mutations)
+    const unlockLink = page.locator("a:text(\"Unlock Wallet\")").first();
+    await assert.doesNotReject(unlockLink.waitFor({ timeout: 5000 }));
     assert.ok(
-      text.includes("Notice: AMM pool execution is not supported by the web wallet"),
-      "Pool view must explain that execution is unsupported and strictly quote-only",
+      text.includes("Unlock your Web Wallet or connect window.kovanica to swap"),
+      "Pool view must require unlocking wallet or connecting extension before executing swaps",
     );
 
     // 5. Verify NO financial mutation was triggered

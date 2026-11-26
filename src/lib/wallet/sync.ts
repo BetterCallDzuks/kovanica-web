@@ -13,6 +13,7 @@
 import { api } from "@/lib/api/client";
 import type { ApiHistory, ApiUtxos } from "@/lib/api/contract";
 import type { ApiToken } from "@/lib/tokens/codec";
+import { getWatchedTokenContracts } from "@/lib/wallet/tx-builder";
 
 export type WalletSyncStatus = "idle" | "loading" | "fresh" | "stale" | "error";
 
@@ -48,7 +49,11 @@ export const defaultFetchAdapter: FetchAdapter = {
       "/api/fee_estimate",
       "GET",
     ),
-  fetchTokens: (addr) => api<ApiToken[]>(`/api/tokens?address=${addr}`),
+  fetchTokens: (addr) => {
+    const watched = getWatchedTokenContracts();
+    const suffix = watched.length ? `&watched=${encodeURIComponent(watched.join(","))}` : "";
+    return api<ApiToken[]>(`/api/tokens?address=${encodeURIComponent(addr)}${suffix}`);
+  },
 };
 
 export class WalletSyncManager {

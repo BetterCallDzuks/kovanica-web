@@ -1,8 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDownUp, ArrowLeft, Layers, Settings2, Zap, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowDownUp,
+  ArrowLeft,
+  CheckCircle2,
+  ExternalLink,
+  Layers,
+  Loader2,
+  RefreshCw,
+  Settings2,
+  ShieldCheck,
+  Wallet,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Shell } from "@/components/layout/shell";
+import { api, useApiSource } from "@/lib/api/client";
+import { shortId } from "@/lib/ledger/hash";
+import { useLedger } from "@/lib/ledger/store";
 import { ATOM, FIXED_FEES, TOKEN } from "@/lib/networkConstants";
 import {
   DEFAULT_DEX_POOLS,
@@ -12,11 +27,29 @@ import {
   parseTokenUnits,
 } from "@/lib/amm/math";
 import { computeSwapInterfaceFee, getSwapInterfaceFeeConfig } from "@/lib/monetization";
+import { formatTokenAmount, parseTokenAmount } from "@/lib/tokens/codec";
+import {
+  priceImpactBps as computeKvpPriceImpactBps,
+  quote as computeKvpPoolQuote,
+  type ApiPool,
+} from "@/lib/tokens/pool";
+import {
+  connectExtensionSigner,
+  executeTokenBuy,
+  executeTokenSell,
+  getKovanicaExtension,
+  getWatchedTokenContracts,
+  webWalletSigner,
+  type ActiveSigner,
+  type AmmCallResult,
+} from "@/lib/wallet/tx-builder";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/swap")({
   component: SwapPage,
 });
+
+const KVNC_DECIMALS = 9;
 
 const SLIPPAGE_PRESETS_BPS = [
   { label: "0.1%", bps: 10 },
@@ -25,17 +58,67 @@ const SLIPPAGE_PRESETS_BPS = [
 ] as const;
 
 function SwapPage() {
-  const [selectedPoolId, setSelectedPoolId] = useState(DEFAULT_DEX_POOLS[0]!.id);
+  const source = useApiSource();
+  const wallet = useLedger((s) => s.wallet);
+
+  // Live on-chain KVP-102 pools from /api/pools
+  const [livePools, setLivePools] = useState<ApiPool[]>([]);
+  const [loadingPools, setLoadingPools] = useState(false);
+
+  // Selection: either `live:<contractAddress>` or a reference pool id from DEFAULT_DEX_POOLS
+  const [selectedPoolId, setSelectedPoolId] = useState<string>(DEFAULT_DEX_POOLS[0]!.id);
   const [zeroForOne, setZeroForOne] = useState(true);
-  const [amountInStr, setAmountInStr] = useState("100");
+  const [amountInStr, setAmountInStr] = useState("10");
   const [slippageBps, setSlippageBps] = useState<number>(50);
   const [customSlippage, setCustomSlippage] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+
+  // Signer & execution state
+  const [extSigner, setExtSigner] = useState<ActiveSigner | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [swapStatus, setSwapStatus] = useState<string | null>(null);
+  const [lastSwap, setLastSwap] = useState<AmmCallResult | null>(null);
 
   // Live Wave B dynamic base fee & storage deposit telemetry
   const [baseFeeAtoms, setBaseFeeAtoms] = useState<number>(1);
   const [depositPerByteAtoms, setDepositPerByteAtoms] = useState<number>(100_000);
+
+  const unlockedSigner = useMemo(() => webWalletSigner(wallet), [wallet]);
+  const activeSigner = unlockedSigner ?? extSigner;
+  const hasExtension = useMemo(() => getKovanicaExtension() !== null, []);
+
+  const fetchLivePools = useCallback(async () => {
+    if (source === "mainnet") {
+      setLivePools([]);
+      return;
+    }
+    setLoadingPools(true);
+    try {
+      const watched = getWatchedTokenContracts();
+      const suffix = watched.length ? `?watched=${encodeURIComponent(watched.join(","))}` : "";
+      const rows = await api<ApiPool[]>(`/api/pools${suffix}`);
+      if (Array.isArray(rows)) {
+        setLivePools(rows);
+        if (rows.length > 0) {
+          setSelectedPoolId((current) => {
+            if (current.startsWith("live:")) {
+              const addr = current.slice("live:".length);
+              if (rows.some((r) => r.address === addr)) return current;
+            }
+            return `live:${rows[0]!.address}`;
+          });
+        }
+      }
+    } catch {
+      // keep reference pools usable if node is offline
+    } finally {
+      setLoadingPools(false);
+    }
+  }, [source]);
+
+  useEffect(() => {
+    void fetchLivePools();
+  }, [fetchLivePools]);
 
   useEffect(() => {
     let active = true;
@@ -56,48 +139,159 @@ function SwapPage() {
     };
   }, []);
 
-  const pool = useMemo(
+  const selectedLivePool = useMemo(() => {
+    if (!selectedPoolId.startsWith("live:")) return null;
+    const addr = selectedPoolId.slice("live:".length);
+    return livePools.find((p) => p.address === addr) ?? null;
+  }, [livePools, selectedPoolId]);
+
+  const refPool = useMemo(
     () => DEFAULT_DEX_POOLS.find((p) => p.id === selectedPoolId) ?? DEFAULT_DEX_POOLS[0]!,
     [selectedPoolId],
   );
 
-  const tokenIn = zeroForOne ? pool.token0 : pool.token1;
-  const tokenOut = zeroForOne ? pool.token1 : pool.token0;
-  const reserveIn = zeroForOne ? pool.reserve0 : pool.reserve1;
-  const reserveOut = zeroForOne ? pool.reserve1 : pool.reserve0;
+  // Unified display & quote fields across live KVP-102 pools and reference pools
+  const tokenIn = useMemo(() => {
+    if (selectedLivePool) {
+      return zeroForOne
+        ? { symbol: TOKEN, decimals: KVNC_DECIMALS, isNative: true }
+        : { symbol: selectedLivePool.symbol, decimals: selectedLivePool.decimals, isNative: false };
+    }
+    return zeroForOne ? refPool.token0 : refPool.token1;
+  }, [refPool, selectedLivePool, zeroForOne]);
 
-  const amountInRaw = useMemo(
-    () => parseTokenUnits(amountInStr, tokenIn.decimals),
-    [amountInStr, tokenIn.decimals],
-  );
+  const tokenOut = useMemo(() => {
+    if (selectedLivePool) {
+      return zeroForOne
+        ? { symbol: selectedLivePool.symbol, decimals: selectedLivePool.decimals, isNative: false }
+        : { symbol: TOKEN, decimals: KVNC_DECIMALS, isNative: true };
+    }
+    return zeroForOne ? refPool.token1 : refPool.token0;
+  }, [refPool, selectedLivePool, zeroForOne]);
+
+  const reserveIn = selectedLivePool
+    ? zeroForOne
+      ? BigInt(selectedLivePool.kuna_reserve)
+      : BigInt(selectedLivePool.token_reserve)
+    : zeroForOne
+      ? refPool.reserve0
+      : refPool.reserve1;
+
+  const reserveOut = selectedLivePool
+    ? zeroForOne
+      ? BigInt(selectedLivePool.token_reserve)
+      : BigInt(selectedLivePool.kuna_reserve)
+    : zeroForOne
+      ? refPool.reserve1
+      : refPool.reserve0;
+
+  const feeBps = selectedLivePool ? selectedLivePool.fee_bps : refPool.feeBps;
+
+  const amountInRaw = useMemo(() => {
+    if (selectedLivePool) {
+      return parseTokenAmount(amountInStr, tokenIn.decimals);
+    }
+    return parseTokenUnits(amountInStr, tokenIn.decimals);
+  }, [amountInStr, selectedLivePool, tokenIn.decimals]);
 
   const quote = useMemo(() => {
     if (!amountInRaw || amountInRaw <= 0n) return null;
+    if (selectedLivePool) {
+      const amountOut = computeKvpPoolQuote(amountInRaw, reserveIn, reserveOut, feeBps);
+      if (amountOut === null || amountOut <= 0n) return null;
+      const clampedSlippage = Math.max(0, Math.min(5000, Math.round(slippageBps)));
+      const minAmountOut = (amountOut * BigInt(10_000 - clampedSlippage)) / 10_000n;
+      const feeAmount = (amountInRaw * BigInt(feeBps)) / 10_000n;
+      const impactBps = computeKvpPriceImpactBps(amountInRaw, reserveIn, reserveOut, amountOut);
+      return {
+        amountOut,
+        minAmountOut,
+        feeAmount,
+        priceImpactPct: impactBps !== null ? impactBps / 100 : 0,
+      };
+    }
     return computeSwapQuote(amountInRaw, reserveIn, reserveOut, slippageBps);
-  }, [amountInRaw, reserveIn, reserveOut, slippageBps]);
+  }, [amountInRaw, feeBps, reserveIn, reserveOut, selectedLivePool, slippageBps]);
 
   const interfaceFeeConfig = getSwapInterfaceFeeConfig();
   const interfaceFeeRaw = useMemo(
-    () => (amountInRaw && amountInRaw > 0n ? computeSwapInterfaceFee(amountInRaw, interfaceFeeConfig.feeBps) : 0n),
+    () =>
+      amountInRaw && amountInRaw > 0n
+        ? computeSwapInterfaceFee(amountInRaw, interfaceFeeConfig.feeBps)
+        : 0n,
     [amountInRaw, interfaceFeeConfig.feeBps],
   );
 
   const batchSteps = useMemo(() => {
-    if (!amountInRaw || !quote) return [];
+    if (selectedLivePool || !amountInRaw || !quote) return [];
     return buildWaveASwapBatchPlan({
-      poolId: pool.id,
-      tokenIn,
-      tokenOut,
+      poolId: refPool.id,
+      tokenIn: zeroForOne ? refPool.token0 : refPool.token1,
+      tokenOut: zeroForOne ? refPool.token1 : refPool.token0,
       amountIn: amountInRaw,
       minAmountOut: quote.minAmountOut,
     });
-  }, [amountInRaw, pool.id, quote, tokenIn, tokenOut]);
+  }, [amountInRaw, quote, refPool, selectedLivePool, zeroForOne]);
+
+  async function onConnectExtension() {
+    try {
+      const signer = await connectExtensionSigner();
+      setExtSigner(signer);
+      toast.success(`Connected ${shortId(signer.addressKvnc)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Extension connection failed");
+    }
+  }
 
   const handleExecuteSwap = async () => {
     if (!amountInRaw || !quote) {
       toast.error("Enter a valid positive swap amount");
       return;
     }
+
+    // Live on-chain KVP-102 pool execution via client-signed token_buy / token_sell
+    if (selectedLivePool) {
+      if (selectedLivePool.paused) {
+        toast.error(`${selectedLivePool.symbol} pool is currently paused`);
+        return;
+      }
+      if (!activeSigner) {
+        toast.error("Unlock your Web Wallet on /wallet or connect window.kovanica to swap");
+        return;
+      }
+      setSubmitting(true);
+      setLastSwap(null);
+      setSwapStatus(
+        `Preparing ${zeroForOne ? "token_buy" : "token_sell"} on ${selectedLivePool.symbol} / KVNC…`,
+      );
+      try {
+        const res = zeroForOne
+          ? await executeTokenBuy(activeSigner, {
+              contract: selectedLivePool.address,
+              kunaInAtoms: amountInRaw,
+              minOutAtoms: quote.minAmountOut,
+              onStatus: setSwapStatus,
+            })
+          : await executeTokenSell(activeSigner, {
+              contract: selectedLivePool.address,
+              tokensInAtoms: amountInRaw,
+              minOutAtoms: quote.minAmountOut,
+              onStatus: setSwapStatus,
+            });
+        setLastSwap(res);
+        setSwapStatus(null);
+        toast.success(`Swap broadcast! ${res.method} (${shortId(res.txHash)})`);
+        void fetchLivePools();
+      } catch (err) {
+        setSwapStatus(null);
+        toast.error(err instanceof Error ? err.message : "Swap execution failed");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // Reference preview pool path (Wave A batch preview)
     setSubmitting(true);
     try {
       const kovanicaProvider = (
@@ -118,7 +312,7 @@ function SwapPage() {
         );
       } else {
         toast.success(
-          `Prepared 1-tx Wave A atomic Batch: ${batchSteps.map((s) => s.method).join(" → ")} (min out ${formatTokenUnits(quote.minAmountOut, tokenOut.decimals)} ${tokenOut.symbol})`,
+          `Preview quote ready: ${batchSteps.map((s) => s.method).join(" → ")} (min out ${formatTokenUnits(quote.minAmountOut, tokenOut.decimals)} ${tokenOut.symbol}). Initialize a live KVP-102 pool on /pools to execute on-chain.`,
         );
       }
     } catch (err) {
@@ -130,231 +324,404 @@ function SwapPage() {
 
   return (
     <Shell>
-      <main className="mx-auto w-full max-w-xl px-4 py-6 md:px-6 md:py-8 space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link to="/wallet" className="text-muted hover:text-fg transition-colors">
-            <ArrowLeft className="size-5" />
-          </Link>
-          <div>
-            <p className="font-mono text-[10px] tracking-wide text-emerald-400 uppercase">
-              Native AMM / DEX · Constant Product (0.30% LP Fee)
-            </p>
-            <h1 className="font-display text-2xl tracking-tight text-fg">Kovanica Swap</h1>
+      <main className="mx-auto w-full max-w-xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Link to="/wallet" className="text-muted transition-colors hover:text-fg">
+              <ArrowLeft className="size-5" />
+            </Link>
+            <div>
+              <p className="font-mono text-[10px] tracking-wide text-emerald-400 uppercase">
+                Native AMM / DEX · Constant Product ({(feeBps / 100).toFixed(2)}% LP Fee)
+              </p>
+              <h1 className="font-display text-2xl tracking-tight text-fg">Kovanica Swap</h1>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/pools">
-            <Button variant="outline" size="sm" className="text-xs">
-              <Layers className="size-3.5 mr-1.5" />
-              Pools
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void fetchLivePools()}
+              disabled={loadingPools}
+              aria-label="Refresh on-chain pools"
+            >
+              <RefreshCw className={loadingPools ? "size-3.5 animate-spin" : "size-3.5"} />
             </Button>
-          </Link>
-          <Button
-            variant={showSettings ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowSettings((v) => !v)}
-            aria-label="Slippage settings"
-          >
-            <Settings2 className="size-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Live Wave B Fee Banner */}
-      <div className="rounded-lg border border-border bg-surface/60 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-        <span>
-          Wave B Base Fee: <strong className="font-mono text-fg">{baseFeeAtoms} atoms/byte</strong>
-        </span>
-        <span>
-          Storage Deposit:{" "}
-          <strong className="font-mono text-fg">
-            {(depositPerByteAtoms / ATOM).toFixed(4)} {TOKEN}/byte
-          </strong>
-        </span>
-        <span>
-          Batch Fee Floor:{" "}
-          <strong className="font-mono text-fg">
-            {(FIXED_FEES.rwa_mint / ATOM).toFixed(4)} {TOKEN}
-          </strong>
-        </span>
-      </div>
-
-      {showSettings && (
-        <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-fg">Slippage Tolerance (`min_out` guard)</span>
-            <span className="font-mono text-xs text-muted">{(slippageBps / 100).toFixed(2)}%</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {SLIPPAGE_PRESETS_BPS.map((p) => (
-              <Button
-                key={p.bps}
-                size="sm"
-                variant={slippageBps === p.bps ? "default" : "outline"}
-                onClick={() => {
-                  setSlippageBps(p.bps);
-                  setCustomSlippage("");
-                }}
-                className="text-xs"
-              >
-                {p.label}
+            <Link to="/pools">
+              <Button variant="outline" size="sm" className="text-xs">
+                <Layers className="mr-1.5 size-3.5" />
+                Pools
               </Button>
-            ))}
-            <input
-              value={customSlippage}
-              onChange={(e) => {
-                setCustomSlippage(e.target.value);
-                const parsed = Number.parseFloat(e.target.value);
-                if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 50) {
-                  setSlippageBps(Math.round(parsed * 100));
-                }
-              }}
-              placeholder="Custom %"
-              className="h-8 w-24 rounded-md border border-border bg-bg px-2 font-mono text-xs text-fg"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Swap Card */}
-      <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
-        <div>
-          <label className="text-xs text-muted block mb-1.5">Active Liquidity Pool</label>
-          <select
-            value={selectedPoolId}
-            onChange={(e) => setSelectedPoolId(e.target.value)}
-            className="w-full h-10 rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
-          >
-            {DEFAULT_DEX_POOLS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.token0.symbol} / {p.token1.symbol} — TVL ${p.tvlUsd.toLocaleString("en-US")}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Sell Input */}
-        <div className="rounded-lg border border-border bg-bg p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted">
-            <span>You Pay</span>
-            <span className="font-mono">
-              Reserve: {formatTokenUnits(reserveIn, tokenIn.decimals)} {tokenIn.symbol}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <input
-              value={amountInStr}
-              onChange={(e) => setAmountInStr(e.target.value)}
-              placeholder="0.0"
-              className="flex-1 bg-transparent font-mono text-2xl text-fg focus:outline-none"
-            />
-            <span className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
-              {tokenIn.symbol}
-            </span>
+            </Link>
+            <Button
+              variant={showSettings ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowSettings((v) => !v)}
+              aria-label="Slippage settings"
+            >
+              <Settings2 className="size-3.5" />
+            </Button>
           </div>
         </div>
 
-        <div className="flex justify-center -my-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setZeroForOne((v) => !v)}
-            aria-label="Flip swap direction"
-            className="rounded-full"
-          >
-            <ArrowDownUp className="size-4" />
-          </Button>
-        </div>
-
-        {/* Buy Output */}
-        <div className="rounded-lg border border-border bg-bg p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted">
-            <span>You Receive (Estimated)</span>
-            <span className="font-mono">
-              Reserve: {formatTokenUnits(reserveOut, tokenOut.decimals)} {tokenOut.symbol}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 font-mono text-2xl text-fg">
-              {quote ? formatTokenUnits(quote.amountOut, tokenOut.decimals, 6) : "0.0"}
-            </div>
-            <span className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
-              {tokenOut.symbol}
-            </span>
-          </div>
-        </div>
-
-        {/* Quote Details */}
-        {quote && (
-          <div className="rounded-lg border border-border/70 bg-bg/60 p-3 space-y-1.5 text-xs">
-            <div className="flex justify-between text-muted">
-              <span>LP Fee (0.30%)</span>
-              <span className="font-mono text-fg">
-                {formatTokenUnits(quote.feeAmount, tokenIn.decimals, 6)} {tokenIn.symbol}
+        {/* Signer status bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface/60 px-3.5 py-2.5 text-xs">
+          {activeSigner ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="size-2 shrink-0 rounded-full bg-emerald-400" />
+              <span className="text-muted">
+                Signer ({activeSigner.kind === "web-wallet" ? "Web Wallet" : "window.kovanica"}):
               </span>
+              <code className="truncate font-mono text-fg">
+                {shortId(activeSigner.addressKvnc)}
+              </code>
             </div>
-            <div className="flex justify-between text-muted">
-              <Link to="/pricing" className="hover:text-gold hover:underline">
-                Interface Fee ({(interfaceFeeConfig.feeBps / 100).toFixed(2)}%)
-              </Link>
-              <span className="font-mono text-fg">
-                {interfaceFeeConfig.active
-                  ? `${formatTokenUnits(interfaceFeeRaw, tokenIn.decimals, 6)} ${tokenIn.symbol}`
-                  : "0 (testnet)"}
-              </span>
+          ) : (
+            <div className="flex items-center gap-2 text-muted">
+              <Wallet className="size-3.5 text-gold" />
+              <span>Unlock Web Wallet or connect window.kovanica for live swaps.</span>
             </div>
-            <div className="flex justify-between text-muted">
-              <span>Price Impact</span>
-              <span
-                className={
-                  quote.priceImpactPct > 3
-                    ? "font-mono text-amber-400"
-                    : "font-mono text-emerald-400"
-                }
+          )}
+          <div className="flex items-center gap-2">
+            {!activeSigner && hasExtension && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void onConnectExtension()}
               >
-                {quote.priceImpactPct.toFixed(3)}%
-              </span>
-            </div>
-            <div className="flex justify-between text-muted">
-              <span>Minimum Received ({(slippageBps / 100).toFixed(2)}% slippage)</span>
-              <span className="font-mono text-fg">
-                {formatTokenUnits(quote.minAmountOut, tokenOut.decimals, 6)} {tokenOut.symbol}
-              </span>
-            </div>
+                Connect Extension
+              </Button>
+            )}
+            {!activeSigner && (
+              <Button asChild size="sm" variant="outline">
+                <Link to="/wallet">Unlock Wallet</Link>
+              </Button>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Wave A Atomic Batch Preview */}
-        {batchSteps.length > 0 && (
-          <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
-              <Zap className="size-3.5" />
-              <span>1-Tx Wave A Atomic Batch ({batchSteps.length} actions)</span>
+        {/* Live Wave B Fee Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface/60 px-4 py-2.5 text-xs text-muted">
+          <span>
+            Wave B Base Fee: <strong className="font-mono text-fg">{baseFeeAtoms} atoms/byte</strong>
+          </span>
+          <span>
+            Storage Deposit:{" "}
+            <strong className="font-mono text-fg">
+              {(depositPerByteAtoms / ATOM).toFixed(4)} {TOKEN}/byte
+            </strong>
+          </span>
+          <span>
+            On-chain Pools:{" "}
+            <strong className="font-mono text-emerald-400">{livePools.length} live</strong>
+          </span>
+        </div>
+
+        {showSettings && (
+          <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-fg">
+                Slippage Tolerance (<code>min_out</code> guard)
+              </span>
+              <span className="font-mono text-xs text-muted">{(slippageBps / 100).toFixed(2)}%</span>
             </div>
-            <ol className="list-decimal list-inside space-y-1 text-xs text-muted font-mono">
-              {batchSteps.map((step, i) => (
-                <li key={`${step.method}-${i}`}>
-                  <span className="text-fg">{step.method}</span> — {step.description}
-                </li>
+            <div className="flex flex-wrap items-center gap-2">
+              {SLIPPAGE_PRESETS_BPS.map((p) => (
+                <Button
+                  key={p.bps}
+                  size="sm"
+                  variant={slippageBps === p.bps ? "default" : "outline"}
+                  onClick={() => {
+                    setSlippageBps(p.bps);
+                    setCustomSlippage("");
+                  }}
+                  className="text-xs"
+                >
+                  {p.label}
+                </Button>
               ))}
-            </ol>
+              <input
+                value={customSlippage}
+                onChange={(e) => {
+                  setCustomSlippage(e.target.value);
+                  const parsed = Number.parseFloat(e.target.value);
+                  if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 50) {
+                    setSlippageBps(Math.round(parsed * 100));
+                  }
+                }}
+                placeholder="Custom %"
+                className="h-8 w-24 rounded-md border border-border bg-bg px-2 font-mono text-xs text-fg"
+              />
+            </div>
           </div>
         )}
 
-        <Button
-          className="w-full h-11"
-          disabled={!quote || submitting}
-          onClick={handleExecuteSwap}
-        >
-          <ShieldCheck className="size-4 mr-2" />
-          {submitting
-            ? "Signing Wave A Batch…"
-            : tokenIn.isNative
-              ? `Swap ${tokenIn.symbol} → ${tokenOut.symbol}`
-              : `Approve & Swap ${tokenIn.symbol} → ${tokenOut.symbol} (1-Tx Batch)`}
-        </Button>
-      </div>
+        {/* Swap Card */}
+        <div className="space-y-4 rounded-xl border border-border bg-surface p-5">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="text-xs text-muted">Active Liquidity Pool</label>
+              {selectedLivePool ? (
+                <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400 uppercase">
+                  Live Testnet Pool
+                </span>
+              ) : (
+                <Link
+                  to="/pools"
+                  className="font-mono text-[10px] text-gold hover:underline"
+                >
+                  Preview Pool · Initialize live pool →
+                </Link>
+              )}
+            </div>
+            <select
+              value={selectedPoolId}
+              onChange={(e) => {
+                setSelectedPoolId(e.target.value);
+                setLastSwap(null);
+              }}
+              className="h-10 w-full rounded-md border border-border bg-bg px-3 font-mono text-xs text-fg"
+            >
+              {livePools.length > 0 && (
+                <optgroup label="Live On-Chain KVP-102 Pools (Testnet)">
+                  {livePools.map((p) => (
+                    <option key={p.address} value={`live:${p.address}`}>
+                      KVNC / {p.symbol} —{" "}
+                      {formatTokenAmount(BigInt(p.kuna_reserve), KVNC_DECIMALS)} KVNC +{" "}
+                      {formatTokenAmount(BigInt(p.token_reserve), p.decimals)} {p.symbol} (
+                      {(p.fee_bps / 100).toFixed(2)}%)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Reference Preview Pools (Quote-Only)">
+                {DEFAULT_DEX_POOLS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.token0.symbol} / {p.token1.symbol} — TVL ${p.tvlUsd.toLocaleString("en-US")}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+
+          {/* Sell Input */}
+          <div className="space-y-2 rounded-lg border border-border bg-bg p-4">
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span>You Pay</span>
+              <span className="font-mono">
+                Reserve:{" "}
+                {selectedLivePool
+                  ? formatTokenAmount(reserveIn, tokenIn.decimals)
+                  : formatTokenUnits(reserveIn, tokenIn.decimals)}{" "}
+                {tokenIn.symbol}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                value={amountInStr}
+                onChange={(e) => setAmountInStr(e.target.value)}
+                placeholder="0.0"
+                disabled={submitting}
+                className="flex-1 bg-transparent font-mono text-2xl text-fg focus:outline-none"
+              />
+              <span className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
+                {tokenIn.symbol}
+              </span>
+            </div>
+          </div>
+
+          <div className="-my-1 flex justify-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setZeroForOne((v) => !v)}
+              aria-label="Flip swap direction"
+              className="rounded-full"
+            >
+              <ArrowDownUp className="size-4" />
+            </Button>
+          </div>
+
+          {/* Buy Output */}
+          <div className="space-y-2 rounded-lg border border-border bg-bg p-4">
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span>You Receive (Estimated)</span>
+              <span className="font-mono">
+                Reserve:{" "}
+                {selectedLivePool
+                  ? formatTokenAmount(reserveOut, tokenOut.decimals)
+                  : formatTokenUnits(reserveOut, tokenOut.decimals)}{" "}
+                {tokenOut.symbol}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 font-mono text-2xl text-fg">
+                {quote
+                  ? selectedLivePool
+                    ? formatTokenAmount(quote.amountOut, tokenOut.decimals)
+                    : formatTokenUnits(quote.amountOut, tokenOut.decimals, 6)
+                  : "0.0"}
+              </div>
+              <span className="rounded-md border border-border bg-surface px-3 py-1.5 font-mono text-sm font-medium text-fg">
+                {tokenOut.symbol}
+              </span>
+            </div>
+          </div>
+
+          {/* Quote Details */}
+          {quote && (
+            <div className="space-y-1.5 rounded-lg border border-border/70 bg-bg/60 p-3 text-xs">
+              <div className="flex justify-between text-muted">
+                <span>LP Fee ({(feeBps / 100).toFixed(2)}%)</span>
+                <span className="font-mono text-fg">
+                  {selectedLivePool
+                    ? formatTokenAmount(quote.feeAmount, tokenIn.decimals)
+                    : formatTokenUnits(quote.feeAmount, tokenIn.decimals, 6)}{" "}
+                  {tokenIn.symbol}
+                </span>
+              </div>
+              <div className="flex justify-between text-muted">
+                <Link to="/pricing" className="hover:text-gold hover:underline">
+                  Interface Fee ({(interfaceFeeConfig.feeBps / 100).toFixed(2)}%)
+                </Link>
+                <span className="font-mono text-fg">
+                  {interfaceFeeConfig.active
+                    ? `${formatTokenUnits(interfaceFeeRaw, tokenIn.decimals, 6)} ${tokenIn.symbol}`
+                    : "0 (testnet)"}
+                </span>
+              </div>
+              <div className="flex justify-between text-muted">
+                <span>Price Impact</span>
+                <span
+                  className={
+                    quote.priceImpactPct > 3
+                      ? "font-mono text-amber-400"
+                      : "font-mono text-emerald-400"
+                  }
+                >
+                  {quote.priceImpactPct.toFixed(3)}%
+                </span>
+              </div>
+              <div className="flex justify-between text-muted">
+                <span>Minimum Received ({(slippageBps / 100).toFixed(2)}% slippage)</span>
+                <span className="font-mono text-fg">
+                  {selectedLivePool
+                    ? formatTokenAmount(quote.minAmountOut, tokenOut.decimals)
+                    : formatTokenUnits(quote.minAmountOut, tokenOut.decimals, 6)}{" "}
+                  {tokenOut.symbol}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Execution preview: Live KVP-102 Call OR Reference Wave A Batch */}
+          {selectedLivePool && quote && (
+            <div className="space-y-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
+              <div className="flex items-center gap-1.5 font-medium text-emerald-400">
+                <Zap className="size-3.5" />
+                <span>
+                  On-Chain KVP-102 Call:{" "}
+                  <code className="font-mono">{zeroForOne ? "token_buy" : "token_sell"}</code>
+                </span>
+              </div>
+              <p className="font-mono text-[11px] text-muted">
+                Contract {shortId(selectedLivePool.address)} · Call.value ={" "}
+                {zeroForOne
+                  ? `${formatTokenAmount(amountInRaw ?? 0n, KVNC_DECIMALS)} KVNC`
+                  : "0 KVNC"}{" "}
+                · min_out = {formatTokenAmount(quote.minAmountOut, tokenOut.decimals)}{" "}
+                {tokenOut.symbol}
+              </p>
+            </div>
+          )}
+
+          {!selectedLivePool && batchSteps.length > 0 && (
+            <div className="space-y-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
+                <Zap className="size-3.5" />
+                <span>1-Tx Wave A Atomic Batch ({batchSteps.length} actions)</span>
+              </div>
+              <ol className="list-inside list-decimal space-y-1 font-mono text-xs text-muted">
+                {batchSteps.map((step, i) => (
+                  <li key={`${step.method}-${i}`}>
+                    <span className="text-fg">{step.method}</span> — {step.description}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {swapStatus && (
+            <div className="flex items-center gap-2 rounded-lg border border-blue/30 bg-blue/10 px-3.5 py-2.5 text-xs text-blue">
+              <Loader2 className="size-4 shrink-0 animate-spin" />
+              <span>{swapStatus}</span>
+            </div>
+          )}
+
+          <Button
+            className="h-11 w-full"
+            disabled={
+              !quote ||
+              submitting ||
+              Boolean(selectedLivePool && (!activeSigner || selectedLivePool.paused))
+            }
+            onClick={() => void handleExecuteSwap()}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                {selectedLivePool
+                  ? `Signing ${zeroForOne ? "token_buy" : "token_sell"}…`
+                  : "Signing Wave A Batch…"}
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="mr-2 size-4" />
+                {selectedLivePool
+                  ? selectedLivePool.paused
+                    ? `${selectedLivePool.symbol} Pool Paused`
+                    : !activeSigner
+                      ? "Unlock Wallet to Execute Swap"
+                      : `Sign & Swap ${tokenIn.symbol} → ${tokenOut.symbol}`
+                  : tokenIn.isNative
+                    ? `Swap ${tokenIn.symbol} → ${tokenOut.symbol}`
+                    : `Approve & Swap ${tokenIn.symbol} → ${tokenOut.symbol} (1-Tx Batch)`}
+              </>
+            )}
+          </Button>
+
+          {lastSwap && (
+            <div className="space-y-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <CheckCircle2 className="size-5" />
+                <h3 className="font-medium">Swap Broadcast to Testnet!</h3>
+              </div>
+              <div className="space-y-1 font-mono text-[11px]">
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted">Method</span>
+                  <span className="text-fg">{lastSwap.method}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted">Tx Hash</span>
+                  <span className="truncate text-fg">{shortId(lastSwap.txHash)}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted">Network Fee</span>
+                  <span className="text-fg">
+                    {(Number(lastSwap.fee) / ATOM).toFixed(6)} {TOKEN}
+                  </span>
+                </div>
+              </div>
+              <Button asChild size="sm" className="w-full text-xs">
+                <Link to="/explorer">
+                  <ExternalLink className="mr-1.5 size-3.5" />
+                  Open in Explorer
+                </Link>
+              </Button>
+            </div>
+          )}
+        </div>
       </main>
     </Shell>
   );
