@@ -1,123 +1,266 @@
-import { useState } from "react";
-import { Eye, KeyRound, Scan } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import {
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Radio,
+  Scan,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { fmtKvnc, parseKvnc } from "@/lib/ledger/format";
+import { shortId } from "@/lib/ledger/hash";
+import { useLedger } from "@/lib/ledger/store";
 import {
-  createStealthMeta,
   deriveOnetimeAddress,
-  scanStealthOutputs,
+  deriveOnetimeSpendKey,
+  deriveStealthKeypairFromMnemonic,
+  generateStealthKeypair,
   prepareStealthSpend,
+  publishStealthAnnouncement,
+  scanStealthOutputs,
+  signSighashWithStealthScalar,
   submitStealthSpend,
-  type StealthMetaAddress,
+  type StealthKeypair,
   type StealthOnetime,
   type StealthScanHit,
 } from "@/lib/protocol/stealth";
-import { signSighashWithSeedHex } from "@/lib/wallet/keys";
-import { parseKvnc, fmtKvnc } from "@/lib/ledger/format";
+import { parseAddr } from "@/lib/wallet/address";
+import { webWalletSigner } from "@/lib/wallet/tx-builder";
 
-/** KVP-103 / RFC-003 — Stealth; spends sign with one-time seed only. */
+type Tab = "receive" | "send" | "scan" | "spend";
+
+/**
+ * KVP-103 / RFC-003 — Client-Side Dual-Key Stealth Addresses on Ed25519.
+ *
+ * Every one-time address is a standard Kovanica L1 account (`kvnc…dag`).
+ * Scan and spend private keys never leave the browser.
+ */
 export function StealthView() {
-  const [tab, setTab] = useState<"receive" | "scan" | "spend">("receive");
-  const [scanPubkey, setScanPubkey] = useState("");
-  const [spendPubkey, setSpendPubkey] = useState("");
-  const [viewTag, setViewTag] = useState("");
-  const [meta, setMeta] = useState<StealthMetaAddress | null>(null);
-  const [onetime, setOnetime] = useState<StealthOnetime | null>(null);
+  const wallet = useLedger((s) => s.wallet);
+  const unlockedWallet = useMemo(() => webWalletSigner(wallet), [wallet]);
+
+  const [tab, setTab] = useState<Tab>("receive");
+
+  // Receive tab state
+  const [keys, setKeys] = useState<StealthKeypair | null>(null);
+  const [showSecrets, setShowSecrets] = useState(false);
+
+  // Send / Derive tab state
+  const [targetMeta, setTargetMeta] = useState("");
+  const [derived, setDerived] = useState<StealthOnetime | null>(null);
+  const [txHint, setTxHint] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(false);
+
+  // Scan tab state
   const [scanPriv, setScanPriv] = useState("");
-  const [hits, setHits] = useState<StealthScanHit[]>([]);
-  const [spendFrom, setSpendFrom] = useState("");
+  const [scanSpendPub, setScanSpendPub] = useState("");
+  const [viewTagFilter, setViewTagFilter] = useState("");
+  const [manualEphemeral, setManualEphemeral] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [hits, setHits] = useState<StealthScanHit[] | null>(null);
+
+  // Spend tab state
+  const [spendEphemeral, setSpendEphemeral] = useState("");
+  const [spendScanPriv, setSpendScanPriv] = useState("");
+  const [spendPriv, setSpendPriv] = useState("");
   const [spendTo, setSpendTo] = useState("");
   const [spendAmount, setSpendAmount] = useState("1");
-  const [oneTimeSeed, setOneTimeSeed] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [spending, setSpending] = useState(false);
+  const [lastSpendTx, setLastSpendTx] = useState<{ txHash: string; from: string; fee: number } | null>(
+    null,
+  );
 
-  async function onCreateMeta() {
-    setBusy(true);
+  function copyText(text: string, label: string) {
+    void navigator.clipboard.writeText(text).then(
+      () => toast.success(`${label} copied`),
+      () => toast.error("Clipboard copy failed"),
+    );
+  }
+
+  function onGenerateRandom() {
     try {
-      const res = await createStealthMeta(scanPubkey, spendPubkey || scanPubkey, viewTag || undefined);
-      setMeta(res);
-      toast.success("Stealth meta-address created");
+      const kp = generateStealthKeypair();
+      setKeys(kp);
+      setShowSecrets(false);
+      toast.success("Generated fresh KVP-103 dual-key stealth identity locally");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Create failed");
-    } finally {
-      setBusy(false);
+      toast.error(e instanceof Error ? e.message : "Key generation failed");
     }
   }
 
-  async function onDerive() {
-    if (!meta) {
-      toast.error("Create a meta-address first");
+  function onDeriveFromWallet() {
+    if (!unlockedWallet || unlockedWallet.kind !== "web-wallet") {
+      toast.error("Unlock your Web Wallet on /wallet first");
       return;
     }
-    setBusy(true);
     try {
-      const res = await deriveOnetimeAddress(meta.metaAddress);
-      setOnetime(res);
-      toast.success("One-time address derived");
+      const kp = deriveStealthKeypairFromMnemonic(unlockedWallet.mnemonic);
+      setKeys(kp);
+      setShowSecrets(false);
+      toast.success("Derived deterministic stealth identity from your Web Wallet phrase");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Derive failed");
+      toast.error(e instanceof Error ? e.message : "Derivation failed");
+    }
+  }
+
+  function onUseMyKeysInScan() {
+    if (!keys) return;
+    setScanPriv(keys.scanPrivkeyHex);
+    setScanSpendPub(keys.spendPubkeyHex);
+    setTab("scan");
+    toast.success("Loaded scan key + spend pubkey into Scan (browser memory only)");
+  }
+
+  function onDeriveOnetime() {
+    if (!targetMeta.trim()) {
+      toast.error("Paste a recipient stealth meta-address (st:kvnc:…)");
+      return;
+    }
+    try {
+      const res = deriveOnetimeAddress(targetMeta.trim());
+      setDerived(res);
+      setPublished(false);
+      toast.success("Derived unlinkable one-time L1 address client-side");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Derivation failed");
+    }
+  }
+
+  async function onPublishAnnouncement() {
+    if (!derived) return;
+    setPublishing(true);
+    try {
+      await publishStealthAnnouncement({
+        ephemeralPubkeyHex: derived.ephemeralPubkeyHex,
+        viewTag: derived.viewTag,
+        stealthAddress: derived.address,
+        txHash: txHint.trim() || undefined,
+      });
+      setPublished(true);
+      toast.success("Published public stealth announcement (no secrets sent)");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Publish failed");
     } finally {
-      setBusy(false);
+      setPublishing(false);
     }
   }
 
   async function onScan() {
-    setBusy(true);
+    if (!scanPriv.trim() || !scanSpendPub.trim()) {
+      toast.error("Scan private key and spend public key are both required");
+      return;
+    }
+    setScanning(true);
     try {
-      // scanPriv is never sent to the network — library enforces client-side only
-      const res = await scanStealthOutputs(scanPriv, viewTag || undefined);
+      const manual = manualEphemeral
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await scanStealthOutputs({
+        scanPrivkeyHex: scanPriv.trim(),
+        spendPubkeyHex: scanSpendPub.trim(),
+        viewTagFilter: viewTagFilter.trim() || undefined,
+        manualEphemerals: manual,
+      });
       setHits(res);
-      toast.success(res.length ? `Found ${res.length} output(s)` : "No matching outputs");
+      toast.success(
+        res.length
+          ? `Found ${res.length} matching stealth output${res.length > 1 ? "s" : ""}`
+          : "No matching stealth announcements found",
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Scan failed");
     } finally {
-      setBusy(false);
-      setScanPriv("");
+      setScanning(false);
     }
+  }
+
+  function onLoadHitIntoSpend(hit: StealthScanHit) {
+    setSpendEphemeral(hit.ephemeralPubkeyHex);
+    if (scanPriv.trim()) setSpendScanPriv(scanPriv.trim());
+    if (keys?.spendPrivkeyHex) setSpendPriv(keys.spendPrivkeyHex);
+    setTab("spend");
+    toast.success(`Loaded ${shortId(hit.address)} into Spend`);
   }
 
   async function onSpend() {
     const atoms = parseKvnc(spendAmount);
     if (atoms === null || atoms <= 0) {
-      toast.error("Enter a positive amount");
+      toast.error("Enter a positive KVNC amount");
       return;
     }
-    if (!spendFrom.trim() || !spendTo.trim()) {
-      toast.error("From and to required");
+    if (!parseAddr(spendTo.trim())) {
+      toast.error("Enter a valid destination address (kvnc…dag or 64-hex)");
       return;
     }
-    const seed = oneTimeSeed.trim().toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(seed)) {
-      toast.error("One-time private seed (64 hex) is required — not the wallet mnemonic");
+    if (!spendEphemeral.trim() || !spendScanPriv.trim() || !spendPriv.trim()) {
+      toast.error("Ephemeral pubkey, scan private key, and spend private key are required");
       return;
     }
-    setBusy(true);
+
+    setSpending(true);
+    setLastSpendTx(null);
     try {
-      const prep = await prepareStealthSpend(spendFrom.trim(), spendTo.trim(), atoms);
-      const sig = await signSighashWithSeedHex(seed, prep.sighash);
-      const sub = await submitStealthSpend(spendFrom.trim(), spendTo.trim(), atoms, sig);
-      toast.success(`Submitted · ${sub.tx.slice(0, 16)}…`);
-      setOneTimeSeed("");
+      const derivedKey = deriveOnetimeSpendKey({
+        scanPrivkeyHex: spendScanPriv.trim(),
+        spendPrivkeyHex: spendPriv.trim(),
+        ephemeralPubkeyHex: spendEphemeral.trim(),
+      });
+
+      const prep = await prepareStealthSpend(derivedKey.address, spendTo.trim(), atoms);
+      const { signatureHex } = signSighashWithStealthScalar(
+        derivedKey.oneTimeScalarHex,
+        prep.sighash,
+      );
+      const sub = await submitStealthSpend(
+        derivedKey.address,
+        spendTo.trim(),
+        atoms,
+        signatureHex,
+      );
+      setLastSpendTx({ txHash: sub.tx, from: derivedKey.address, fee: prep.fee });
+      toast.success(`Stealth spend broadcast! ${shortId(sub.tx)}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Spend failed");
+      toast.error(e instanceof Error ? e.message : "Stealth spend failed");
     } finally {
-      setBusy(false);
+      setSpending(false);
     }
   }
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-12 pt-8 md:px-8">
-      <p className="font-mono text-[11px] tracking-brand text-blue uppercase">KVP-103 · RFC-003</p>
-      <h1 className="mt-1 font-display text-3xl tracking-tight text-fg italic md:text-4xl">Stealth</h1>
-      <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted">
-        One-time ECDH addresses. Scan keys never leave the browser. Spends require the one-time seed.
+      <p className="font-mono text-[11px] tracking-brand text-blue uppercase">
+        KVP-103 · RFC-003 · Ed25519 ECDH
       </p>
-      <div className="mt-8 inline-flex rounded-md bg-surface-2 p-0.5">
-        {([
-          { id: "receive" as const, label: "Receive", icon: KeyRound },
-          { id: "scan" as const, label: "Scan", icon: Scan },
-          { id: "spend" as const, label: "Spend", icon: Eye },
-        ]).map(({ id, label, icon: Icon }) => (
+      <h1 className="mt-1 font-display text-3xl tracking-tight text-fg italic md:text-4xl">
+        Stealth Addresses
+      </h1>
+      <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted">
+        Unlinkable one-time L1 accounts (<code className="text-fg">kvnc…dag</code>) using
+        dual-key Ed25519 ECDH. Scan and spend private keys never leave your browser; spends sign
+        standard L1 transactions directly on Testnet (Chain 2).
+      </p>
+
+      <div className="mt-7 inline-flex flex-wrap rounded-md bg-surface-2 p-0.5">
+        {(
+          [
+            { id: "receive" as const, label: "Receive", icon: KeyRound },
+            { id: "send" as const, label: "Derive & Announce", icon: Send },
+            { id: "scan" as const, label: "Scan", icon: Scan },
+            { id: "spend" as const, label: "Spend", icon: ShieldCheck },
+          ] as const
+        ).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -133,94 +276,454 @@ export function StealthView() {
           </button>
         ))}
       </div>
-      <div className="mt-6 space-y-4 rounded-xl border border-border bg-surface p-5">
+
+      <div className="mt-6 space-y-5 rounded-xl border border-border bg-surface p-5">
         {tab === "receive" && (
-          <>
-            <input
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="Scan pubkey 64 hex"
-              value={scanPubkey}
-              onChange={(e) => setScanPubkey(e.target.value)}
-            />
-            <input
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="Spend pubkey (optional)"
-              value={spendPubkey}
-              onChange={(e) => setSpendPubkey(e.target.value)}
-            />
-            <input
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="View tag"
-              value={viewTag}
-              onChange={(e) => setViewTag(e.target.value)}
-            />
-            <Button disabled={busy} onClick={() => void onCreateMeta()}>
-              {busy ? "…" : "Create meta-address"}
-            </Button>
-            {meta && (
-              <div className="rounded-lg border border-gold/30 bg-gold/5 p-3">
-                <p className="break-all font-mono text-xs">{meta.metaAddress}</p>
-                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void onDerive()}>
-                  Derive one-time
+          <div className="space-y-4">
+            <p className="text-xs leading-relaxed text-muted">
+              Share your public <strong className="text-fg">Stealth Meta-Address</strong> so
+              senders can derive fresh, unlinkable one-time <code className="text-fg">kvnc…dag</code>{" "}
+              addresses for every payment.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={onGenerateRandom}>
+                <Sparkles className="mr-1.5 size-4" />
+                Generate Stealth Keys
+              </Button>
+              {unlockedWallet ? (
+                <Button type="button" variant="outline" onClick={onDeriveFromWallet}>
+                  <Wallet className="mr-1.5 size-4" />
+                  Derive from Unlocked Wallet
                 </Button>
-                {onetime && <p className="mt-1 font-mono text-xs text-muted">{onetime.address}</p>}
+              ) : (
+                <Button asChild variant="outline">
+                  <Link to="/wallet">
+                    <Wallet className="mr-1.5 size-4" />
+                    Unlock Wallet to Derive
+                  </Link>
+                </Button>
+              )}
+            </div>
+
+            {keys && (
+              <div className="space-y-3 rounded-xl border border-gold/30 bg-gold/5 p-4">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium tracking-wide text-gold uppercase">
+                      Public Stealth Meta-Address (Safe to Share)
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => copyText(keys.metaAddress, "Stealth meta-address")}
+                    >
+                      <Copy className="mr-1 size-3" /> Copy
+                    </Button>
+                  </div>
+                  <p className="mt-1 break-all rounded-md border border-border bg-bg p-2.5 font-mono text-xs text-fg">
+                    {keys.metaAddress}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] font-medium tracking-wide text-subtle uppercase">
+                    Private Keys (Local Only — Back Up Offline)
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setShowSecrets((v) => !v)}
+                  >
+                    {showSecrets ? (
+                      <>
+                        <EyeOff className="mr-1 size-3" /> Hide
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="mr-1 size-3" /> Reveal
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="grid gap-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-bg px-3 py-2">
+                    <span className="text-muted">Scan Privkey (watch-only)</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-mono text-fg">
+                        {showSecrets ? `${keys.scanPrivkeyHex.slice(0, 20)}…` : "••••••••••••••••"}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText(keys.scanPrivkeyHex, "Scan private key")}
+                        className="text-subtle hover:text-fg"
+                        aria-label="Copy scan private key"
+                      >
+                        <Copy className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-bg px-3 py-2">
+                    <span className="text-muted">Spend Privkey (required to spend)</span>
+                    <div className="flex items-center gap-1.5">
+                      <code className="font-mono text-fg">
+                        {showSecrets ? `${keys.spendPrivkeyHex.slice(0, 20)}…` : "••••••••••••••••"}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => copyText(keys.spendPrivkeyHex, "Spend private key")}
+                        className="text-subtle hover:text-fg"
+                        aria-label="Copy spend private key"
+                      >
+                        <Copy className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button type="button" size="sm" variant="outline" onClick={onUseMyKeysInScan}>
+                    <Scan className="mr-1.5 size-3.5" />
+                    Load into Scan
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setTargetMeta(keys.metaAddress);
+                      setTab("send");
+                    }}
+                  >
+                    <Send className="mr-1.5 size-3.5" />
+                    Test Derive Address
+                  </Button>
+                </div>
               </div>
             )}
-          </>
+          </div>
         )}
+
+        {tab === "send" && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                Recipient Stealth Meta-Address
+              </label>
+              <input
+                className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg placeholder:text-subtle focus:outline-none focus:ring-1 focus:ring-blue"
+                placeholder="st:kvnc:<64-hex-scan-pub>:<64-hex-spend-pub>"
+                value={targetMeta}
+                onChange={(e) => setTargetMeta(e.target.value)}
+              />
+            </div>
+
+            <Button type="button" onClick={onDeriveOnetime}>
+              <KeyRound className="mr-1.5 size-4" />
+              Derive One-Time L1 Address
+            </Button>
+
+            {derived && (
+              <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-emerald-400">
+                    One-Time Stealth Address (Standard L1 Account)
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => copyText(derived.address, "One-time address")}
+                  >
+                    <Copy className="mr-1 size-3" /> Copy
+                  </Button>
+                </div>
+                <p className="break-all rounded-md border border-border bg-bg p-2.5 font-mono text-fg">
+                  {derived.address}
+                </p>
+
+                <div className="space-y-1 font-mono text-[11px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted">Ephemeral Pubkey (R)</span>
+                    <button
+                      type="button"
+                      onClick={() => copyText(derived.ephemeralPubkeyHex, "Ephemeral pubkey")}
+                      className="truncate text-fg hover:underline"
+                    >
+                      {shortId(derived.ephemeralPubkeyHex)}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted">View Tag (2-byte filter)</span>
+                    <span className="text-gold">0x{derived.viewTag}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-muted">
+                    Optional Funding Tx Hash (for announcement metadata)
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-bg px-2.5 py-1.5 font-mono text-xs text-fg"
+                    placeholder="0x… (optional)"
+                    value={txHint}
+                    onChange={(e) => setTxHint(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={publishing || published}
+                    onClick={() => void onPublishAnnouncement()}
+                  >
+                    {publishing ? (
+                      <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                    ) : (
+                      <Radio className="mr-1.5 size-3.5" />
+                    )}
+                    {published ? "Announcement Published" : "Publish Announcement"}
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/wallet">
+                      <Wallet className="mr-1.5 size-3.5" />
+                      Fund in Wallet
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "scan" && (
-          <>
-            <p className="text-sm text-muted">
-              The scan private key is never uploaded. Full ECDH scan runs offline / on a local node.
+          <div className="space-y-4">
+            <p className="text-xs leading-relaxed text-muted">
+              True watch-only ECDH scanning: runs <strong className="text-fg">100% locally</strong>{" "}
+              using only your Scan Private Key + Spend Public Key. Private keys are never uploaded.
             </p>
-            <input
-              type="password"
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="Scan privkey (local only — not sent)"
-              value={scanPriv}
-              onChange={(e) => setScanPriv(e.target.value)}
-            />
-            <Button disabled={busy} onClick={() => void onScan()}>
-              {busy ? "…" : "Scan (client-side)"}
+            <div>
+              <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                Scan Private Key (64 hex — local only)
+              </label>
+              <input
+                type="password"
+                className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                placeholder="64-char hex scan private key"
+                value={scanPriv}
+                onChange={(e) => setScanPriv(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                Spend Public Key (64 hex)
+              </label>
+              <input
+                className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                placeholder="64-char hex spend public key"
+                value={scanSpendPub}
+                onChange={(e) => setScanSpendPub(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                  View Tag Filter (optional, 4 hex)
+                </label>
+                <input
+                  className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                  placeholder="e.g. a1b2"
+                  value={viewTagFilter}
+                  onChange={(e) => setViewTagFilter(e.target.value)}
+                  maxLength={6}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                  Manual Ephemeral Pubkey (optional)
+                </label>
+                <input
+                  className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                  placeholder="64-hex R (for offline scan)"
+                  value={manualEphemeral}
+                  onChange={(e) => setManualEphemeral(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <Button type="button" disabled={scanning} onClick={() => void onScan()}>
+              {scanning ? (
+                <>
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  Scanning Locally…
+                </>
+              ) : (
+                <>
+                  <Scan className="mr-1.5 size-4" />
+                  Scan Announcements (Client-Side ECDH)
+                </>
+              )}
             </Button>
-            {hits.map((h, i) => (
-              <p key={i} className="font-mono text-xs">
-                {h.outpoint.tx.slice(0, 12)}…:{h.outpoint.index} · {fmtKvnc(h.value)}
-              </p>
-            ))}
-          </>
+
+            {hits !== null && (
+              <div className="space-y-2 pt-1">
+                {hits.length === 0 ? (
+                  <p className="rounded-lg border border-border bg-bg p-3 text-xs text-muted">
+                    No matching stealth outputs found in published announcements.
+                  </p>
+                ) : (
+                  hits.map((hit) => (
+                    <div
+                      key={hit.addressHex}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-bg p-3 text-xs"
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="truncate font-mono text-fg">{shortId(hit.address)}</p>
+                        <p className="font-mono text-[11px] text-muted">
+                          Balance: <strong className="text-emerald-400">{fmtKvnc(hit.balanceAtoms)} KVNC</strong> ·{" "}
+                          {hit.utxoCount} UTXO{hit.utxoCount === 1 ? "" : "s"} · tag 0x{hit.viewTag}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onLoadHitIntoSpend(hit)}
+                      >
+                        Spend
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         )}
+
         {tab === "spend" && (
-          <>
-            <input
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="From one-time address"
-              value={spendFrom}
-              onChange={(e) => setSpendFrom(e.target.value)}
-            />
-            <input
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="Destination"
-              value={spendTo}
-              onChange={(e) => setSpendTo(e.target.value)}
-            />
-            <input
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              value={spendAmount}
-              onChange={(e) => setSpendAmount(e.target.value)}
-            />
-            <input
-              type="password"
-              className="w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-sm"
-              placeholder="One-time private seed (64 hex) — required"
-              value={oneTimeSeed}
-              onChange={(e) => setOneTimeSeed(e.target.value)}
-            />
-            <Button disabled={busy} onClick={() => void onSpend()}>
-              {busy ? "…" : "Prepare & sign with one-time key"}
+          <div className="space-y-4">
+            <p className="text-xs leading-relaxed text-muted">
+              Derives the one-time Ed25519 spend scalar{" "}
+              <code className="text-fg">p = (b + t) mod L</code> locally in your browser, signs a
+              standard L1 transfer sighash, and broadcasts via{" "}
+              <code className="text-fg">/api/submit</code>.
+            </p>
+            <div>
+              <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                Ephemeral Pubkey (R, 64 hex)
+              </label>
+              <input
+                className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                placeholder="64-hex ephemeral pubkey from announcement"
+                value={spendEphemeral}
+                onChange={(e) => setSpendEphemeral(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                  Scan Private Key (64 hex)
+                </label>
+                <input
+                  type="password"
+                  className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                  placeholder="Local only"
+                  value={spendScanPriv}
+                  onChange={(e) => setSpendScanPriv(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                  Spend Private Key (64 hex)
+                </label>
+                <input
+                  type="password"
+                  className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                  placeholder="Local only"
+                  value={spendPriv}
+                  onChange={(e) => setSpendPriv(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                  Destination Address
+                </label>
+                <input
+                  className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                  placeholder="kvnc…dag or 64-hex"
+                  value={spendTo}
+                  onChange={(e) => setSpendTo(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium tracking-wide text-subtle uppercase">
+                  Amount (KVNC)
+                </label>
+                <input
+                  className="mt-1.5 w-full rounded-md border border-border bg-bg px-3 py-2 font-mono text-xs text-fg"
+                  value={spendAmount}
+                  onChange={(e) => setSpendAmount(e.target.value)}
+                  inputMode="decimal"
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              className="h-11 w-full"
+              disabled={spending}
+              onClick={() => void onSpend()}
+            >
+              {spending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Deriving One-Time Key &amp; Signing…
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="mr-2 size-4" />
+                  Sign &amp; Broadcast Stealth Spend
+                </>
+              )}
             </Button>
-            <p className="text-xs text-subtle">Signs with the one-time seed, not the wallet mnemonic.</p>
-          </>
+
+            {lastSpendTx && (
+              <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs">
+                <div className="flex items-center gap-2 font-medium text-emerald-400">
+                  <CheckCircle2 className="size-4" />
+                  <span>Stealth Spend Broadcast to Testnet!</span>
+                </div>
+                <div className="space-y-1 font-mono text-[11px]">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted">One-Time Source</span>
+                    <span className="truncate text-fg">{shortId(lastSpendTx.from)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted">Tx Hash</span>
+                    <span className="truncate text-fg">{shortId(lastSpendTx.txHash)}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted">Fee</span>
+                    <span className="text-fg">{fmtKvnc(lastSpendTx.fee)} KVNC</span>
+                  </div>
+                </div>
+                <Button asChild size="sm" className="w-full text-xs">
+                  <Link to="/explorer">
+                    <ExternalLink className="mr-1.5 size-3.5" />
+                    View in Explorer
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </main>
