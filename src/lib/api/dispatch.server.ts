@@ -1302,8 +1302,10 @@ async function dispatchMeteredApi(
         const sigBytes = hexToBytes(sig);
         if (sigBytes.length !== 64) return text("signature must be 64 bytes", 400);
 
+        // Bincode enum variant index for TransactionKind::Call is u32le(6)
+        // (while the signing preimage tag on line 1269 is u8(4)).
         const rawKind = concat([
-          u32le(4),
+          u32le(6),
           contractBytes,
           u64le(0),
           u64le(BigInt(methodBytes.length)),

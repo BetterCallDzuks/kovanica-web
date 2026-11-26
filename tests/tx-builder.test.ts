@@ -447,3 +447,86 @@ test("rpcCall attaches server-only Authorization Bearer header when KOVANICA_RPC
     else process.env.KOVANICA_RPC_WRITE_TOKENS = prevList;
   }
 });
+
+test("POST /api/token_submit encodes TransactionKind::Call with wire variant index 6", async () => {
+  const fromHex = "11".repeat(32);
+  const toHex = "22".repeat(32);
+  const tokenHex = "33".repeat(32);
+  // Minimal valid bincode TokenState holding 1_000_000_000 for fromHex:
+  // name("T") + symbol("T") + decimals(9) + totalSupply(1e9) + owner(32) + minter(32)
+  // + balances(1 entry: fromHex -> 1e9) + allowances(0) + paused(false) + icon("")
+  const encStr = (s: string) => {
+    const b = new TextEncoder().encode(s);
+    const out = new Uint8Array(8 + b.length);
+    new DataView(out.buffer).setBigUint64(0, BigInt(b.length), true);
+    out.set(b, 8);
+    return out;
+  };
+  const u64 = (v: bigint) => {
+    const b = new Uint8Array(8);
+    new DataView(b.buffer).setBigUint64(0, v, true);
+    return b;
+  };
+  const u128 = (v: bigint) => {
+    const b = new Uint8Array(16);
+    new DataView(b.buffer).setBigUint64(0, v, true);
+    return b;
+  };
+  const parts = [
+    encStr("Test"),
+    encStr("TST"),
+    Uint8Array.of(9),
+    u128(1_000_000_000n),
+    hexToBytes(fromHex),
+    hexToBytes(fromHex),
+    u64(1n),
+    hexToBytes(fromHex),
+    u128(1_000_000_000n),
+    u64(0n),
+    Uint8Array.of(0),
+    encStr(""),
+  ];
+  const totalLen = parts.reduce((a, p) => a + p.length, 0);
+  const stateBytes = new Uint8Array(totalLen);
+  let off = 0;
+  for (const p of parts) {
+    stateBytes.set(p, off);
+    off += p.length;
+  }
+  const stateHex = `0x${bytesToHex(stateBytes)}`;
+
+  let submittedRawHex = "";
+  const restore = stubFetch((_url, init) => {
+    const parsed = JSON.parse(String(init?.body ?? "{}")) as { method: string; params?: unknown[] };
+    if (parsed.method === "kovanica_getStorageAt") {
+      return Response.json({ jsonrpc: "2.0", id: 1, result: stateHex });
+    }
+    if (parsed.method === "kovanica_getBalance") {
+      return Response.json({ jsonrpc: "2.0", id: 1, result: "0x2540be400" }); // 10 KVNC
+    }
+    if (parsed.method === "kovanica_getNonce") {
+      return Response.json({ jsonrpc: "2.0", id: 1, result: "0x3" });
+    }
+    if (parsed.method === "kovanica_sendRawTransaction") {
+      submittedRawHex = String(parsed.params?.[0] ?? "");
+      return Response.json({ jsonrpc: "2.0", id: 1, result: "0x" + "ee".repeat(32) });
+    }
+    return Response.json({ jsonrpc: "2.0", id: 1, result: null });
+  });
+
+  try {
+    const sig = "aa".repeat(64);
+    const res = await dispatchApi(
+      new Request(
+        `https://testnet.kovanica.online/api/token_submit?from=${fromHex}&token=${tokenHex}&to=${toHex}&amount=1000&sig=${sig}`,
+        { method: "POST" },
+      ),
+    );
+    assert.equal(res.status, 200);
+    const rawBytes = hexToBytes(submittedRawHex);
+    // Variant index sits immediately after sender (32) + nonce (8) = offset 40
+    assert.equal(new DataView(rawBytes.buffer).getUint32(40, true), 6);
+  } finally {
+    restore();
+  }
+});
