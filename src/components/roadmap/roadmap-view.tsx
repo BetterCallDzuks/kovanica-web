@@ -118,7 +118,7 @@ const SURFACE: Item[] = [
     title: "Universal Explorer Global Search (PR #24)",
     status: "done",
     blurb:
-      "Deep-linking resolver supporting canonical PRO-21 addresses (kvnc...dag), Ed25519 public keys, block/tx digests, token symbols, NFT IDs, and RWA certificates.",
+      "Deep-linking resolver supporting canonical PRO-21 addresses (kvnc...dag), Ed25519 public keys, block/tx digests, token symbols, and NFT IDs.",
     note: "Instant resolution with asynchronous smart contract state probing.",
   },
   {

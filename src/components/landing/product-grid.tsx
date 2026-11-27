@@ -7,10 +7,10 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
   ArrowUpRight,
-  Building2,
   Compass,
   Eye,
   FileText,
+  Layers,
   Wallet,
 } from "lucide-react";
 
@@ -21,7 +21,7 @@ type ProductTo =
   | "/explorer"
   | "/wallet"
   | "/swap"
-  | "/rwa"
+  | "/multi-asset"
   | "/stealth"
   | "/docs";
 
@@ -61,12 +61,12 @@ const PRODUCTS: Product[] = [
     body: "Constant-product DEX with 1-click atomic Approve → Swap batches and LP position tracking.",
   },
   {
-    to: "/rwa",
-    external: `${TESTNET}/rwa`,
-    icon: Building2,
+    to: "/multi-asset",
+    external: `${TESTNET}/multi-asset`,
+    icon: Layers,
     accent: "text-gold",
-    title: "Tokens, NFTs & RWA",
-    body: "Create KVP-102 tokens, mint KVP-106 NFTs, and issue compliant real-world assets.",
+    title: "Tokens & Native NFTs",
+    body: "Create KVP-102 fungible tokens, mint KVP-106 native NFTs, and manage multi-asset balances.",
   },
   {
     to: "/stealth",

@@ -1,12 +1,12 @@
 /**
- * Shell — unified protocol chrome across all app, DeFi, RWA, wallet, and info routes.
+ * Shell — unified protocol chrome across all app, DeFi, wallet, and info routes.
  *
  * 5-Tab Function Navigation (single source of truth shared with HomeTestnet):
  * 1. Explore: Explorer, Network, Mining Pool, Origins Map, Dashboard, Roadmap
  * 2. Trade: Swap, Liquidity Pools, Orderbook DEX, Atomic Swaps
- * 3. Assets: RWA Registry, Issue RWA, Manage RWA, Multi-Asset, Native NFTs, Token Listings
+ * 3. Assets: Multi-Asset, Native NFTs, Token Listings
  * 4. Wallet: Wallet, Faucet, Airdrops, CoinJoin, Ecosystem Tools
- * 5. Build: Multisig, HTLC, Vaults, Stealth, Docs, API Reference, Playground
+ * 5. Build: Multisig, HTLC, Vaults, Stealth, Docs, API Reference, Playground, Support & Donations, Privacy Policy
  *
  * Plus:
  * - Ecosystem Switcher (consuming SURFACE / SURFACE_STATUS from surfaces.ts)
@@ -20,8 +20,6 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Activity,
   ArrowLeftRight,
-  Briefcase,
-  Building2,
   ChevronDown,
   Code2,
   Coins,
@@ -32,6 +30,7 @@ import {
   FileText,
   Gem,
   Globe,
+  Heart,
   Image,
   Layers,
   LayoutDashboard,
@@ -39,10 +38,8 @@ import {
   Map as MapIcon,
   Menu,
   Pickaxe,
-  PlusCircle,
   Route,
   Search,
-  Settings,
   Shield,
   Sparkles,
   Terminal,
@@ -98,9 +95,6 @@ export const NAV_GROUPS = [
     showSubNav: true,
     extraPrefixes: ["/wallet/collection/", "/wallet/nft/"] as readonly string[],
     items: [
-      { to: "/rwa" as const, label: "RWA Registry", icon: Building2, desc: "KVP-106 institutional asset directory", exact: false },
-      { to: "/wallet/rwa-issue" as const, label: "Issue RWA", icon: PlusCircle, desc: "Derive & mint KVP-106 assets", exact: false },
-      { to: "/wallet/rwa-manage" as const, label: "Manage RWA", icon: Settings, desc: "Allowlist, freeze & coupon scheduler", exact: false },
       { to: "/multi-asset" as const, label: "Multi-Asset", icon: Layers, desc: "KVP-102 token balances & transfers", exact: false },
       { to: "/nft" as const, label: "Native NFTs", icon: Image, desc: "KVP-106 non-fungible assets", exact: false },
       { to: "/wallet/token-listings" as const, label: "Token Listings", icon: Gem, desc: "Token registry submissions", exact: false },
@@ -134,7 +128,7 @@ export const NAV_GROUPS = [
       { to: "/docs" as const, label: "Docs", icon: FileText, desc: "Protocol specs & CLI reference", exact: false },
       { to: "/api-reference" as const, label: "API Reference", icon: Terminal, desc: "JSON-RPC 2.0 & HTTP contract", exact: false },
       { to: "/playground" as const, label: "Playground", icon: Code2, desc: "Onboarding, API console & snippets", exact: false },
-      { to: "/pricing" as const, label: "Pricing & Services", icon: Briefcase, desc: "RPC tiers, RWA SaaS, listings & sponsorships", exact: false },
+      { to: "/support" as const, label: "Support & Donations", icon: Heart, desc: "Support open-source protocol development", exact: false },
       { to: "/privacy" as const, label: "Privacy Policy", icon: Shield, desc: "Zero-telemetry & local custody policy", exact: false },
     ],
   },
@@ -143,7 +137,7 @@ export const NAV_GROUPS = [
 const MOBILE_PRIMARY_SLOTS = [
   { to: "/explorer" as const, label: "Explore", icon: Compass, exact: false },
   { to: "/swap" as const, label: "Swap", icon: ArrowLeftRight, exact: false },
-  { to: "/rwa" as const, label: "Assets", icon: Building2, exact: false },
+  { to: "/multi-asset" as const, label: "Assets", icon: Layers, exact: false },
   { to: "/wallet" as const, label: "Wallet", icon: Wallet, exact: true },
 ] as const;
 
@@ -186,8 +180,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const isMobilePrimaryActive = MOBILE_PRIMARY_SLOTS.some((slot) =>
     isItemActive(slot.to, slot.exact),
   );
-  const compactHeaderSearch =
-    pathname === "/swap" || pathname === "/pools" || pathname === "/rwa";
+  const compactHeaderSearch = pathname === "/swap" || pathname === "/pools";
 
   return (
     <ShellContext.Provider value={true}>

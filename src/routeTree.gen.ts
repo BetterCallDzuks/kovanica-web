@@ -24,11 +24,11 @@ import { Route as NftRouteImport } from './routes/nft'
 import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as PoolRouteImport } from './routes/pool'
 import { Route as PoolsRouteImport } from './routes/pools'
-import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as RwaRouteImport } from './routes/rwa'
 import { Route as StealthRouteImport } from './routes/stealth'
+import { Route as SupportRouteImport } from './routes/support'
 import { Route as SwapRouteImport } from './routes/swap'
 import { Route as VaultsRouteImport } from './routes/vaults'
 import { Route as WalletRouteImport } from './routes/wallet'
@@ -123,11 +123,6 @@ const PoolsRoute = PoolsRouteImport.update({
   path: '/pools',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PricingRoute = PricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -146,6 +141,11 @@ const RwaRoute = RwaRouteImport.update({
 const StealthRoute = StealthRouteImport.update({
   id: '/stealth',
   path: '/stealth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SwapRoute = SwapRouteImport.update({
@@ -256,11 +256,11 @@ export interface FileRoutesByFullPath {
   '/playground': typeof PlaygroundRouteWithChildren
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
-  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/roadmap': typeof RoadmapRoute
   '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
+  '/support': typeof SupportRoute
   '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
   '/wallet': typeof WalletRouteWithChildren
@@ -296,11 +296,11 @@ export interface FileRoutesByTo {
   '/playground': typeof PlaygroundRouteWithChildren
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
-  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/roadmap': typeof RoadmapRoute
   '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
+  '/support': typeof SupportRoute
   '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
   '/wallet': typeof WalletRouteWithChildren
@@ -337,11 +337,11 @@ export interface FileRoutesById {
   '/playground': typeof PlaygroundRouteWithChildren
   '/pool': typeof PoolRoute
   '/pools': typeof PoolsRoute
-  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/roadmap': typeof RoadmapRoute
   '/rwa': typeof RwaRoute
   '/stealth': typeof StealthRoute
+  '/support': typeof SupportRoute
   '/swap': typeof SwapRoute
   '/vaults': typeof VaultsRoute
   '/wallet': typeof WalletRouteWithChildren
@@ -379,11 +379,11 @@ export interface FileRouteTypes {
     | '/playground'
     | '/pool'
     | '/pools'
-    | '/pricing'
     | '/privacy'
     | '/roadmap'
     | '/rwa'
     | '/stealth'
+    | '/support'
     | '/swap'
     | '/vaults'
     | '/wallet'
@@ -419,11 +419,11 @@ export interface FileRouteTypes {
     | '/playground'
     | '/pool'
     | '/pools'
-    | '/pricing'
     | '/privacy'
     | '/roadmap'
     | '/rwa'
     | '/stealth'
+    | '/support'
     | '/swap'
     | '/vaults'
     | '/wallet'
@@ -459,11 +459,11 @@ export interface FileRouteTypes {
     | '/playground'
     | '/pool'
     | '/pools'
-    | '/pricing'
     | '/privacy'
     | '/roadmap'
     | '/rwa'
     | '/stealth'
+    | '/support'
     | '/swap'
     | '/vaults'
     | '/wallet'
@@ -500,11 +500,11 @@ export interface RootRouteChildren {
   PlaygroundRoute: typeof PlaygroundRouteWithChildren
   PoolRoute: typeof PoolRoute
   PoolsRoute: typeof PoolsRoute
-  PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   RoadmapRoute: typeof RoadmapRoute
   RwaRoute: typeof RwaRoute
   StealthRoute: typeof StealthRoute
+  SupportRoute: typeof SupportRoute
   SwapRoute: typeof SwapRoute
   VaultsRoute: typeof VaultsRoute
   WalletRoute: typeof WalletRouteWithChildren
@@ -619,13 +619,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PoolsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pricing': {
-      id: '/pricing'
-      path: '/pricing'
-      fullPath: '/pricing'
-      preLoaderRoute: typeof PricingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -652,6 +645,13 @@ declare module '@tanstack/react-router' {
       path: '/stealth'
       fullPath: '/stealth'
       preLoaderRoute: typeof StealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/swap': {
@@ -854,11 +854,11 @@ const rootRouteChildren: RootRouteChildren = {
   PlaygroundRoute: PlaygroundRouteWithChildren,
   PoolRoute: PoolRoute,
   PoolsRoute: PoolsRoute,
-  PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   RoadmapRoute: RoadmapRoute,
   RwaRoute: RwaRoute,
   StealthRoute: StealthRoute,
+  SupportRoute: SupportRoute,
   SwapRoute: SwapRoute,
   VaultsRoute: VaultsRoute,
   WalletRoute: WalletRouteWithChildren,

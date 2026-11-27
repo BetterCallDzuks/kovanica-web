@@ -406,11 +406,11 @@ export async function handleBillingCheckout(
     const origin = `${reqUrl.protocol}//${reqUrl.host}`;
     const successUrl = sanitizeRedirectUrl(
       payload.successUrl,
-      `${origin}/pricing?checkout=success&invoice=${invoiceId}`,
+      `${origin}/support?checkout=success&invoice=${invoiceId}`,
     );
     const cancelUrl = sanitizeRedirectUrl(
       payload.cancelUrl,
-      `${origin}/pricing?checkout=cancelled&invoice=${invoiceId}`,
+      `${origin}/support?checkout=cancelled&invoice=${invoiceId}`,
     );
 
     const form = new URLSearchParams();

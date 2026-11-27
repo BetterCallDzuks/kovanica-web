@@ -643,7 +643,7 @@ function SwapPage() {
                 </span>
               </div>
               <div className="flex justify-between text-muted">
-                <Link to="/pricing" className="hover:text-gold hover:underline">
+                <Link to="/support" className="hover:text-gold hover:underline">
                   Interface Fee ({(interfaceFeeConfig.feeBps / 100).toFixed(2)}%)
                 </Link>
                 <span className="font-mono text-fg">

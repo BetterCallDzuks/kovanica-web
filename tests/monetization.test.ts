@@ -152,7 +152,11 @@ test("POST /api/inquiries validates input, traps honeypot bots, and persists val
   }
 });
 
-test("/pricing route wraps in unified <Shell>", () => {
-  const pricingSource = readFileSync(join(process.cwd(), "src/routes/pricing.tsx"), "utf8");
-  assert.ok(pricingSource.includes("<Shell>"), "pricing.tsx must render inside <Shell>");
+test("/support route wraps in unified <Shell> and /pricing is removed", () => {
+  const supportSource = readFileSync(join(process.cwd(), "src/routes/support.tsx"), "utf8");
+  assert.ok(supportSource.includes("<Shell>"), "support.tsx must render inside <Shell>");
+  assert.throws(
+    () => readFileSync(join(process.cwd(), "src/routes/pricing.tsx"), "utf8"),
+    "pricing.tsx must be removed",
+  );
 });

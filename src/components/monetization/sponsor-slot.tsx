@@ -4,7 +4,7 @@ import { getSponsorConfig } from "@/lib/monetization";
 import { cn } from "@/lib/utils";
 
 export interface SponsorSlotProps {
-  surface: "explorer" | "faucet" | "docs" | "pricing";
+  surface: "explorer" | "faucet" | "docs" | "support";
   showPlaceholder?: boolean;
   className?: string;
 }
@@ -13,7 +13,7 @@ export interface SponsorSlotProps {
  * Privacy-first static sponsor banner.
  * - Zero tracking cookies, zero third-party ad scripts.
  * - Renders an external sponsor ONLY when VITE_SPONSOR_URL (https://) and VITE_SPONSOR_TEXT are set.
- * - Otherwise renders an optional, unobtrusive 1-line link to /pricing?topic=sponsorship.
+ * - Otherwise renders an optional, unobtrusive 1-line link to /support.
  */
 export function SponsorSlot({
   surface,
@@ -67,11 +67,10 @@ export function SponsorSlot({
         <span>Privacy-first sponsorship slot · Zero tracking cookies or ad scripts</span>
       </span>
       <Link
-        to="/pricing"
-        search={{ topic: "sponsorship" }}
+        to="/support"
         className="font-mono text-[11px] text-gold hover:underline"
       >
-        Sponsor this surface →
+        Support Kovanica →
       </Link>
     </aside>
   );

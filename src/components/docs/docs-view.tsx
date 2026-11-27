@@ -114,10 +114,10 @@ export function DocsView() {
               API Reference →
             </a>
             <Link
-              to="/pricing"
+              to="/support"
               className="rounded-md px-2.5 py-1.5 font-mono text-[11px] tracking-wide text-teal uppercase transition-colors hover:bg-surface-2 hover:text-fg"
             >
-              Pricing &amp; Services →
+              Support &amp; Donations →
             </Link>
           </div>
         </nav>
@@ -492,8 +492,8 @@ export function DocsView() {
                 <tr>
                   <td className="px-3 py-2 font-mono text-blue">RFC-007</td>
                   <td className="px-3 py-2 font-mono text-gold">KVP-106</td>
-                  <td className="px-3 py-2 text-fg font-medium">RWA &amp; Native NFTs</td>
-                  <td className="px-3 py-2">Institutional RWA (allowlist/freeze/coupons; /rwa, /wallet/rwa-issue, /wallet/rwa-manage) &amp; Native NFTs (/nft)</td>
+                  <td className="px-3 py-2 text-fg font-medium">Native NFTs</td>
+                  <td className="px-3 py-2">On-chain non-fungible tokens &amp; collections (/nft)</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-mono text-blue">RFC-008</td>
@@ -529,7 +529,7 @@ export function DocsView() {
               <Link to="/roadmap">Open roadmap</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link to="/pricing">Pricing &amp; Services</Link>
+              <Link to="/support">Support &amp; Donations</Link>
             </Button>
           </div>
         </section>

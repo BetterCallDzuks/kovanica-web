@@ -7,7 +7,6 @@ import {
   History,
   Copy,
   Gem,
-  Landmark,
   Waves,
   PlusCircle,
   Loader2,
@@ -266,7 +265,7 @@ export function MultiAssetView() {
         or inspect and transfer multi-asset balances on Testnet (Chain 2).
       </p>
 
-      {/* Token tools — Swap, Pools, RWA, NFT */}
+      {/* Token tools — Swap, Pools, NFT, Mining Pool */}
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
           to="/swap"
@@ -281,27 +280,6 @@ export function MultiAssetView() {
         >
           <Waves className="size-3.5 text-blue" />
           DEX Pools
-        </Link>
-        <Link
-          to="/rwa"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          <Landmark className="size-3.5 text-gold" />
-          RWA Registry
-        </Link>
-        <Link
-          to="/wallet/rwa-manage"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          <Landmark className="size-3.5 text-purple-400" />
-          RWA Compliance
-        </Link>
-        <Link
-          to="/wallet/rwa-issue"
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          <Landmark className="size-3.5 text-gold" />
-          Issue RWA
         </Link>
         <Link
           to="/nft"
