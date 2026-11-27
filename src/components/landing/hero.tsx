@@ -36,7 +36,7 @@ export function Hero() {
           BlockDAG, wide open.
         </p>
         <p className="mx-auto mt-3.5 max-w-md text-sm leading-relaxed text-muted md:mt-4 md:max-w-lg md:text-base">
-          Fast 4-second Layer-1 BlockDAG with zero stake, deterministic Wasmi smart contracts, native AMM, RWA compliance, and dual-key stealth privacy.
+          Fast 4-second Layer-1 BlockDAG with zero stake, deterministic Wasmi smart contracts, native AMM, KVP-102 tokens &amp; NFTs, and dual-key stealth privacy.
         </p>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 font-mono text-[11px] text-subtle">

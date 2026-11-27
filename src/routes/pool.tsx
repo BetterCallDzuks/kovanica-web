@@ -75,8 +75,7 @@ function PoolPage() {
               VarDiff: {summary.varDiffMode} · Drain: {summary.gracefulDrainMethod}
             </span>
             <Link
-              to="/pricing"
-              search={{ topic: "pool" }}
+              to="/support"
               className="rounded-md border border-border bg-bg px-2 py-0.5 text-muted hover:border-gold/40 hover:text-gold"
             >
               Pool Fee: {poolFee.testnetFeePct}% testnet · {poolFee.plannedMainnetFeePct.toFixed(1)}% planned mainnet

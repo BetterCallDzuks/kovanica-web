@@ -44,10 +44,10 @@ export function LandingChrome({ children }: { children: React.ReactNode }) {
             Roadmap
           </a>
           <a
-            href={`${SURFACE.testnet}/pricing`}
+            href={`${SURFACE.landing}/support`}
             className="hidden h-9 items-center rounded-md px-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg md:inline-flex"
           >
-            Pricing
+            Support
           </a>
           <a
             href={SURFACE.github}
@@ -73,6 +73,12 @@ export function LandingChrome({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 text-xs text-subtle md:flex-row">
           <span className="font-mono">kovanica · KVNC · Hybrid PoW + GHOSTDAG</span>
           <div className="flex flex-wrap items-center gap-4 font-mono">
+            <a
+              href={`${SURFACE.landing}/support`}
+              className="transition-colors hover:text-fg"
+            >
+              Support
+            </a>
             <a
               href={`${SURFACE.landing}/privacy`}
               className="transition-colors hover:text-fg"
